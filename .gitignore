@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Builds and generated output
+dist/
+**/dist/
+build/
+web-build/
+.expo/
+**/.expo/
+*.tsbuildinfo
+
+# Native/mobile secrets
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+
+# Logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+pnpm-debug.*
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
+
+# Uploads/runtime data
+backend/uploads/
+backend/generated/prisma/

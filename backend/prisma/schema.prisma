@@ -1,0 +1,145 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              Int     @id @default(autoincrement())
+  email           String  @unique
+  username        String? @unique
+  firstName       String?
+  lastName        String?
+  phoneNumber     String? 
+  avatarUrl       String?
+  bio             String?
+  trustScore      Decimal @default(0.0) @db.Decimal(5, 2)
+  googleId        String? @unique
+  accountVerified Boolean @default(false)
+  password        String?
+  refreshHashed   String?
+  country         String?
+  state           String?
+  city            String?
+  address         String?
+  zipCode         String?
+  // Seller / Buyer fields
+  isActive    Boolean   @default(true) // can be suspended/disabled
+  rating      Float     @default(0.0) // avg rating from reviews
+  numReviews  Int       @default(0)
+  location    String? // city/state/country
+  lastSeen    DateTime? // last online
+  deviceToken String? // for push notifications
+
+  // Relations
+  products  Product[] // products being sold
+  reviews   Review[]  // reviews made by this user
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Category {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  description String?
+  imageUrl    String?
+  iconName    String?
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Product {
+  id          Int     @id @default(autoincrement())
+  name       String
+  description String
+  price       Decimal @db.Decimal(10, 2)
+  condition   String // e.g. "New", "Used - Like New", "Used - Good"
+  quantity    Int     @default(1)
+  currency    String  @default("USD") // ISO currency code
+  // Relations
+  sellerId   Int
+  seller     User         @relation(fields: [sellerId], references: [id])
+  categoryId Int
+  category   Category     @relation(fields: [categoryId], references: [id])
+  tags       ProductTag[]
+
+
+  location String?
+
+  // Media
+  images ProductImage[]
+
+  // Reviews
+  reviews Review[]
+  rating  Float @default(0.0) // avg rating for this product
+  numReviews Int @default(0)
+
+  // Status
+  status     ProductStatus @default(ACTIVE)
+  isFeatured Boolean       @default(false)
+  views      Int           @default(0)
+
+  // Trust & moderation
+  flagged      Boolean              @default(false)
+  verification ProductVerification?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ProductTag {
+  id        Int     @id @default(autoincrement())
+  name      String
+  productId Int
+  product   Product @relation(fields: [productId], references: [id])
+}
+
+model ProductImage {
+  id        Int     @id @default(autoincrement())
+  url       String
+  productId Int
+  product   Product @relation(fields: [productId], references: [id])
+}
+
+
+model ProductVerification {
+  id         Int      @id @default(autoincrement())
+  productId  Int      @unique
+  product    Product  @relation(fields: [productId], references: [id])
+  verified   Boolean  @default(false)
+  notes      String?
+  reviewedBy Int? // admin/moderator id
+  createdAt  DateTime @default(now())
+}
+
+model Review {
+  id         Int      @id @default(autoincrement())
+  productId  Int
+  product    Product  @relation(fields: [productId], references: [id])
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id])
+  rating     Int      @default(5) // 1-5
+  comment    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([productId, userId]) // one review per user per product
+}
+
+enum ProductStatus {
+  ACTIVE
+  SOLD
+  PENDING
+  HIDDEN
+  DELETED
+}

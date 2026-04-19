@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "Avera",
+    "slug": "Avera",
+    "version": "1.0.0",
+    "scheme": "avera",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/images/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff",
+      "dark": {
+        "image": "./assets/images/splash.png",
+        "backgroundColor": "#0A0A0A"
+      }
+    },
+    "icon": "./assets/images/splash.png",
+    "plugins": [
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.249640936667-09tllcnhcd8mvvjdp8eeu64e40bibmlh"
+        }
+      ],
+      "expo-secure-store",
+      "expo-router"
+    ],
+    "android": {
+      "package": "app.avera",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/splash.png",
+        "backgroundColor": "#ffffff"
+      },
+      "splash": {
+        "image": "./assets/images/splash.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#ffffff"
+      },
+      "abiFilters": ["arm64-v8a"]
+    },
+    "ios": {
+      "bundleIdentifier": "app.avera",
+      "supportsTablet": true,
+      "infoPlist": {
+        "UIViewControllerBasedStatusBarAppearance": false
+      },
+      "splash": {
+        "image": "./assets/images/splash.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#ffffff"
+      }
+    }
+  }
+}
