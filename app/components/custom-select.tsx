@@ -55,7 +55,7 @@ export function CustomSelect({
     if (!searchable || !searchQuery.trim()) return options;
     const query = searchQuery.trim().toLowerCase();
     return options.filter((option) =>
-      option.label.toLowerCase().includes(query)
+      option.label.toLowerCase().includes(query),
     );
   }, [options, searchable, searchQuery]);
 
@@ -148,7 +148,9 @@ export function CustomSelect({
                   key={option.value}
                   onPress={() => handleSelect(option.value)}
                   className={`px-4 py-3.5 ${
-                    index < filteredOptions.length - 1 ? "border-b border-gray-50 dark:border-white/5" : ""
+                    index < filteredOptions.length - 1
+                      ? "border-b border-gray-50 dark:border-white/5"
+                      : ""
                   } ${
                     selectedValue === option.value
                       ? "bg-brand/5 dark:bg-brand/10"

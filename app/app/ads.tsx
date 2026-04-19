@@ -23,13 +23,18 @@ export default function AdsScreen() {
   const [ads, setAds] = useState<Ad[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   const load = async () => {
     try {
       const res = await axiosInstance.get("/ads/mine");
       setAds(res.data);
-    } catch {} finally { setLoading(false); }
+    } catch {
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getImageUrl = (url: string) =>
@@ -41,13 +46,24 @@ export default function AdsScreen() {
       <View className="px-5 py-4 border-b border-gray-50">
         <View className="flex-row items-center">
           <View className="w-14 h-14 rounded-xl bg-gray-100 overflow-hidden">
-            {image && <Image source={{ uri: getImageUrl(image) }} className="w-full h-full" />}
+            {image && (
+              <Image
+                source={{ uri: getImageUrl(image) }}
+                className="w-full h-full"
+              />
+            )}
           </View>
           <View className="flex-1 ml-3">
-            <Text className="text-base font-semibold text-gray-900">{item.product.name}</Text>
+            <Text className="text-base font-semibold text-gray-900">
+              {item.product.name}
+            </Text>
             <View className="flex-row items-center mt-1">
-              <View className={`px-2 py-0.5 rounded-full ${item.status === "ACTIVE" ? "bg-green-100" : "bg-gray-100"}`}>
-                <Text className={`text-xs font-semibold ${item.status === "ACTIVE" ? "text-green-700" : "text-gray-500"}`}>
+              <View
+                className={`px-2 py-0.5 rounded-full ${item.status === "ACTIVE" ? "bg-green-100" : "bg-gray-100"}`}
+              >
+                <Text
+                  className={`text-xs font-semibold ${item.status === "ACTIVE" ? "text-green-700" : "text-gray-500"}`}
+                >
                   {item.status}
                 </Text>
               </View>
@@ -58,19 +74,27 @@ export default function AdsScreen() {
         <View className="flex-row justify-between mt-3 bg-gray-50 rounded-xl p-3">
           <View className="items-center">
             <Text className="text-xs text-gray-400">Impressions</Text>
-            <Text className="text-sm font-bold text-gray-900">{item.impressions}</Text>
+            <Text className="text-sm font-bold text-gray-900">
+              {item.impressions}
+            </Text>
           </View>
           <View className="items-center">
             <Text className="text-xs text-gray-400">Clicks</Text>
-            <Text className="text-sm font-bold text-gray-900">{item.clicks}</Text>
+            <Text className="text-sm font-bold text-gray-900">
+              {item.clicks}
+            </Text>
           </View>
           <View className="items-center">
             <Text className="text-xs text-gray-400">Budget</Text>
-            <Text className="text-sm font-bold text-gray-900">NGN {Number(item.budget).toLocaleString()}</Text>
+            <Text className="text-sm font-bold text-gray-900">
+              NGN {Number(item.budget).toLocaleString()}
+            </Text>
           </View>
           <View className="items-center">
             <Text className="text-xs text-gray-400">Spent</Text>
-            <Text className="text-sm font-bold text-gray-900">NGN {Number(item.spent).toLocaleString()}</Text>
+            <Text className="text-sm font-bold text-gray-900">
+              NGN {Number(item.spent).toLocaleString()}
+            </Text>
           </View>
         </View>
       </View>

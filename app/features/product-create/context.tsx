@@ -20,7 +20,7 @@ interface CreateProductFlowContextValue {
   updateForm: (updates: Partial<CreateProductForm>) => void;
   setField: <K extends CreateProductField>(
     key: K,
-    value: CreateProductForm[K]
+    value: CreateProductForm[K],
   ) => void;
   clearErrors: () => void;
   validateFields: (fields: CreateProductField[]) => boolean;
@@ -33,7 +33,9 @@ const CreateProductFlowContext = createContext<
 >(undefined);
 
 export function CreateProductFlowProvider({ children }: PropsWithChildren) {
-  const [form, setForm] = useState<CreateProductForm>(DEFAULT_CREATE_PRODUCT_FORM);
+  const [form, setForm] = useState<CreateProductForm>(
+    DEFAULT_CREATE_PRODUCT_FORM,
+  );
   const [errors, setErrors] = useState<FieldErrors>({});
 
   const updateForm = (updates: Partial<CreateProductForm>) => {
@@ -42,7 +44,7 @@ export function CreateProductFlowProvider({ children }: PropsWithChildren) {
 
   const setField = <K extends CreateProductField>(
     key: K,
-    value: CreateProductForm[K]
+    value: CreateProductForm[K],
   ) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
@@ -53,8 +55,8 @@ export function CreateProductFlowProvider({ children }: PropsWithChildren) {
     const partialSchema = productSchema.pick(
       fields.reduce(
         (acc, field) => ({ ...acc, [field]: true }),
-        {} as Record<CreateProductField, true>
-      )
+        {} as Record<CreateProductField, true>,
+      ),
     );
 
     const result = partialSchema.safeParse(form);
@@ -114,7 +116,7 @@ export function CreateProductFlowProvider({ children }: PropsWithChildren) {
       validateAll,
       reset,
     }),
-    [form, errors]
+    [form, errors],
   );
 
   return (
@@ -129,7 +131,7 @@ export function useCreateProductFlow() {
 
   if (!context) {
     throw new Error(
-      "useCreateProductFlow must be used within CreateProductFlowProvider"
+      "useCreateProductFlow must be used within CreateProductFlowProvider",
     );
   }
 

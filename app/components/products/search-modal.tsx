@@ -36,7 +36,7 @@ export const SearchModal = ({
               q: query,
               ...(categoryId ? { categoryId } : {}),
             },
-          }
+          },
         );
 
         setSearchResults(response.data);
@@ -66,7 +66,7 @@ export const SearchModal = ({
             <Text key={index} className="font-light">
               {part}
             </Text>
-          )
+          ),
         )}
       </Text>
     );
@@ -126,7 +126,7 @@ export const SearchModal = ({
                           ...(product ? { query: product } : {}),
                           ...(categoryId ? { categoryId } : {}),
                           ...(categoryName ? { categoryName } : {}),
-                        } as {}).toString()}`
+                        } as {}).toString()}`,
                       );
                     }}
                   >

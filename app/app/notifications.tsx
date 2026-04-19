@@ -27,26 +27,37 @@ export default function NotificationsScreen() {
   const [notifs, setNotifs] = useState<Notif[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   const load = async () => {
     try {
       const res = await axiosInstance.get("/notifications");
       setNotifs(res.data);
-    } catch {} finally { setLoading(false); }
+    } catch {
+    } finally {
+      setLoading(false);
+    }
   };
 
   const markAllRead = async () => {
     try {
       await axiosInstance.patch("/notifications/read-all");
-      setNotifs((prev) => prev.map((n) => ({ ...n, readAt: new Date().toISOString() })));
+      setNotifs((prev) =>
+        prev.map((n) => ({ ...n, readAt: new Date().toISOString() })),
+      );
     } catch {}
   };
 
   const handleTap = async (notif: Notif) => {
     if (!notif.readAt) {
       await axiosInstance.patch(`/notifications/${notif.id}/read`);
-      setNotifs((prev) => prev.map((n) => n.id === notif.id ? { ...n, readAt: new Date().toISOString() } : n));
+      setNotifs((prev) =>
+        prev.map((n) =>
+          n.id === notif.id ? { ...n, readAt: new Date().toISOString() } : n,
+        ),
+      );
     }
     if (notif.data?.orderId) router.push(`/order/${notif.data.orderId}`);
   };
@@ -57,16 +68,24 @@ export default function NotificationsScreen() {
       className={`flex-row px-5 py-4 border-b border-gray-50 ${!item.readAt ? "bg-blue-50/50" : ""}`}
     >
       <View className="w-9 h-9 rounded-full bg-gray-100 items-center justify-center">
-        <Ionicons name={(TYPE_ICONS[item.type] || "notifications-outline") as any} size={18} color="#374151" />
+        <Ionicons
+          name={(TYPE_ICONS[item.type] || "notifications-outline") as any}
+          size={18}
+          color="#374151"
+        />
       </View>
       <View className="flex-1 ml-3">
-        <Text className="text-sm font-semibold text-gray-900">{item.title}</Text>
+        <Text className="text-sm font-semibold text-gray-900">
+          {item.title}
+        </Text>
         <Text className="text-sm text-gray-500 mt-0.5">{item.body}</Text>
         <Text className="text-xs text-gray-400 mt-1">
           {new Date(item.createdAt).toLocaleDateString()}
         </Text>
       </View>
-      {!item.readAt && <View className="w-2 h-2 rounded-full bg-blue-500 self-center" />}
+      {!item.readAt && (
+        <View className="w-2 h-2 rounded-full bg-blue-500 self-center" />
+      )}
     </Pressable>
   );
 
@@ -80,7 +99,9 @@ export default function NotificationsScreen() {
           <Text className="text-lg font-bold text-gray-900">Notifications</Text>
         </View>
         <Pressable onPress={markAllRead}>
-          <Text className="text-sm text-blue-600 font-medium">Mark all read</Text>
+          <Text className="text-sm text-blue-600 font-medium">
+            Mark all read
+          </Text>
         </Pressable>
       </View>
 
@@ -92,7 +113,11 @@ export default function NotificationsScreen() {
         refreshing={loading}
         ListEmptyComponent={
           <View className="flex-1 items-center justify-center py-20">
-            <Ionicons name="notifications-off-outline" size={48} color="#D1D5DB" />
+            <Ionicons
+              name="notifications-off-outline"
+              size={48}
+              color="#D1D5DB"
+            />
             <Text className="text-gray-400 mt-4">No notifications</Text>
           </View>
         }

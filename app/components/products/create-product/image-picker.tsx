@@ -25,22 +25,32 @@ export function ImagePickerComponent({
           {images.length}/7 images
         </Text>
       </View>
-      
+
       <Pressable
         onPress={onAddImages}
         disabled={images.length >= 7}
         className={`border-2 border-dashed rounded-2xl h-24 items-center justify-center bg-gray-50/50 dark:bg-white/5 ${
           error ? "border-red-200" : "border-gray-200 dark:border-white/10"
-        } ${images.length >= 7 ? 'opacity-50' : ''}`}
+        } ${images.length >= 7 ? "opacity-50" : ""}`}
       >
-        <Ionicons name="camera-outline" size={32} color={error ? "#ef4444" : "#9CA3AF"} />
-        <Text className={`mt-1 font-medium ${error ? "text-red-500" : "text-gray-500"} text-xs`}>
+        <Ionicons
+          name="camera-outline"
+          size={32}
+          color={error ? "#ef4444" : "#9CA3AF"}
+        />
+        <Text
+          className={`mt-1 font-medium ${error ? "text-red-500" : "text-gray-500"} text-xs`}
+        >
           {images.length >= 7 ? "Maximum limit reached" : "Upload item photos"}
         </Text>
       </Pressable>
 
       {images.length > 0 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-4">
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          className="mt-4"
+        >
           {images.map((uri, idx) => (
             <View key={idx} className="relative mr-4">
               <Image
@@ -48,7 +58,9 @@ export function ImagePickerComponent({
                 className="w-24 h-24 rounded-2xl border border-gray-100 dark:border-white/10"
               />
               <View className="absolute top-1 left-1 bg-black/50 rounded-full w-5 h-5 items-center justify-center">
-                <Text className="text-white text-[10px] font-bold">{idx + 1}</Text>
+                <Text className="text-white text-[10px] font-bold">
+                  {idx + 1}
+                </Text>
               </View>
               {/* Remove Button */}
               <Pressable

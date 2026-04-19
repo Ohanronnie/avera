@@ -47,7 +47,7 @@ export default function OnboardingScreen() {
           }
         },
       }),
-    [currentStep]
+    [currentStep],
   );
 
   return (
@@ -59,7 +59,10 @@ export default function OnboardingScreen() {
           onBack={handleBack}
         />
 
-        <View className="flex-1 flex-col justify-between" {...panResponder.panHandlers}>
+        <View
+          className="flex-1 flex-col justify-between"
+          {...panResponder.panHandlers}
+        >
           <OnboardingSlide slide={activeSlide} />
 
           <OnboardingFooter

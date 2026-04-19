@@ -23,13 +23,20 @@ export function Navbar({ title, showBack = true, rightElement }: NavbarProps) {
             onPress={() => router.back()}
             className="p-2 rounded-xl active:bg-gray-100 dark:active:bg-white/5"
           >
-            <Ionicons name="chevron-back" size={24} color={isDark ? "white" : "#111"} />
+            <Ionicons
+              name="chevron-back"
+              size={24}
+              color={isDark ? "white" : "#111"}
+            />
           </Pressable>
         )}
       </View>
-      
+
       <View className="flex-[2] items-center">
-        <Text className="font-bold text-lg text-black dark:text-white" numberOfLines={1}>
+        <Text
+          className="font-bold text-lg text-black dark:text-white"
+          numberOfLines={1}
+        >
           {title}
         </Text>
       </View>

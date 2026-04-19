@@ -7,7 +7,7 @@ export interface NavigationButtonsProps {
   onPrevious: () => void;
   onNext: () => void;
   onValidate: () => boolean;
-  disabled: boolean
+  disabled: boolean;
 }
 
 export function NavigationButtons({
@@ -16,7 +16,7 @@ export function NavigationButtons({
   onPrevious,
   onNext,
   onValidate,
-  disabled
+  disabled,
 }: NavigationButtonsProps) {
   return (
     <View className="justify-between flex-row items-center">

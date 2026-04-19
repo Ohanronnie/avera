@@ -18,7 +18,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { z } from "zod";
 import { useColorScheme } from "nativewind";
 import { configureGoogleAuth } from "@/utils/google-auth";
-import { useGoogleLoginMutation, useRegisterMutation } from "@/features/auth/hooks";
+import {
+  useGoogleLoginMutation,
+  useRegisterMutation,
+} from "@/features/auth/hooks";
 import { useToast } from "@/contexts/ToastContext";
 
 // 🔹 Validation schema with Zod
@@ -29,7 +32,7 @@ const RegisterSchema = z.object({
     .min(8, "Password must be at least 8 characters")
     .regex(
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/,
-      "Password must contain at least 1 uppercase, 1 lowercase, 1 number, and 1 special character"
+      "Password must contain at least 1 uppercase, 1 lowercase, 1 number, and 1 special character",
     ),
 });
 
@@ -40,7 +43,7 @@ export default function Register() {
   const [passwordFocus, setPasswordFocus] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>(
-    {}
+    {},
   );
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
@@ -48,7 +51,9 @@ export default function Register() {
 
   const registerMutation = useRegisterMutation({
     onRegistered: (response) => {
-      router.push(`/(auth)/otp-verification?email=${response.email}&id=${response.id}`);
+      router.push(
+        `/(auth)/otp-verification?email=${response.email}&id=${response.id}`,
+      );
     },
     onFieldErrors: (fieldErrors) => {
       setErrors(fieldErrors);
@@ -225,10 +230,16 @@ export default function Register() {
             disabled={googleLoginMutation.isPending}
           >
             {googleLoginMutation.isPending ? (
-              <ActivityIndicator color={isDark ? "#FFFFFF" : "#111827"} size="small" />
+              <ActivityIndicator
+                color={isDark ? "#FFFFFF" : "#111827"}
+                size="small"
+              />
             ) : (
               <>
-                <Image source={require("@/assets/images/onboarding/google-logo.png")} className="w-5 h-5" />
+                <Image
+                  source={require("@/assets/images/onboarding/google-logo.png")}
+                  className="w-5 h-5"
+                />
                 <ButtonText className="text-black dark:text-white">
                   Google
                 </ButtonText>

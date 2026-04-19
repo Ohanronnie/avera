@@ -1,5 +1,5 @@
 import { Stack } from "expo-router";
-import "../global.css" with { type: "css"};
+import "../global.css" with { type: "css" };
 import { GluestackUIProvider } from "@/components/ui/gluestack-ui-provider";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -18,6 +18,10 @@ function RootNavigator() {
       <Stack.Screen name="product" />
       <Stack.Screen name="wallet-asset/[symbol]" />
       <Stack.Screen name="messages" />
+      <Stack.Screen name="seller" />
+      <Stack.Screen name="seller-listings" />
+      <Stack.Screen name="wallet-quote" />
+      <Stack.Screen name="p2p" />
     </Stack>
   );
 }

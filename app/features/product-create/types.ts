@@ -74,9 +74,10 @@ export const CONDITION_OPTIONS: Array<CreateProductForm["condition"]> = [
 
 export const CURRENCY_OPTIONS: Array<CreateProductForm["currency"]> = ["NGN"];
 
-export const CREATE_PRODUCT_STEP_FIELDS: Record<string, CreateProductField[]> = {
-  "basic-info": ["name", "shortDescription", "description", "location"],
-  pricing: ["price", "quantity", "currency", "isNegotiable"],
-  media: ["categoryId", "categoryName", "images"],
-  review: ["condition"],
-};
+export const CREATE_PRODUCT_STEP_FIELDS: Record<string, CreateProductField[]> =
+  {
+    "basic-info": ["name", "shortDescription", "description", "location"],
+    pricing: ["price", "quantity", "currency", "isNegotiable"],
+    media: ["categoryId", "categoryName", "images"],
+    review: ["condition"],
+  };

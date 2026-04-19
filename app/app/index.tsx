@@ -4,9 +4,8 @@ import * as SecureStore from "expo-secure-store";
 import { Animated, StyleSheet, View, Dimensions } from "react-native";
 
 export default function Index() {
-
   const fadeAnim = useRef(new Animated.Value(0)).current;
-console.log("Index screen rendered");
+  console.log("Index screen rendered");
   useEffect(() => {
     Animated.timing(fadeAnim, {
       toValue: 1,
@@ -24,7 +23,7 @@ console.log("Index screen rendered");
         console.log("Stored token:", token);
         router.replace("/(tabs)/home");
       } else {
-        console.log("here")
+        console.log("here");
         router.replace("/(auth)/onboarding");
       }
     };

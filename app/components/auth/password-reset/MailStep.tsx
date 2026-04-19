@@ -42,7 +42,6 @@ export function PasswordResetMailStep({
           size="xl"
         >
           <InputField
-           
             placeholder="Enter your email"
             keyboardType="email-address"
             value={email}

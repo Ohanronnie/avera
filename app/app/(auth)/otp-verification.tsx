@@ -1,12 +1,7 @@
 import { Text } from "@/components/ui/text";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import {
-  View,
-  Pressable,
-  KeyboardAvoidingView,
-  Platform,
-} from "react-native";
+import { View, Pressable, KeyboardAvoidingView, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { VerificationContent } from "@/components/auth/otp/VerificationContent";
 import { useTheme } from "@/contexts/ThemeContext";

@@ -5,10 +5,7 @@ import { LineChart } from "react-native-gifted-charts";
 import { CHART_HEIGHT, CHART_POINTS } from "@/components/wallet/data";
 
 export function WalletChart() {
-  const chartData = useMemo(
-    () => CHART_POINTS.map((value) => ({ value })),
-    []
-  );
+  const chartData = useMemo(() => CHART_POINTS.map((value) => ({ value })), []);
 
   return (
     <View className="mt-4">

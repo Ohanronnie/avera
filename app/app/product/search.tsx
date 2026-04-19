@@ -18,7 +18,10 @@ type ProductFilters = {
   featured: boolean;
 };
 
-const conditionOptions: Array<{ label: string; value: ProductFilters["condition"] }> = [
+const conditionOptions: Array<{
+  label: string;
+  value: ProductFilters["condition"];
+}> = [
   { label: "All", value: "all" },
   { label: "New", value: "new" },
   { label: "Used", value: "used" },
@@ -93,11 +96,19 @@ const FilterChip = ({
   </Pressable>
 );
 
-const SuggestionsScreen = ({ onSearchTerm }: { onSearchTerm: (term: string) => void }) => {
+const SuggestionsScreen = ({
+  onSearchTerm,
+}: {
+  onSearchTerm: (term: string) => void;
+}) => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   const recentSearches = ["IPhone 15 Pro", "MacBook Pro 16", "AirPods Max"];
-  const trendingSearches = ["iPhone 14 Pro Max", "MacBook Air M2", "AirPods Pro"];
+  const trendingSearches = [
+    "iPhone 14 Pro Max",
+    "MacBook Air M2",
+    "AirPods Pro",
+  ];
   const popularCategories = [
     { label: "Phones", icon: "phone-portrait-outline" },
     { label: "Laptops", icon: "laptop-outline" },
@@ -166,14 +177,23 @@ const SuggestionsScreen = ({ onSearchTerm }: { onSearchTerm: (term: string) => v
         </View>
         <View className="flex-row flex-wrap justify-between">
           {popularCategories.map((item) => (
-            <View key={item.label} className="mb-4 w-[25%] items-center justify-center">
+            <View
+              key={item.label}
+              className="mb-4 w-[25%] items-center justify-center"
+            >
               <Pressable
                 onPress={() => onSearchTerm(item.label)}
                 className="h-20 w-20 items-center justify-center rounded-full border border-gray-100 bg-background-50 dark:border-white/5 dark:bg-white/5"
               >
-                <Ionicons name={item.icon as any} size={28} color={isDark ? "white" : "black"} />
+                <Ionicons
+                  name={item.icon as any}
+                  size={28}
+                  color={isDark ? "white" : "black"}
+                />
               </Pressable>
-              <Text className="mt-2 text-center text-sm font-medium">{item.label}</Text>
+              <Text className="mt-2 text-center text-sm font-medium">
+                {item.label}
+              </Text>
             </View>
           ))}
         </View>
@@ -250,8 +270,12 @@ export default function SearchScreen() {
             offset,
             ...(params.categoryId ? { categoryId: params.categoryId } : {}),
             ...(nextFilters.featured ? { featured: "true" } : {}),
-            ...(nextFilters.condition !== "all" ? { condition: nextFilters.condition } : {}),
-            ...(nextFilters.sort !== "newest" ? { sort: nextFilters.sort } : {}),
+            ...(nextFilters.condition !== "all"
+              ? { condition: nextFilters.condition }
+              : {}),
+            ...(nextFilters.sort !== "newest"
+              ? { sort: nextFilters.sort }
+              : {}),
           },
         });
 
@@ -306,7 +330,14 @@ export default function SearchScreen() {
       setHasNextPage(true);
       nextOffsetRef.current = 0;
     }
-  }, [params.categoryId, params.condition, params.featured, params.query, params.section, params.sort]);
+  }, [
+    params.categoryId,
+    params.condition,
+    params.featured,
+    params.query,
+    params.section,
+    params.sort,
+  ]);
 
   const submitSearch = (nextQuery = searchQuery) => {
     setActiveQuery(nextQuery);
@@ -355,12 +386,20 @@ export default function SearchScreen() {
           className="items-center justify-center rounded-full border border-gray-200 bg-gray-50 p-2.5 dark:border-white/10 dark:bg-white/5"
           onPress={() => router.back()}
         >
-          <Ionicons name="arrow-back" size={18} color={isDark ? "white" : "#666"} />
+          <Ionicons
+            name="arrow-back"
+            size={18}
+            color={isDark ? "white" : "#666"}
+          />
         </Pressable>
 
         <Input className="h-12 flex-1 flex-row items-center rounded-full border border-gray-200 bg-gray-50 px-4 dark:border-white/10 dark:bg-white/5">
           <InputField
-            placeholder={params.categoryName ? `Search in "${params.categoryName}"` : "Search for items..."}
+            placeholder={
+              params.categoryName
+                ? `Search in "${params.categoryName}"`
+                : "Search for items..."
+            }
             className="flex-1 text-base text-black dark:text-white"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -375,7 +414,11 @@ export default function SearchScreen() {
           className="items-center justify-center rounded-full border border-gray-200 bg-gray-50 p-2.5 dark:border-white/10 dark:bg-white/5"
           onPress={() => submitSearch()}
         >
-          <Ionicons name="search-outline" size={18} color={isDark ? "white" : "#666"} />
+          <Ionicons
+            name="search-outline"
+            size={18}
+            color={isDark ? "white" : "#666"}
+          />
         </Pressable>
 
         <Pressable
@@ -385,10 +428,17 @@ export default function SearchScreen() {
             setFilterSheetOpen(true);
           }}
         >
-          <Ionicons name="options-outline" size={18} color={isDark ? "white" : "#666"} />
+          <Ionicons
+            name="options-outline"
+            size={18}
+            color={isDark ? "white" : "#666"}
+          />
           {activeFilterCount > 0 && (
             <View className="absolute -right-1 -top-1 h-5 w-5 items-center justify-center rounded-full bg-brand">
-              <Text variant="none" className="text-[10px] font-black text-white">
+              <Text
+                variant="none"
+                className="text-[10px] font-black text-white"
+              >
                 {activeFilterCount}
               </Text>
             </View>
@@ -425,7 +475,10 @@ export default function SearchScreen() {
                 </View>
               ) : null
             }
-            columnWrapperStyle={{ justifyContent: "space-between", paddingHorizontal: 16 }}
+            columnWrapperStyle={{
+              justifyContent: "space-between",
+              paddingHorizontal: 16,
+            }}
             contentContainerStyle={{ paddingVertical: 20 }}
             renderItem={({ item }) => <ProductCard product={item} />}
             showsVerticalScrollIndicator={false}
@@ -521,7 +574,9 @@ export default function SearchScreen() {
             </View>
             <View
               className={`h-7 w-12 rounded-full p-1 ${
-                draftFilters.featured ? "bg-brand" : "bg-gray-300 dark:bg-white/20"
+                draftFilters.featured
+                  ? "bg-brand"
+                  : "bg-gray-300 dark:bg-white/20"
               }`}
             >
               <View

@@ -28,11 +28,11 @@ export function PasswordResetNewPasswordStep({
 
     if (
       !/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(
-        password
+        password,
       )
     ) {
       setError(
-        "Password must be at least 8 characters, include uppercase, lowercase, number, and symbol"
+        "Password must be at least 8 characters, include uppercase, lowercase, number, and symbol",
       );
       return;
     }

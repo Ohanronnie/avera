@@ -53,11 +53,15 @@ const buildHomeSections = (items: any[]): HomeProductSection[] => {
     .map(mapProductToCard)
     .slice(0, 4);
   const budgetFinds = [...items]
-    .sort((first, second) => Number(first.price || 0) - Number(second.price || 0))
+    .sort(
+      (first, second) => Number(first.price || 0) - Number(second.price || 0),
+    )
     .map(mapProductToCard)
     .slice(0, 4);
   const premiumPicks = [...items]
-    .sort((first, second) => Number(second.price || 0) - Number(first.price || 0))
+    .sort(
+      (first, second) => Number(second.price || 0) - Number(first.price || 0),
+    )
     .map(mapProductToCard)
     .slice(0, 4);
   const usedDeals = items
@@ -76,7 +80,9 @@ const buildHomeSections = (items: any[]): HomeProductSection[] => {
       key: "featured",
       title: "Featured Deals",
       subtitle: "Hand-picked items worth checking first.",
-      products: featuredProducts.length ? featuredProducts : products.slice(4, 8),
+      products: featuredProducts.length
+        ? featuredProducts
+        : products.slice(4, 8),
     },
     {
       key: "budget",
@@ -116,7 +122,9 @@ export default function HomeScreen() {
 
   const router = useRouter();
   const [activeBanner, setActiveBanner] = useState(0);
-  const [productSections, setProductSections] = useState<HomeProductSection[]>([]);
+  const [productSections, setProductSections] = useState<HomeProductSection[]>(
+    [],
+  );
   const [productsLoading, setProductsLoading] = useState(false);
 
   const banners = [
@@ -178,10 +186,18 @@ export default function HomeScreen() {
             onPress={() => router.push("/product/search")}
             className="p-3 rounded-full bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5"
           >
-            <Ionicons name="search-outline" size={20} color={isDark ? "white" : "#111"} />
+            <Ionicons
+              name="search-outline"
+              size={20}
+              color={isDark ? "white" : "#111"}
+            />
           </Pressable>
           <Pressable className="p-3 rounded-full bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
-            <Ionicons name="notifications-outline" size={20} color={isDark ? "white" : "#111"} />
+            <Ionicons
+              name="notifications-outline"
+              size={20}
+              color={isDark ? "white" : "#111"}
+            />
           </Pressable>
         </View>
       </View>
@@ -256,7 +272,9 @@ export default function HomeScreen() {
               <View
                 key={i}
                 className={`h-1.5 rounded-full mx-1 transition-all ${
-                  activeBanner === i ? "w-6 bg-brand" : "w-1.5 bg-gray-200 dark:bg-white/10"
+                  activeBanner === i
+                    ? "w-6 bg-brand"
+                    : "w-1.5 bg-gray-200 dark:bg-white/10"
                 }`}
               />
             ))}
@@ -266,7 +284,9 @@ export default function HomeScreen() {
         {/* Categories Section */}
         <View className="mt-6 px-5">
           <View className="flex flex-row justify-between items-center mb-4">
-            <Text className="text-xl font-bold text-black dark:text-white">Categories</Text>
+            <Text className="text-xl font-bold text-black dark:text-white">
+              Categories
+            </Text>
             <Pressable
               className="flex flex-row items-center"
               onPress={() => router.push("/product/categories")}
@@ -321,7 +341,11 @@ export default function HomeScreen() {
                     <Text className="mr-1 text-sm font-semibold text-brand">
                       See All
                     </Text>
-                    <Ionicons name="chevron-forward" size={16} color="#2563EB" />
+                    <Ionicons
+                      name="chevron-forward"
+                      size={16}
+                      color="#2563EB"
+                    />
                   </Pressable>
                 </View>
                 <View className="flex-row flex-wrap justify-between">

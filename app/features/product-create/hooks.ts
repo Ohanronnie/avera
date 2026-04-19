@@ -1,6 +1,10 @@
 import { productSchema } from "@/components/products/create-product/schema";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { createProduct, fetchCategories, uploadProductImages } from "@/features/product-create/api";
+import {
+  createProduct,
+  fetchCategories,
+  uploadProductImages,
+} from "@/features/product-create/api";
 import { CreateProductForm } from "@/features/product-create/types";
 
 export function useCategoriesQuery() {

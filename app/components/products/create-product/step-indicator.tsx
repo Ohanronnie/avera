@@ -20,7 +20,9 @@ export function StepIndicator({ steps, currentStep }: StepIndicatorProps) {
             {index !== 0 && (
               <View
                 className={`absolute h-[2px] top-4 -translate-y-1/2 left-[-50%] right-[50%] ${
-                  currentStep >= s.id ? "bg-brand" : "bg-gray-200 dark:bg-white/10"
+                  currentStep >= s.id
+                    ? "bg-brand"
+                    : "bg-gray-200 dark:bg-white/10"
                 }`}
               />
             )}
@@ -52,8 +54,8 @@ export function StepIndicator({ steps, currentStep }: StepIndicatorProps) {
                 isCompleted
                   ? "text-brand"
                   : isActive
-                  ? "text-gray-500 dark:text-gray-400"
-                  : "text-gray-300 dark:text-gray-700"
+                    ? "text-gray-500 dark:text-gray-400"
+                    : "text-gray-300 dark:text-gray-700"
               }`}
             >
               {s.label}

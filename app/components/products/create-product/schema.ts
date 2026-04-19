@@ -4,10 +4,17 @@ import z from "zod";
 export const productSchema = z.object({
   name: z.string().min(3, "Name must be at least 3 characters"),
 
-  shortDescription: z.string().min(5, "Short description must be at least 5 characters").max(60, "Short description must be at most 60 characters"),
-  description: z.string().min(10, "Long description must be at least 10 characters"),
+  shortDescription: z
+    .string()
+    .min(5, "Short description must be at least 5 characters")
+    .max(60, "Short description must be at most 60 characters"),
+  description: z
+    .string()
+    .min(10, "Long description must be at least 10 characters"),
   price: z.number().positive("Price must be greater than 0"),
-  categoryName: z.string().min(3, "Category name must be at least 3 characters"),
+  categoryName: z
+    .string()
+    .min(3, "Category name must be at least 3 characters"),
   categoryId: z.number().positive("Category is required"),
   images: z
     .array(z.url("Invalid image URL"))

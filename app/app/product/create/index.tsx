@@ -6,7 +6,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function CreateIntroScreen() {
-
   const features = [
     {
       icon: "flash-outline",
@@ -26,10 +25,13 @@ export default function CreateIntroScreen() {
   ];
 
   return (
-    <SafeAreaView className="flex-1 bg-white dark:bg-[#0A0A0A]" edges={["top", "bottom"]}>
+    <SafeAreaView
+      className="flex-1 bg-white dark:bg-[#0A0A0A]"
+      edges={["top", "bottom"]}
+    >
       <Navbar title="Start Selling" showBack={true} />
-      
-      <ScrollView 
+
+      <ScrollView
         className="flex-1 px-6 bg-white dark:bg-[#0A0A0A]"
         showsVerticalScrollIndicator={false}
       >
@@ -37,7 +39,7 @@ export default function CreateIntroScreen() {
           <View className="w-48 h-48 bg-brand/5 dark:bg-brand/10 rounded-full items-center justify-center mb-8">
             <Ionicons name="storefront-outline" size={80} color="#2563EB" />
           </View>
-          
+
           <Text className="text-3xl font-bold text-black dark:text-white text-center">
             Ready to make some money?
           </Text>
@@ -48,13 +50,24 @@ export default function CreateIntroScreen() {
 
         <View className="space-y-6 mt-4">
           {features.map((feature, i) => (
-            <View key={i} className="flex-row items-center bg-gray-50/50 dark:bg-[#0D0D0D] p-4 rounded-2xl border border-gray-100 dark:border-white/[0.03] mb-4">
+            <View
+              key={i}
+              className="flex-row items-center bg-gray-50/50 dark:bg-[#0D0D0D] p-4 rounded-2xl border border-gray-100 dark:border-white/[0.03] mb-4"
+            >
               <View className="w-12 h-12 bg-white dark:bg-white/5 rounded-xl items-center justify-center border border-gray-100 dark:border-white/10">
-                <Ionicons name={feature.icon as any} size={24} color="#2563EB" />
+                <Ionicons
+                  name={feature.icon as any}
+                  size={24}
+                  color="#2563EB"
+                />
               </View>
               <View className="ml-4 flex-1">
-                <Text className="font-bold text-black dark:text-white text-base">{feature.title}</Text>
-                <Text className="text-gray-500 dark:text-gray-400 text-sm mt-0.5">{feature.desc}</Text>
+                <Text className="font-bold text-black dark:text-white text-base">
+                  {feature.title}
+                </Text>
+                <Text className="text-gray-500 dark:text-gray-400 text-sm mt-0.5">
+                  {feature.desc}
+                </Text>
               </View>
             </View>
           ))}
@@ -67,7 +80,9 @@ export default function CreateIntroScreen() {
           onPress={() => router.push("/product/create/basic-info")}
           className="bg-brand h-14 justify-center rounded-2xl flex-row items-center"
         >
-          <Text className="text-white font-bold text-base">Start Listing Now</Text>
+          <Text className="text-white font-bold text-base">
+            Start Listing Now
+          </Text>
         </TouchableOpacity>
         <Text className="text-center text-gray-400 dark:text-gray-500 text-[10px] mt-3">
           By continuing, you agree to Avera's Selling Policies

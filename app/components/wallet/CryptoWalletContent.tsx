@@ -2,9 +2,11 @@ import { Image, Pressable, View } from "react-native";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 
-import { ActionCard } from "@/components/wallet/ActionCard";
 import { WalletChart } from "@/components/wallet/WalletChart";
-import type { TokenHolding, WalletActivityItem } from "@/components/wallet/types";
+import type {
+  TokenHolding,
+  WalletActivityItem,
+} from "@/components/wallet/types";
 import { Text } from "@/components/themed/theme";
 
 export function CryptoWalletContent({
@@ -15,8 +17,6 @@ export function CryptoWalletContent({
   setCryptoTab,
   tokenHoldings,
   activityFeed,
-  onShowWithdraw,
-  onReceive,
 }: {
   maskedWalletId: string;
   portfolioChange: number;
@@ -25,13 +25,10 @@ export function CryptoWalletContent({
   setCryptoTab: (tab: "crypto" | "activity") => void;
   tokenHoldings: TokenHolding[];
   activityFeed: WalletActivityItem[];
-  onShowWithdraw: () => void;
-  onReceive: () => void;
 }) {
   return (
     <>
       <View className="items-center">
-        
         <View className="mt-10 flex-row items-center">
           <Text variant="none" className="text-xl font-semibold text-[#4ADE80]">
             +12.04%
@@ -47,20 +44,6 @@ export function CryptoWalletContent({
       </View>
 
       <WalletChart />
-
-      <View className="mt-6 flex-row gap-3">
-        <ActionCard
-          icon="arrow-down-left"
-          label="Receive"
-          onPress={onReceive}
-          iconPosition="left"
-        />
-        <ActionCard
-          icon="arrow-up-right"
-          label="Send"
-          onPress={onShowWithdraw}
-        />
-      </View>
 
       <View className="mt-8 flex-row rounded-2xl bg-[#111214] p-1">
         <Pressable

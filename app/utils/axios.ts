@@ -85,7 +85,7 @@ const refreshAccessToken = async (): Promise<string> => {
 
   const { accessToken: newAccessToken, refreshToken: newRefreshToken } =
     response.data;
-    console.log("Tokens refreshed successfully");
+  console.log("Tokens refreshed successfully");
   await saveTokens(newAccessToken, newRefreshToken);
   return newAccessToken;
 };
@@ -93,7 +93,7 @@ const refreshAccessToken = async (): Promise<string> => {
 // === Interceptors ===
 axiosInstance.interceptors.request.use(
   async (config) => {
-   // await new Promise((res, rej) => setTimeout(res, 5000))
+    // await new Promise((res, rej) => setTimeout(res, 5000))
     // If tokens are not in memory, load them once from storage
     if (!accessToken || !refreshToken) {
       await loadTokensFromStore();
@@ -104,7 +104,7 @@ axiosInstance.interceptors.request.use(
     }
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => Promise.reject(error),
 );
 
 axiosInstance.interceptors.response.use(
@@ -152,5 +152,5 @@ axiosInstance.interceptors.response.use(
     }
 
     return Promise.reject(error);
-  }
+  },
 );

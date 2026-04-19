@@ -66,7 +66,11 @@ function Categories({
               onPress={() => openCategory(category)}
               className="h-20 w-20 flex items-center justify-center bg-background-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 rounded-full"
             >
-              <Ionicons name={category.iconName as any} size={28} color={isDark ? "white" : "black"} />
+              <Ionicons
+                name={category.iconName as any}
+                size={28}
+                color={isDark ? "white" : "black"}
+              />
             </Pressable>
             <Text className="mt-2 text-sm font-medium">{category.name}</Text>
           </View>
@@ -84,7 +88,11 @@ function Categories({
             onPress={() => openCategory(category)}
             className="h-20 w-20 flex items-center justify-center bg-background-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 rounded-full"
           >
-            <Ionicons name={category.iconName as any} size={28} color={isDark ? "white" : "black"} />
+            <Ionicons
+              name={category.iconName as any}
+              size={28}
+              color={isDark ? "white" : "black"}
+            />
           </Pressable>
           <Text className="mt-2 text-sm font-medium text-center">
             {category.name}

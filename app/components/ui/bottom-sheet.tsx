@@ -86,10 +86,7 @@ export function BottomSheet({
   }, [alwaysVisible, translateY, visible]);
 
   const sheet = (
-    <View
-      className="absolute left-0 right-0"
-      style={{ bottom: -5 }}
-    >
+    <View className="absolute left-0 right-0" style={{ bottom: -5 }}>
       {!alwaysVisible && (
         <Pressable
           onPress={closeSheet}
@@ -125,7 +122,11 @@ export function BottomSheet({
                 onPress={closeSheet}
                 className="h-10 w-10 items-center justify-center rounded-full bg-gray-100 dark:bg-white/10"
               >
-                <Ionicons name="close" size={20} color={isDark ? "white" : "#111827"} />
+                <Ionicons
+                  name="close"
+                  size={20}
+                  color={isDark ? "white" : "#111827"}
+                />
               </Pressable>
             )}
           </View>
@@ -142,7 +143,12 @@ export function BottomSheet({
   }
 
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={closeSheet}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      onRequestClose={closeSheet}
+    >
       {sheet}
     </Modal>
   );

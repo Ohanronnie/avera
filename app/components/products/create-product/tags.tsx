@@ -14,7 +14,15 @@ interface TagsReviewProps {
   selectedCondition: string;
 }
 
-export function TagsReview({errors, form,selectedCondition, onUpdateForm, onOpenConditionModal, onSubmit,disabled }: TagsReviewProps) {
+export function TagsReview({
+  errors,
+  form,
+  selectedCondition,
+  onUpdateForm,
+  onOpenConditionModal,
+  onSubmit,
+  disabled,
+}: TagsReviewProps) {
   return (
     <View className="flex-1">
       {/* Section Header */}
@@ -56,7 +64,9 @@ export function TagsReview({errors, form,selectedCondition, onUpdateForm, onOpen
           <Text className="text-white">{selectedCondition}</Text>
           <Ionicons name="chevron-down" size={20} color="gray" />
         </Pressable>
-        {errors.condition && <Text className="text-red-500 text-sm mt-1">{errors.condition}</Text>}
+        {errors.condition && (
+          <Text className="text-red-500 text-sm mt-1">{errors.condition}</Text>
+        )}
       </View>
       {/* Product Preview */}
       <View className="mt-6">
@@ -86,7 +96,8 @@ export function TagsReview({errors, form,selectedCondition, onUpdateForm, onOpen
             {form.currency} {form.price.toLocaleString()}
           </Text>
           <Text className="text-sm text-gray-500 mt-1">
-            Quantity: {form.quantity} | Condition: {form.condition} | Category: {form.categoryName}
+            Quantity: {form.quantity} | Condition: {form.condition} | Category:{" "}
+            {form.categoryName}
           </Text>
           <Text className="text-sm text-gray-700 mt-3">{form.description}</Text>
         </View>

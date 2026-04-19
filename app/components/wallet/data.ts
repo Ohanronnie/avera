@@ -1,4 +1,7 @@
-import type { TokenHolding, WalletActivityItem } from "@/components/wallet/types";
+import type {
+  TokenHolding,
+  WalletActivityItem,
+} from "@/components/wallet/types";
 
 export const CHART_HEIGHT = 150;
 
@@ -55,7 +58,7 @@ export function getTokenHoldingBySymbol(symbol?: string) {
   if (!symbol) return undefined;
 
   return tokenHoldings.find(
-    (token) => token.symbol.toLowerCase() === symbol.toLowerCase()
+    (token) => token.symbol.toLowerCase() === symbol.toLowerCase(),
   );
 }
 

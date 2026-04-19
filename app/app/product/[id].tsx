@@ -18,6 +18,7 @@ import { Star } from "lucide-react-native";
 import { useColorScheme } from "nativewind";
 import { axiosInstance } from "@/utils/axios";
 import { useToast } from "@/contexts/ToastContext";
+import { BottomSheet } from "@/components/ui/bottom-sheet";
 
 const fallbackImage = require("@/assets/images/shoe.jpg");
 const { width } = Dimensions.get("window");
@@ -73,7 +74,8 @@ const getPostedLabel = (createdAt?: string) => {
   if (differenceInDays === 0) return "Today";
   if (differenceInDays === 1) return "Yesterday";
   if (differenceInDays < 7) return `${differenceInDays} days ago`;
-  if (differenceInDays < 30) return `${Math.floor(differenceInDays / 7)} weeks ago`;
+  if (differenceInDays < 30)
+    return `${Math.floor(differenceInDays / 7)} weeks ago`;
 
   return `${Math.floor(differenceInDays / 30)} months ago`;
 };
@@ -81,7 +83,9 @@ const getPostedLabel = (createdAt?: string) => {
 const getSellerName = (seller?: ProductSeller | null) => {
   if (!seller) return "Avera Seller";
 
-  const fullName = [seller.firstName, seller.lastName].filter(Boolean).join(" ");
+  const fullName = [seller.firstName, seller.lastName]
+    .filter(Boolean)
+    .join(" ");
   return fullName || seller.username || "Avera Seller";
 };
 
@@ -96,6 +100,7 @@ export default function ProductDetailsPage() {
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -111,7 +116,9 @@ export default function ProductDetailsPage() {
       } catch (error: any) {
         toast.show({
           title: "Product not available",
-          description: error?.response?.data?.message || "We couldn't load this product right now.",
+          description:
+            error?.response?.data?.message ||
+            "We couldn't load this product right now.",
           variant: "error",
         });
       } finally {
@@ -134,6 +141,8 @@ export default function ProductDetailsPage() {
   const price = Number(product?.price || 0);
   const sellerName = getSellerName(product?.seller);
   const productImageUrl = product?.images?.[0]?.url;
+  const serviceFee = Math.round(price * 0.015);
+  const total = price + serviceFee;
 
   if (loading) {
     return (
@@ -153,7 +162,11 @@ export default function ProductDetailsPage() {
           onPress={() => router.back()}
           className="mt-3 h-11 w-11 items-center justify-center rounded-2xl border border-gray-100 bg-gray-50 dark:border-white/10 dark:bg-white/5"
         >
-          <Ionicons name="chevron-back" size={24} color={isDark ? "white" : "#111"} />
+          <Ionicons
+            name="chevron-back"
+            size={24}
+            color={isDark ? "white" : "#111"}
+          />
         </Pressable>
         <View className="flex-1 items-center justify-center">
           <Text className="text-xl font-bold text-gray-900 dark:text-white">
@@ -181,7 +194,11 @@ export default function ProductDetailsPage() {
             setCurrentImageIndex(Math.round(x / width));
           }}
           renderItem={({ item }) => (
-            <Image source={item} style={{ width, height: 400 }} resizeMode="cover" />
+            <Image
+              source={item}
+              style={{ width, height: 400 }}
+              resizeMode="cover"
+            />
           )}
         />
 
@@ -190,7 +207,11 @@ export default function ProductDetailsPage() {
             onPress={() => router.back()}
             className="h-10 w-10 items-center justify-center rounded-full border border-gray-100/50 bg-white/90 dark:border-white/10 dark:bg-black/40"
           >
-            <Ionicons name="chevron-back" size={24} color={isDark ? "white" : "#111"} />
+            <Ionicons
+              name="chevron-back"
+              size={24}
+              color={isDark ? "white" : "#111"}
+            />
           </Pressable>
           <View className="flex-row gap-x-3">
             <Pressable
@@ -213,7 +234,11 @@ export default function ProductDetailsPage() {
                 })
               }
             >
-              <Ionicons name="share-outline" size={22} color={isDark ? "white" : "#111"} />
+              <Ionicons
+                name="share-outline"
+                size={22}
+                color={isDark ? "white" : "#111"}
+              />
             </Pressable>
           </View>
         </SafeAreaView>
@@ -223,7 +248,9 @@ export default function ProductDetailsPage() {
             <View
               key={index}
               className={`h-1.5 rounded-full ${
-                currentImageIndex === index ? "w-6 bg-brand" : "w-1.5 bg-white/60"
+                currentImageIndex === index
+                  ? "w-6 bg-brand"
+                  : "w-1.5 bg-white/60"
               }`}
             />
           ))}
@@ -267,7 +294,9 @@ export default function ProductDetailsPage() {
             <View className="flex-1 flex-row items-center">
               <Ionicons name="location-sharp" size={18} color="#2563EB" />
               <View className="ml-3">
-                <Text className="text-xs font-medium text-gray-500">Location</Text>
+                <Text className="text-xs font-medium text-gray-500">
+                  Location
+                </Text>
                 <Text className="text-sm font-bold text-black dark:text-white">
                   {product.location || "Nigeria"}
                 </Text>
@@ -276,7 +305,9 @@ export default function ProductDetailsPage() {
             <View className="flex-1 flex-row items-center border-l border-gray-100 pl-6 dark:border-white/5">
               <Ionicons name="time-outline" size={18} color="#2563EB" />
               <View className="ml-3">
-                <Text className="text-xs font-medium text-gray-500">Posted</Text>
+                <Text className="text-xs font-medium text-gray-500">
+                  Posted
+                </Text>
                 <Text className="text-sm font-bold text-black dark:text-white">
                   {getPostedLabel(product.createdAt)}
                 </Text>
@@ -295,7 +326,10 @@ export default function ProductDetailsPage() {
               {product.description}
             </Text>
             {product.description?.length > 180 && (
-              <Pressable onPress={() => setExpanded((current) => !current)} className="mt-2">
+              <Pressable
+                onPress={() => setExpanded((current) => !current)}
+                className="mt-2"
+              >
                 <Text className="text-sm font-bold text-brand">
                   {expanded ? "Show Less" : "Read More"}
                 </Text>
@@ -319,7 +353,10 @@ export default function ProductDetailsPage() {
                   </View>
                 )}
                 <View className="ml-3 flex-1">
-                  <Text className="font-bold text-black dark:text-white" numberOfLines={1}>
+                  <Text
+                    className="font-bold text-black dark:text-white"
+                    numberOfLines={1}
+                  >
                     {sellerName}
                   </Text>
                   <Text className="text-[10px] font-bold uppercase tracking-tight text-gray-400">
@@ -328,7 +365,9 @@ export default function ProductDetailsPage() {
                 </View>
               </View>
               <TouchableOpacity className="rounded-xl border border-gray-100 bg-white px-4 py-2 dark:border-white/10 dark:bg-white/10">
-                <Text className="text-sm font-bold text-black dark:text-white">Profile</Text>
+                <Text className="text-sm font-bold text-black dark:text-white">
+                  Profile
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -359,18 +398,118 @@ export default function ProductDetailsPage() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          onPress={() =>
-            toast.show({
-              title: "Purchase flow coming soon",
-              description: "We have the product ready. Checkout is the next piece to connect.",
-              variant: "info",
-            })
-          }
+          onPress={() => setCheckoutOpen(true)}
           className="h-16 flex-1 items-center justify-center rounded-2xl bg-brand shadow-none"
         >
           <Text className="text-lg font-bold text-white">Buy Now</Text>
         </TouchableOpacity>
       </View>
+
+      <BottomSheet
+        visible={checkoutOpen}
+        coverTabs
+        title="Checkout preview"
+        subtitle="Review this item before starting escrow payment."
+        onClose={() => setCheckoutOpen(false)}
+      >
+        <View>
+          <View className="flex-row rounded-3xl border border-gray-100 bg-gray-50 p-3 dark:border-white/5 dark:bg-white/5">
+            {productImageUrl ? (
+              <Image
+                source={{ uri: productImageUrl }}
+                className="h-20 w-20 rounded-2xl bg-gray-200 dark:bg-white/10"
+              />
+            ) : (
+              <View className="h-20 w-20 items-center justify-center rounded-2xl bg-brand/10">
+                <Ionicons name="cube-outline" size={24} color="#2563EB" />
+              </View>
+            )}
+            <View className="ml-3 flex-1 justify-center">
+              <Text
+                numberOfLines={2}
+                className="text-base font-bold text-gray-950 dark:text-white"
+              >
+                {product.name}
+              </Text>
+              <Text className="mt-1 text-sm font-black text-brand">
+                {formatPrice(product.price)}
+              </Text>
+              <Text className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Sold by {sellerName}
+              </Text>
+            </View>
+          </View>
+
+          <View className="mt-5 rounded-3xl border border-brand/20 bg-brand/10 p-4">
+            <View className="flex-row items-start">
+              <View className="h-10 w-10 items-center justify-center rounded-2xl bg-brand/10">
+                <Ionicons name="shield-checkmark-outline" size={20} color="#2563EB" />
+              </View>
+              <View className="ml-3 flex-1">
+                <Text variant="none" className="font-bold text-brand">
+                  Escrow protected
+                </Text>
+                <Text className="mt-1 text-sm leading-5 text-gray-600 dark:text-gray-300">
+                  Your payment will be held safely until the order is confirmed.
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          <View className="mt-5 rounded-3xl border border-gray-100 bg-white p-4 dark:border-white/5 dark:bg-white/5">
+            {[
+              { label: "Item price", value: formatPrice(price) },
+              { label: "Escrow fee", value: formatPrice(serviceFee) },
+              { label: "Delivery", value: "Choose later" },
+            ].map((item) => (
+              <View key={item.label} className="mb-3 flex-row items-center justify-between">
+                <Text className="text-sm text-gray-500 dark:text-gray-400">
+                  {item.label}
+                </Text>
+                <Text className="text-sm font-bold text-gray-950 dark:text-white">
+                  {item.value}
+                </Text>
+              </View>
+            ))}
+            <View className="mt-1 border-t border-gray-100 pt-4 dark:border-white/10">
+              <View className="flex-row items-center justify-between">
+                <Text className="text-base font-bold text-gray-950 dark:text-white">
+                  Total
+                </Text>
+                <Text className="text-xl font-black text-brand">
+                  {formatPrice(total)}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          <View className="mt-6 flex-row gap-3">
+            <Pressable
+              onPress={() => setCheckoutOpen(false)}
+              className="h-14 flex-1 items-center justify-center rounded-2xl border border-gray-200 bg-gray-50 dark:border-white/10 dark:bg-white/5"
+            >
+              <Text className="font-bold text-gray-950 dark:text-white">
+                Cancel
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                setCheckoutOpen(false);
+                toast.show({
+                  title: "Checkout coming soon",
+                  description: "Next step is creating the order and escrow payment.",
+                  variant: "info",
+                });
+              }}
+              className="h-14 flex-1 items-center justify-center rounded-2xl bg-brand"
+            >
+              <Text variant="none" className="font-bold text-white">
+                Continue
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </BottomSheet>
     </View>
   );
 }

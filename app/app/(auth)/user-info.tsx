@@ -28,7 +28,7 @@ const profileSchema = z.object({
     .string()
     .regex(
       /^[A-Za-z][A-Za-z0-9_]{3,14}$/,
-      "Username must start with a letter and be 4–15 characters (letters, numbers, underscores)"
+      "Username must start with a letter and be 4–15 characters (letters, numbers, underscores)",
     ),
   bio: z.string().max(160, "Bio must be 160 characters or less").optional(),
   phoneNumber: z.string().min(1, "Phone number is required"),
@@ -78,7 +78,9 @@ export default function UserFormScreen() {
   const [loading, setLoading] = useState(false);
   const [checkingUsername, setCheckingUsername] = useState(false);
   const { isDark } = useTheme();
-  const usernameDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const usernameDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const usernameRequestRef = useRef(0);
   const usernameAbortRef = useRef<AbortController | null>(null);
   const lastCheckedUsernameRef = useRef("");
@@ -108,68 +110,71 @@ export default function UserFormScreen() {
     setCheckingUsername(false);
   }, []);
 
-  const checkUsernameAvailability = useCallback(async (value: string) => {
-    const trimmedValue = value.trim();
+  const checkUsernameAvailability = useCallback(
+    async (value: string) => {
+      const trimmedValue = value.trim();
 
-    if (!trimmedValue) {
-      cancelUsernameCheck();
-      lastCheckedUsernameRef.current = "";
-      username.setError(null);
-      return;
-    }
-
-    if (!USERNAME_REGEX.test(trimmedValue)) {
-      cancelUsernameCheck();
-      return;
-    }
-
-    if (
-      trimmedValue === inFlightUsernameRef.current ||
-      trimmedValue === lastCheckedUsernameRef.current
-    ) {
-      return;
-    }
-
-    if (usernameAbortRef.current) {
-      usernameAbortRef.current.abort();
-    }
-
-    const controller = new AbortController();
-    usernameAbortRef.current = controller;
-    inFlightUsernameRef.current = trimmedValue;
-
-    const requestId = ++usernameRequestRef.current;
-
-    try {
-      setCheckingUsername(true);
-      const { data } = await axiosInstance.get(
-        `/auth/check-username?username=${encodeURIComponent(trimmedValue)}`,
-        { signal: controller.signal }
-      );
-
-      if (requestId !== usernameRequestRef.current) {
-        return;
-      }
-
-      lastCheckedUsernameRef.current = trimmedValue;
-      if (!data.available) {
-        username.setError("Username is already taken");
-      } else {
+      if (!trimmedValue) {
+        cancelUsernameCheck();
+        lastCheckedUsernameRef.current = "";
         username.setError(null);
-      }
-    } catch (error: any) {
-      if (error?.code === "ERR_CANCELED" || error?.name === "CanceledError") {
         return;
       }
-      // Silent: validate again on submit
-    } finally {
-      if (requestId === usernameRequestRef.current) {
-        inFlightUsernameRef.current = "";
-        usernameAbortRef.current = null;
-        setCheckingUsername(false);
+
+      if (!USERNAME_REGEX.test(trimmedValue)) {
+        cancelUsernameCheck();
+        return;
       }
-    }
-  }, [cancelUsernameCheck, username.setError]);
+
+      if (
+        trimmedValue === inFlightUsernameRef.current ||
+        trimmedValue === lastCheckedUsernameRef.current
+      ) {
+        return;
+      }
+
+      if (usernameAbortRef.current) {
+        usernameAbortRef.current.abort();
+      }
+
+      const controller = new AbortController();
+      usernameAbortRef.current = controller;
+      inFlightUsernameRef.current = trimmedValue;
+
+      const requestId = ++usernameRequestRef.current;
+
+      try {
+        setCheckingUsername(true);
+        const { data } = await axiosInstance.get(
+          `/auth/check-username?username=${encodeURIComponent(trimmedValue)}`,
+          { signal: controller.signal },
+        );
+
+        if (requestId !== usernameRequestRef.current) {
+          return;
+        }
+
+        lastCheckedUsernameRef.current = trimmedValue;
+        if (!data.available) {
+          username.setError("Username is already taken");
+        } else {
+          username.setError(null);
+        }
+      } catch (error: any) {
+        if (error?.code === "ERR_CANCELED" || error?.name === "CanceledError") {
+          return;
+        }
+        // Silent: validate again on submit
+      } finally {
+        if (requestId === usernameRequestRef.current) {
+          inFlightUsernameRef.current = "";
+          usernameAbortRef.current = null;
+          setCheckingUsername(false);
+        }
+      }
+    },
+    [cancelUsernameCheck, username.setError],
+  );
 
   useEffect(() => {
     const trimmedUsername = username.value.trim();
@@ -246,7 +251,7 @@ export default function UserFormScreen() {
       router.replace("/(tabs)/home");
     } catch (e: any) {
       const fieldErrors = e?.response?.data?.fieldErrors;
-      console.log(fieldErrors)
+      console.log(fieldErrors);
       if (fieldErrors) {
         firstName.setError(fieldErrors?.firstName?.[0] || null);
         lastName.setError(fieldErrors?.lastName?.[0] || null);
@@ -300,7 +305,7 @@ export default function UserFormScreen() {
               field: bio,
               placeholder: "Tell us a bit about yourself (max 160 chars)",
               multiline: true,
-              className: "pt-2"
+              className: "pt-2",
             },
           ].map(
             ({ label, field, placeholder, multiline, onBlur, className }) => (

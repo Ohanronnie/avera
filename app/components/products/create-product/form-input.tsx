@@ -32,8 +32,10 @@ export function FormInput({
   const isDark = colorScheme === "dark";
 
   // Dynamic height based on lines, but keeping it within reasonable bounds
-  const containerHeight = multiline 
-    ? numberOfLines <= 2 ? "h-20" : "h-32" 
+  const containerHeight = multiline
+    ? numberOfLines <= 2
+      ? "h-20"
+      : "h-32"
     : "h-14";
 
   return (
@@ -43,17 +45,23 @@ export function FormInput({
           {label}
         </Text>
         {hint && (
-          <Text className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">{hint}</Text>
+          <Text className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">
+            {hint}
+          </Text>
         )}
       </View>
-      <Input 
+      <Input
         variant="outline"
         size="xl"
         className={`${className} ${containerHeight}`}
-        style={{ 
-          borderWidth: 1, 
-          borderColor: error ? '#ef4444' : (isDark ? 'rgba(255,255,255,0.1)' : '#E5E7EB'),
-          backgroundColor: isDark ? '#1A1A1A' : '#F9FAFB'
+        style={{
+          borderWidth: 1,
+          borderColor: error
+            ? "#ef4444"
+            : isDark
+              ? "rgba(255,255,255,0.1)"
+              : "#E5E7EB",
+          backgroundColor: isDark ? "#1A1A1A" : "#F9FAFB",
         }}
       >
         <InputField

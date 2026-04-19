@@ -16,7 +16,9 @@ export default function OrdersScreen() {
     <SafeAreaView className="flex-1 bg-white dark:bg-[#0A0A0A]" edges={["top"]}>
       {/* Header */}
       <View className="px-5 py-4 border-b border-gray-100 dark:border-white/5 bg-white dark:bg-[#0A0A0A]">
-        <Text className="text-2xl font-bold text-gray-900 dark:text-white">Your Orders</Text>
+        <Text className="text-2xl font-bold text-gray-900 dark:text-white">
+          Your Orders
+        </Text>
       </View>
 
       {/* Tabs */}
@@ -27,7 +29,7 @@ export default function OrdersScreen() {
             onPress={() => setActiveTab(tab)}
             className={`mr-8 pb-3 ${activeTab === tab ? "border-b-2 border-brand" : ""}`}
           >
-            <Text 
+            <Text
               className={`text-sm font-bold ${activeTab === tab ? "text-brand" : "text-gray-400"}`}
             >
               {tab}
@@ -39,7 +41,11 @@ export default function OrdersScreen() {
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         <View className="flex-1 items-center justify-center py-32 px-10">
           <View className="w-24 h-24 bg-gray-50 dark:bg-white/5 rounded-full items-center justify-center mb-6">
-            <Ionicons name="receipt-outline" size={40} color={isDark ? "#333" : "#D1D5DB"} />
+            <Ionicons
+              name="receipt-outline"
+              size={40}
+              color={isDark ? "#333" : "#D1D5DB"}
+            />
           </View>
           <Text className="text-xl font-bold text-gray-900 dark:text-white text-center">
             No {activeTab.toLowerCase()} orders
@@ -47,8 +53,8 @@ export default function OrdersScreen() {
           <Text className="text-sm text-gray-500 text-center mt-2">
             When you buy or sell items, they will appear here.
           </Text>
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             className="mt-8 bg-brand px-8 py-4 rounded-2xl"
             activeOpacity={0.8}
           >

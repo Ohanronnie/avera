@@ -1,4 +1,11 @@
-import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  ReactNode,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import * as SecureStore from "expo-secure-store";
 import { useColorScheme } from "nativewind";
 
@@ -67,10 +74,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       toggleTheme,
       hydrated,
     }),
-    [resolvedScheme, hydrated]
+    [resolvedScheme, hydrated],
   );
 
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+  return (
+    <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
+  );
 }
 
 export function useTheme() {

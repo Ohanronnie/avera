@@ -50,7 +50,9 @@ export default function MediaScreen() {
   };
 
   const handleCategoryChange = (value: string) => {
-    const selected = categories.find((category) => String(category.id) === value);
+    const selected = categories.find(
+      (category) => String(category.id) === value,
+    );
     if (!selected) return;
     updateForm({ categoryId: selected.id, categoryName: selected.name });
   };
@@ -62,17 +64,22 @@ export default function MediaScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white dark:bg-[#0A0A0A]" edges={["top", "bottom"]}>
+    <SafeAreaView
+      className="flex-1 bg-white dark:bg-[#0A0A0A]"
+      edges={["top", "bottom"]}
+    >
       <Navbar title="Create Product" />
       <StepIndicator steps={stepConfig} currentStep={3} />
-      
-      <ScrollView 
+
+      <ScrollView
         className="flex-1 px-5 bg-white dark:bg-[#0A0A0A]"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 300 }}
       >
         <View className="py-6">
-          <Text className="text-2xl font-bold text-black dark:text-white">Category & Photos</Text>
+          <Text className="text-2xl font-bold text-black dark:text-white">
+            Category & Photos
+          </Text>
           <Text className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             Visuals are key! Add high-quality photos of your product.
           </Text>
@@ -86,9 +93,13 @@ export default function MediaScreen() {
           </View>
           <CustomSelect
             options={categoryOptions}
-            selectedValue={form.categoryId ? String(form.categoryId) : undefined}
+            selectedValue={
+              form.categoryId ? String(form.categoryId) : undefined
+            }
             onValueChange={handleCategoryChange}
-            placeholder={isLoading ? "Loading categories..." : "Select category"}
+            placeholder={
+              isLoading ? "Loading categories..." : "Select category"
+            }
             searchable
             searchPlaceholder="Search category"
             triggerClassName="h-14 rounded-2xl bg-gray-50/50 dark:bg-white/5 border-gray-100 dark:border-white/10"
@@ -117,15 +128,19 @@ export default function MediaScreen() {
           onPress={() => router.back()}
           className="flex-1 h-14 justify-center rounded-2xl border border-gray-200 dark:border-white/10"
         >
-          <Text className="text-black dark:text-white font-bold text-center">Back</Text>
+          <Text className="text-black dark:text-white font-bold text-center">
+            Back
+          </Text>
         </TouchableOpacity>
-        
+
         <TouchableOpacity
           activeOpacity={0.8}
           onPress={goNext}
           className="flex-[2] bg-brand h-14 justify-center rounded-2xl flex-row items-center"
         >
-          <Text className="text-white font-bold text-base mr-2">Review Product</Text>
+          <Text className="text-white font-bold text-base mr-2">
+            Review Product
+          </Text>
           <Ionicons name="arrow-forward" size={18} color="white" />
         </TouchableOpacity>
       </View>

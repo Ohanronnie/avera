@@ -33,18 +33,18 @@ export async function uploadProductImages(images: string[]): Promise<string[]> {
       headers: {
         "Content-Type": "multipart/form-data",
       },
-    }
+    },
   );
 
   return response.data.files.map((file) => file.path);
 }
 
 export async function createProduct(
-  payload: CreateProductForm
+  payload: CreateProductForm,
 ): Promise<CreateProductResponse> {
   const response = await axiosInstance.post<CreateProductResponse>(
     "/products/create",
-    payload
+    payload,
   );
   return response.data;
 }

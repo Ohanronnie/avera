@@ -19,7 +19,8 @@ const stepConfig = [
 ];
 
 export default function ReviewScreen() {
-  const { form, updateForm, errors, validateAll, reset } = useCreateProductFlow();
+  const { form, updateForm, errors, validateAll, reset } =
+    useCreateProductFlow();
   const createProductMutation = useCreateProductMutation();
 
   const conditionOptions = CONDITION_OPTIONS.map((condition) => ({
@@ -39,17 +40,22 @@ export default function ReviewScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white dark:bg-[#0A0A0A]" edges={["top", "bottom"]}>
+    <SafeAreaView
+      className="flex-1 bg-white dark:bg-[#0A0A0A]"
+      edges={["top", "bottom"]}
+    >
       <Navbar title="Create Product" />
       <StepIndicator steps={stepConfig} currentStep={4} />
-      
-      <ScrollView 
+
+      <ScrollView
         className="flex-1 px-5 bg-white dark:bg-[#0A0A0A]"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 300 }}
       >
         <View className="py-6">
-          <Text className="text-2xl font-bold text-black dark:text-white">Final Review</Text>
+          <Text className="text-2xl font-bold text-black dark:text-white">
+            Final Review
+          </Text>
           <Text className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             Check everything one last time before going live.
           </Text>
@@ -65,7 +71,9 @@ export default function ReviewScreen() {
             options={conditionOptions}
             selectedValue={form.condition}
             onValueChange={(condition) =>
-              updateForm({ condition: condition as (typeof CONDITION_OPTIONS)[number] })
+              updateForm({
+                condition: condition as (typeof CONDITION_OPTIONS)[number],
+              })
             }
             placeholder="Select condition"
             triggerClassName="h-14 rounded-2xl bg-gray-50/50 dark:bg-white/5 border-gray-100 dark:border-white/10"
@@ -96,8 +104,12 @@ export default function ReviewScreen() {
           <Text className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-widest mb-4">
             Listing Summary
           </Text>
-          
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-2 mb-4">
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            className="-mx-2 mb-4"
+          >
             {form.images.map((uri, index) => (
               <Image
                 key={`${uri}-${index}`}
@@ -109,20 +121,36 @@ export default function ReviewScreen() {
 
           <View className="space-y-3">
             <View className="flex-row justify-between mb-1">
-              <Text className="text-gray-500 dark:text-gray-400 text-sm">Product Name</Text>
-              <Text className="text-black dark:text-white font-bold text-sm text-right flex-1 ml-4">{form.name}</Text>
+              <Text className="text-gray-500 dark:text-gray-400 text-sm">
+                Product Name
+              </Text>
+              <Text className="text-black dark:text-white font-bold text-sm text-right flex-1 ml-4">
+                {form.name}
+              </Text>
             </View>
             <View className="flex-row justify-between mb-1">
-              <Text className="text-gray-500 dark:text-gray-400 text-sm">Price</Text>
-              <Text className="text-brand font-bold text-sm">{form.currency} {form.price.toLocaleString()}</Text>
+              <Text className="text-gray-500 dark:text-gray-400 text-sm">
+                Price
+              </Text>
+              <Text className="text-brand font-bold text-sm">
+                {form.currency} {form.price.toLocaleString()}
+              </Text>
             </View>
             <View className="flex-row justify-between mb-1">
-              <Text className="text-gray-500 dark:text-gray-400 text-sm">Category</Text>
-              <Text className="text-black dark:text-white font-semibold text-sm">{form.categoryName}</Text>
+              <Text className="text-gray-500 dark:text-gray-400 text-sm">
+                Category
+              </Text>
+              <Text className="text-black dark:text-white font-semibold text-sm">
+                {form.categoryName}
+              </Text>
             </View>
             <View className="flex-row justify-between mb-1">
-              <Text className="text-gray-500 dark:text-gray-400 text-sm">Quantity</Text>
-              <Text className="text-black dark:text-white font-semibold text-sm">{form.quantity}</Text>
+              <Text className="text-gray-500 dark:text-gray-400 text-sm">
+                Quantity
+              </Text>
+              <Text className="text-black dark:text-white font-semibold text-sm">
+                {form.quantity}
+              </Text>
             </View>
           </View>
 
@@ -136,7 +164,8 @@ export default function ReviewScreen() {
         {createProductMutation.isError && (
           <View className="mt-4 p-4 bg-red-50 dark:bg-red-500/10 rounded-2xl border border-red-100 dark:border-red-500/20">
             <Text className="text-red-500 text-xs font-medium text-center">
-              Could not create product. Please check your connection and try again.
+              Could not create product. Please check your connection and try
+              again.
             </Text>
           </View>
         )}
@@ -149,9 +178,11 @@ export default function ReviewScreen() {
           onPress={() => router.back()}
           className="flex-1 h-14 justify-center rounded-2xl border border-gray-200 dark:border-white/10"
         >
-          <Text className="text-black dark:text-white font-bold text-center">Back</Text>
+          <Text className="text-black dark:text-white font-bold text-center">
+            Back
+          </Text>
         </TouchableOpacity>
-        
+
         <TouchableOpacity
           activeOpacity={0.8}
           onPress={handleSubmit}
@@ -159,7 +190,9 @@ export default function ReviewScreen() {
           className="flex-[2] bg-brand h-14 justify-center rounded-2xl flex-row items-center"
         >
           <Text className="text-white font-bold text-base mr-2">
-            {createProductMutation.isPending ? "Creating..." : "Complete Listing"}
+            {createProductMutation.isPending
+              ? "Creating..."
+              : "Complete Listing"}
           </Text>
           <Ionicons name="checkmark" size={18} color="white" />
         </TouchableOpacity>

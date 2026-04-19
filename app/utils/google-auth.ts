@@ -26,7 +26,7 @@ export function configureGoogleAuth() {
 
 export function getGoogleAuthErrorMessage(error: unknown) {
   const code = (error as { code?: string })?.code;
-  console.log(code)
+  console.log(code);
   if (code === statusCodes.SIGN_IN_CANCELLED) {
     return "Google sign-in was cancelled.";
   }

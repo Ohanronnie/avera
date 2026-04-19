@@ -8,7 +8,10 @@ import { Pressable, ScrollView, View, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCreateProductFlow } from "@/features/product-create/context";
-import { CREATE_PRODUCT_STEP_FIELDS, NIGERIAN_STATES } from "@/features/product-create/types";
+import {
+  CREATE_PRODUCT_STEP_FIELDS,
+  NIGERIAN_STATES,
+} from "@/features/product-create/types";
 import { useState } from "react";
 
 const stepConfig = [
@@ -34,7 +37,10 @@ export default function BasicInfoScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white dark:bg-[#0A0A0A]" edges={["top", "bottom"]}>
+    <SafeAreaView
+      className="flex-1 bg-white dark:bg-[#0A0A0A]"
+      edges={["top", "bottom"]}
+    >
       <Navbar title="Create Product" />
       <StepIndicator
         steps={[
@@ -45,14 +51,16 @@ export default function BasicInfoScreen() {
         ]}
         currentStep={1}
       />
-      
-      <ScrollView 
+
+      <ScrollView
         className="flex-1 px-5 bg-white dark:bg-[#0A0A0A]"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: isSelectOpen ? 300 : 40 }}
       >
         <View className="py-6">
-          <Text className="text-2xl font-bold text-black dark:text-white">Product Details</Text>
+          <Text className="text-2xl font-bold text-black dark:text-white">
+            Product Details
+          </Text>
           <Text className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             Fill in the essential information to help buyers find your item.
           </Text>
@@ -121,7 +129,9 @@ export default function BasicInfoScreen() {
           className="bg-brand h-14 justify-center rounded-2xl flex-row items-center"
           onPress={goNext}
         >
-          <Text className="text-white font-bold text-base mr-2">Continue to Pricing</Text>
+          <Text className="text-white font-bold text-base mr-2">
+            Continue to Pricing
+          </Text>
           <Ionicons name="arrow-forward" size={18} color="white" />
         </TouchableOpacity>
       </View>

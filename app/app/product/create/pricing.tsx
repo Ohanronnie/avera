@@ -8,7 +8,10 @@ import { ScrollView, View, TouchableOpacity, Switch } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCreateProductFlow } from "@/features/product-create/context";
-import { CREATE_PRODUCT_STEP_FIELDS, CURRENCY_OPTIONS } from "@/features/product-create/types";
+import {
+  CREATE_PRODUCT_STEP_FIELDS,
+  CURRENCY_OPTIONS,
+} from "@/features/product-create/types";
 
 const stepConfig = [
   { id: 1, label: "Basic Info" },
@@ -32,17 +35,22 @@ export default function PricingScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white dark:bg-[#0A0A0A]" edges={["top", "bottom"]}>
+    <SafeAreaView
+      className="flex-1 bg-white dark:bg-[#0A0A0A]"
+      edges={["top", "bottom"]}
+    >
       <Navbar title="Create Product" />
       <StepIndicator steps={stepConfig} currentStep={2} />
-      
-      <ScrollView 
+
+      <ScrollView
         className="flex-1 px-5 bg-white dark:bg-[#0A0A0A]"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 300 }}
       >
         <View className="py-6">
-          <Text className="text-2xl font-bold text-black dark:text-white">Pricing & Inventory</Text>
+          <Text className="text-2xl font-bold text-black dark:text-white">
+            Pricing & Inventory
+          </Text>
           <Text className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             Define your price and how many items you have available.
           </Text>
@@ -67,7 +75,9 @@ export default function PricingScreen() {
           <CustomSelect
             options={currencyOptions}
             selectedValue={form.currency}
-            onValueChange={(currency) => updateForm({ currency: currency as "NGN" })}
+            onValueChange={(currency) =>
+              updateForm({ currency: currency as "NGN" })
+            }
             placeholder="Select currency"
           />
           {errors.currency && (
@@ -87,10 +97,16 @@ export default function PricingScreen() {
           error={errors.quantity}
         />
 
-        <View className={`p-4 rounded-2xl border flex-row justify-between items-center ${form.isNegotiable ? 'border-brand bg-brand/5 dark:bg-brand/10' : 'border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-[#1A1A1A]'}`}>
+        <View
+          className={`p-4 rounded-2xl border flex-row justify-between items-center ${form.isNegotiable ? "border-brand bg-brand/5 dark:bg-brand/10" : "border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-[#1A1A1A]"}`}
+        >
           <View className="flex-1 pr-4">
-            <Text className="text-sm font-bold text-gray-900 dark:text-white">Negotiable</Text>
-            <Text className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Allow buyers to make price offers</Text>
+            <Text className="text-sm font-bold text-gray-900 dark:text-white">
+              Negotiable
+            </Text>
+            <Text className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              Allow buyers to make price offers
+            </Text>
           </View>
           <Switch
             value={form.isNegotiable}
@@ -108,15 +124,19 @@ export default function PricingScreen() {
           onPress={() => router.back()}
           className="flex-1 h-14 justify-center rounded-2xl border border-gray-200 dark:border-white/10"
         >
-          <Text className="text-black dark:text-white font-bold text-center">Back</Text>
+          <Text className="text-black dark:text-white font-bold text-center">
+            Back
+          </Text>
         </TouchableOpacity>
-        
+
         <TouchableOpacity
           activeOpacity={0.8}
           onPress={goNext}
           className="flex-[2] bg-brand h-14 justify-center rounded-2xl flex-row items-center"
         >
-          <Text className="text-white font-bold text-base mr-2">Continue to Media</Text>
+          <Text className="text-white font-bold text-base mr-2">
+            Continue to Media
+          </Text>
           <Ionicons name="arrow-forward" size={18} color="white" />
         </TouchableOpacity>
       </View>

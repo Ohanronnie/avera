@@ -17,7 +17,11 @@ export default function ProductCategoriesScreen() {
           onPress={() => router.back()}
           className="h-11 w-11 items-center justify-center rounded-full border border-gray-100 bg-gray-50 dark:border-white/10 dark:bg-white/5"
         >
-          <Ionicons name="chevron-back" size={22} color={isDark ? "white" : "#111"} />
+          <Ionicons
+            name="chevron-back"
+            size={22}
+            color={isDark ? "white" : "#111"}
+          />
         </Pressable>
         <View className="ml-4 flex-1">
           <Text className="text-2xl font-bold text-black dark:text-white">

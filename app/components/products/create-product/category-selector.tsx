@@ -15,9 +15,8 @@ export function CategorySelector({
   onSelect,
   error,
   onOpenModal,
-  categoryName
+  categoryName,
 }: CategorySelectorProps) {
-
   return (
     <View className="mb-4">
       <Text className="text-base font-medium mb-1 text-white">Category</Text>
@@ -26,8 +25,8 @@ export function CategorySelector({
         className="border border-gray-300 rounded-xl h-14 flex-row items-center justify-between px-3"
       >
         <Text className="text-white">{categoryName}</Text>
-       <Ionicons name="chevron-down" size={20} color="gray" />
-       </Pressable>
+        <Ionicons name="chevron-down" size={20} color="gray" />
+      </Pressable>
       {error && <Text className="text-red-500 text-sm mt-1">{error}</Text>}
     </View>
   );

@@ -1,10 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 
-import {
-  loginUser,
-  loginWithGoogle,
-  registerUser,
-} from "@/features/auth/api";
+import { loginUser, loginWithGoogle, registerUser } from "@/features/auth/api";
 import type {
   AuthFieldErrors,
   LoginPayload,
@@ -97,7 +93,7 @@ export function useRegisterMutation({
               : backendErrors[field];
             return acc;
           },
-          {}
+          {},
         );
 
         onFieldErrors(formatted);

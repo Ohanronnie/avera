@@ -76,7 +76,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const hideAll = useCallback(() => {
-    Object.values(timeoutsRef.current).forEach((timeout) => clearTimeout(timeout));
+    Object.values(timeoutsRef.current).forEach((timeout) =>
+      clearTimeout(timeout),
+    );
     timeoutsRef.current = {};
     setToasts([]);
   }, []);
@@ -85,7 +87,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     ({ duration = 4000, variant = "info", ...options }: ToastOptions) => {
       const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-      setToasts((current) => [...current, { id, variant, duration, ...options }]);
+      setToasts((current) => [
+        ...current,
+        { id, variant, duration, ...options },
+      ]);
 
       if (duration > 0) {
         timeoutsRef.current[id] = setTimeout(() => {
@@ -95,7 +100,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
       return id;
     },
-    [hide]
+    [hide],
   );
 
   const value = useMemo(
@@ -104,7 +109,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       hide,
       hideAll,
     }),
-    [show, hide, hideAll]
+    [show, hide, hideAll],
   );
 
   return (
@@ -150,11 +155,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                   onPress={() => hide(toast.id)}
                   className="ml-3 h-8 w-8 items-center justify-center rounded-full bg-black/5 dark:bg-white/5"
                 >
-                  <Ionicons
-                    name="close"
-                    size={16}
-                    color="#9CA3AF"
-                  />
+                  <Ionicons name="close" size={16} color="#9CA3AF" />
                 </Pressable>
               </View>
             </View>

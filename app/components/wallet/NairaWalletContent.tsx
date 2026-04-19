@@ -23,8 +23,6 @@ export function NairaWalletContent({
 }) {
   return (
     <>
-      
-
       <View className="mt-6 rounded-3xl border border-white/5 bg-[#121214] p-5">
         <View className="flex-row items-start justify-between">
           <View>
@@ -47,7 +45,11 @@ export function NairaWalletContent({
         </View>
 
         <View className="mt-6 flex-row gap-3">
-          <ActionCard icon="arrow-up-right" label="Send" onPress={onShowWithdraw} />
+          <ActionCard
+            icon="arrow-up-right"
+            label="Send"
+            onPress={onShowWithdraw}
+          />
           <ActionCard
             icon="arrow-down-left"
             label="Receive"

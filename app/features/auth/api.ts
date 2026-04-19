@@ -17,7 +17,7 @@ export async function persistAuthSession(tokens: AuthTokensResponse) {
 export async function loginUser(payload: LoginPayload) {
   const { data } = await axiosInstance.post<AuthTokensResponse>(
     "/auth/login",
-    payload
+    payload,
   );
 
   await persistAuthSession(data);
@@ -27,7 +27,7 @@ export async function loginUser(payload: LoginPayload) {
 export async function registerUser(payload: RegisterPayload) {
   const { data } = await axiosInstance.post<RegisterResponse>(
     "/auth/register",
-    payload
+    payload,
   );
 
   return data;
@@ -39,12 +39,12 @@ export async function loginWithGoogle() {
 
   const userInfo = await GoogleSignin.signIn();
   const idToken = userInfo.data?.idToken;
-  if(userInfo.type === "cancelled") {
+  if (userInfo.type === "cancelled") {
     throw new Error("Google sign-in was cancelled.");
   }
   const { data } = await axiosInstance.post<AuthTokensResponse>(
     "/auth/google-login",
-    { token: idToken }
+    { token: idToken },
   );
 
   await persistAuthSession(data);

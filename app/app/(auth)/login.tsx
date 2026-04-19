@@ -5,17 +5,15 @@ import { Divider } from "@/components/ui/divider";
 import { Input, InputField } from "@/components/ui/input";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import {
-  View,
-  Pressable,
-  Image,
-  ActivityIndicator,
-} from "react-native";
+import { View, Pressable, Image, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { z } from "zod";
 import { useColorScheme } from "nativewind";
 import { configureGoogleAuth } from "@/utils/google-auth";
-import { useEmailLoginMutation, useGoogleLoginMutation } from "@/features/auth/hooks";
+import {
+  useEmailLoginMutation,
+  useGoogleLoginMutation,
+} from "@/features/auth/hooks";
 import { useToast } from "@/contexts/ToastContext";
 
 const loginSchema = z.object({
@@ -23,9 +21,7 @@ const loginSchema = z.object({
     .string()
     .nonempty("Email cannot be empty")
     .email("Please provide a valid email address"),
-  password: z
-    .string()
-    .nonempty("Please enter your password"),
+  password: z.string().nonempty("Please enter your password"),
 });
 
 type LoginFields = z.infer<typeof loginSchema>;
@@ -33,7 +29,9 @@ type LoginFields = z.infer<typeof loginSchema>;
 export default function Login() {
   const [form, setForm] = useState<LoginFields>({ email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
-  const [errors, setErrors] = useState<Partial<Record<keyof LoginFields, string>>>({});
+  const [errors, setErrors] = useState<
+    Partial<Record<keyof LoginFields, string>>
+  >({});
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   const toast = useToast();
@@ -48,7 +46,9 @@ export default function Login() {
     onFieldErrors: (fieldErrors) => {
       setErrors({
         ...fieldErrors,
-        ...(fieldErrors.password ? { password: "Invalid email or password." } : {}),
+        ...(fieldErrors.password
+          ? { password: "Invalid email or password." }
+          : {}),
       });
     },
     onInvalidCredentials: () => {
@@ -241,7 +241,10 @@ export default function Login() {
             disabled={googleLoginMutation.isPending}
           >
             {googleLoginMutation.isPending ? (
-              <ActivityIndicator color={isDark ? "#FFFFFF" : "#111827"} size="small" />
+              <ActivityIndicator
+                color={isDark ? "#FFFFFF" : "#111827"}
+                size="small"
+              />
             ) : (
               <>
                 <Image
