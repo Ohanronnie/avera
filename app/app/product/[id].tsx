@@ -46,6 +46,7 @@ type ProductDetails = {
   condition?: string | null;
   currency?: string | null;
   location?: string | null;
+  quantity?: number;
   rating?: number;
   numReviews?: number;
   isFeatured?: boolean;
@@ -101,6 +102,7 @@ export default function ProductDetailsPage() {
   const [expanded, setExpanded] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [buyerQuantity, setBuyerQuantity] = useState(1);
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -141,8 +143,22 @@ export default function ProductDetailsPage() {
   const price = Number(product?.price || 0);
   const sellerName = getSellerName(product?.seller);
   const productImageUrl = product?.images?.[0]?.url;
-  const serviceFee = Math.round(price * 0.015);
-  const total = price + serviceFee;
+  const availableQuantity = Math.max(1, Number(product?.quantity || 1));
+  const subtotal = price * buyerQuantity;
+  const serviceFee = Math.round(subtotal * 0.015);
+  const total = subtotal + serviceFee;
+
+  useEffect(() => {
+    setBuyerQuantity((current) => Math.min(Math.max(current, 1), availableQuantity));
+  }, [availableQuantity]);
+
+  const decrementQuantity = () => {
+    setBuyerQuantity((current) => Math.max(1, current - 1));
+  };
+
+  const incrementQuantity = () => {
+    setBuyerQuantity((current) => Math.min(availableQuantity, current + 1));
+  };
 
   if (loading) {
     return (
@@ -364,7 +380,7 @@ export default function ProductDetailsPage() {
                   </Text>
                 </View>
               </View>
-              <TouchableOpacity className="rounded-xl border border-gray-100 bg-white px-4 py-2 dark:border-white/10 dark:bg-white/10">
+              <TouchableOpacity onPress={() => router.push(`/seller/${product.seller?.id}`)} className="rounded-xl border border-gray-100 bg-white px-4 py-2 dark:border-white/10 dark:bg-white/10">
                 <Text className="text-sm font-bold text-black dark:text-white">
                   Profile
                 </Text>
@@ -457,8 +473,51 @@ export default function ProductDetailsPage() {
           </View>
 
           <View className="mt-5 rounded-3xl border border-gray-100 bg-white p-4 dark:border-white/5 dark:bg-white/5">
+            <View className="flex-row items-center justify-between">
+              <View className="flex-1 pr-4">
+                <Text className="text-base font-bold text-gray-950 dark:text-white">
+                  Quantity
+                </Text>
+                <Text className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {availableQuantity} available
+                </Text>
+              </View>
+
+              <View className="flex-row items-center rounded-full border border-gray-100 bg-gray-50 p-1 dark:border-white/10 dark:bg-white/5">
+                <Pressable
+                  onPress={decrementQuantity}
+                  disabled={buyerQuantity <= 1}
+                  className={`h-10 w-10 items-center justify-center rounded-full ${
+                    buyerQuantity <= 1 ? "opacity-40" : ""
+                  }`}
+                >
+                  <Ionicons
+                    name="remove"
+                    size={18}
+                    color={isDark ? "white" : "#111827"}
+                  />
+                </Pressable>
+                <Text className="min-w-10 text-center text-lg font-black text-gray-950 dark:text-white">
+                  {buyerQuantity}
+                </Text>
+                <Pressable
+                  onPress={incrementQuantity}
+                  disabled={buyerQuantity >= availableQuantity}
+                  className={`h-10 w-10 items-center justify-center rounded-full bg-brand ${
+                    buyerQuantity >= availableQuantity ? "opacity-40" : ""
+                  }`}
+                >
+                  <Ionicons name="add" size={18} color="white" />
+                </Pressable>
+              </View>
+            </View>
+          </View>
+
+          <View className="mt-5 rounded-3xl border border-gray-100 bg-white p-4 dark:border-white/5 dark:bg-white/5">
             {[
               { label: "Item price", value: formatPrice(price) },
+              { label: "Quantity", value: `x${buyerQuantity}` },
+              { label: "Subtotal", value: formatPrice(subtotal) },
               { label: "Escrow fee", value: formatPrice(serviceFee) },
               { label: "Delivery", value: "Choose later" },
             ].map((item) => (

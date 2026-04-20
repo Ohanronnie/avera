@@ -2,9 +2,10 @@ import { useEffect, useRef } from "react";
 import { router } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import { Animated, StyleSheet, View, Dimensions } from "react-native";
+import { useSharedValue } from "react-native-reanimated";
 
 export default function Index() {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = (new Animated.Value(0));
   console.log("Index screen rendered");
   useEffect(() => {
     Animated.timing(fadeAnim, {

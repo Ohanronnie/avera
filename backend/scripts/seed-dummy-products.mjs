@@ -4,9 +4,15 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const API_BASE = (process.env.API_BASE || 'http://localhost:3000').replace(/\/$/, '');
-const MEDIA_BASE = (process.env.MEDIA_BASE || API_BASE.replace('localhost', '127.0.0.1')).replace(/\/$/, '');
-const SOURCE_URL = process.env.SOURCE_URL || 'https://dummyjson.com/products?limit=30';
+const API_BASE = (process.env.API_BASE || 'http://localhost:3000').replace(
+  /\/$/,
+  '',
+);
+const MEDIA_BASE = (
+  process.env.MEDIA_BASE || API_BASE.replace('localhost', '127.0.0.1')
+).replace(/\/$/, '');
+const SOURCE_URL =
+  process.env.SOURCE_URL || 'https://dummyjson.com/products?limit=30';
 const EMAIL = process.env.SEED_EMAIL || 'ohanronnie@gmail.com';
 const PASSWORD = process.env.SEED_PASSWORD || 'Paul123@';
 const LIMIT = Number(process.env.SEED_LIMIT || 25);
@@ -47,31 +53,206 @@ const CATEGORY_MAP = new Map([
 ]);
 
 const FALLBACK_PRODUCTS = [
-  ['Wireless Noise Cancelling Headphones', 'Electronics', 58, 'Clear audio, soft ear cushions, and long battery life for everyday listening.', 'Avera Audio', ['headphones', 'bluetooth', 'audio']],
-  ['Smart Fitness Watch', 'Electronics', 72, 'Track workouts, heart rate, sleep, and notifications from your wrist.', 'PulseFit', ['watch', 'fitness', 'wearable']],
-  ['Portable Bluetooth Speaker', 'Electronics', 34, 'Compact wireless speaker with deep bass and splash resistance.', 'BoomBox', ['speaker', 'bluetooth', 'music']],
-  ['USB-C Fast Charger', 'Electronics', 18, 'Fast wall charger for phones, tablets, and small devices.', 'VoltPro', ['charger', 'usb-c', 'accessory']],
-  ['Leather Laptop Backpack', 'womens-bags', 45, 'Durable backpack with padded laptop storage and everyday compartments.', 'UrbanCarry', ['bag', 'laptop', 'fashion']],
-  ['Classic White Sneakers', 'mens-shoes', 52, 'Clean everyday sneakers with comfortable soles and premium finish.', 'StreetStep', ['shoes', 'sneakers', 'fashion']],
-  ['Cotton Graphic T-Shirt', 'mens-shirts', 16, 'Soft cotton tee with a clean fit for casual wear.', 'ThreadLab', ['shirt', 'clothing', 'casual']],
-  ['Women Summer Dress', 'womens-dresses', 39, 'Lightweight dress for casual outings, work, and weekend plans.', 'LunaWear', ['dress', 'women', 'fashion']],
-  ['Stainless Steel Wristwatch', 'mens-watches', 64, 'Minimal watch with stainless strap and water-resistant build.', 'TimeCraft', ['watch', 'accessory', 'fashion']],
-  ['Gold Plated Necklace', 'womens-jewellery', 29, 'Simple necklace for everyday wear and special occasions.', 'GlowLine', ['jewelry', 'necklace', 'fashion']],
-  ['Ceramic Dinner Plate Set', 'kitchen-accessories', 31, 'Elegant plate set for home dining and hosting guests.', 'HomeNest', ['kitchen', 'plates', 'home']],
-  ['Non-Stick Frying Pan', 'kitchen-accessories', 24, 'Durable non-stick pan for quick meals and easy cleaning.', 'CookMate', ['kitchen', 'pan', 'cooking']],
-  ['Modern Bedside Lamp', 'home-decoration', 28, 'Warm table lamp for bedrooms, offices, and reading corners.', 'BrightHome', ['lamp', 'decor', 'home']],
-  ['Office Desk Chair', 'furniture', 86, 'Comfortable chair with back support for work and study.', 'ErgoSeat', ['chair', 'office', 'furniture']],
-  ['Wooden Coffee Table', 'furniture', 95, 'Compact living-room table with a sturdy wooden finish.', 'OakHaus', ['table', 'furniture', 'home']],
-  ['Hydrating Face Cream', 'skin-care', 22, 'Daily moisturizer for smoother and fresher-looking skin.', 'PureGlow', ['skincare', 'cream', 'beauty']],
-  ['Matte Red Lipstick', 'beauty', 14, 'Bold matte lipstick with smooth color and comfortable wear.', 'VelvetCos', ['lipstick', 'makeup', 'beauty']],
-  ['Luxury Eau De Parfum', 'fragrances', 48, 'Long-lasting fragrance with warm and fresh notes.', 'ScentHouse', ['perfume', 'fragrance', 'beauty']],
-  ['Yoga Exercise Mat', 'sports-accessories', 21, 'Non-slip mat for yoga, stretching, workouts, and meditation.', 'FlexFit', ['yoga', 'fitness', 'sports']],
-  ['Adjustable Dumbbell Pair', 'sports-accessories', 70, 'Space-saving dumbbells for home strength training.', 'IronFlex', ['dumbbell', 'fitness', 'gym']],
-  ['Car Phone Holder', 'vehicle', 13, 'Secure phone mount for dashboards and windshields.', 'DriveGrip', ['car', 'phone-holder', 'auto']],
-  ['Motorcycle Riding Gloves', 'motorcycle', 26, 'Protective gloves with comfortable grip and breathable material.', 'RideSafe', ['motorcycle', 'gloves', 'auto']],
-  ['Premium Dog Food Bag', 'groceries', 33, 'Nutritious dry food blend for active dogs.', 'PetBowl', ['dog', 'pet', 'food']],
-  ['Fresh Cooking Oil Pack', 'groceries', 19, 'Quality cooking oil for home meals and food businesses.', 'KitchenGold', ['oil', 'food', 'grocery']],
-  ['Apple Fruit Pack', 'groceries', 12, 'Fresh apples packed for snacks, juicing, and family meals.', 'FreshFarm', ['apple', 'fruit', 'grocery']],
+  [
+    'Wireless Noise Cancelling Headphones',
+    'Electronics',
+    58,
+    'Clear audio, soft ear cushions, and long battery life for everyday listening.',
+    'Avera Audio',
+    ['headphones', 'bluetooth', 'audio'],
+  ],
+  [
+    'Smart Fitness Watch',
+    'Electronics',
+    72,
+    'Track workouts, heart rate, sleep, and notifications from your wrist.',
+    'PulseFit',
+    ['watch', 'fitness', 'wearable'],
+  ],
+  [
+    'Portable Bluetooth Speaker',
+    'Electronics',
+    34,
+    'Compact wireless speaker with deep bass and splash resistance.',
+    'BoomBox',
+    ['speaker', 'bluetooth', 'music'],
+  ],
+  [
+    'USB-C Fast Charger',
+    'Electronics',
+    18,
+    'Fast wall charger for phones, tablets, and small devices.',
+    'VoltPro',
+    ['charger', 'usb-c', 'accessory'],
+  ],
+  [
+    'Leather Laptop Backpack',
+    'womens-bags',
+    45,
+    'Durable backpack with padded laptop storage and everyday compartments.',
+    'UrbanCarry',
+    ['bag', 'laptop', 'fashion'],
+  ],
+  [
+    'Classic White Sneakers',
+    'mens-shoes',
+    52,
+    'Clean everyday sneakers with comfortable soles and premium finish.',
+    'StreetStep',
+    ['shoes', 'sneakers', 'fashion'],
+  ],
+  [
+    'Cotton Graphic T-Shirt',
+    'mens-shirts',
+    16,
+    'Soft cotton tee with a clean fit for casual wear.',
+    'ThreadLab',
+    ['shirt', 'clothing', 'casual'],
+  ],
+  [
+    'Women Summer Dress',
+    'womens-dresses',
+    39,
+    'Lightweight dress for casual outings, work, and weekend plans.',
+    'LunaWear',
+    ['dress', 'women', 'fashion'],
+  ],
+  [
+    'Stainless Steel Wristwatch',
+    'mens-watches',
+    64,
+    'Minimal watch with stainless strap and water-resistant build.',
+    'TimeCraft',
+    ['watch', 'accessory', 'fashion'],
+  ],
+  [
+    'Gold Plated Necklace',
+    'womens-jewellery',
+    29,
+    'Simple necklace for everyday wear and special occasions.',
+    'GlowLine',
+    ['jewelry', 'necklace', 'fashion'],
+  ],
+  [
+    'Ceramic Dinner Plate Set',
+    'kitchen-accessories',
+    31,
+    'Elegant plate set for home dining and hosting guests.',
+    'HomeNest',
+    ['kitchen', 'plates', 'home'],
+  ],
+  [
+    'Non-Stick Frying Pan',
+    'kitchen-accessories',
+    24,
+    'Durable non-stick pan for quick meals and easy cleaning.',
+    'CookMate',
+    ['kitchen', 'pan', 'cooking'],
+  ],
+  [
+    'Modern Bedside Lamp',
+    'home-decoration',
+    28,
+    'Warm table lamp for bedrooms, offices, and reading corners.',
+    'BrightHome',
+    ['lamp', 'decor', 'home'],
+  ],
+  [
+    'Office Desk Chair',
+    'furniture',
+    86,
+    'Comfortable chair with back support for work and study.',
+    'ErgoSeat',
+    ['chair', 'office', 'furniture'],
+  ],
+  [
+    'Wooden Coffee Table',
+    'furniture',
+    95,
+    'Compact living-room table with a sturdy wooden finish.',
+    'OakHaus',
+    ['table', 'furniture', 'home'],
+  ],
+  [
+    'Hydrating Face Cream',
+    'skin-care',
+    22,
+    'Daily moisturizer for smoother and fresher-looking skin.',
+    'PureGlow',
+    ['skincare', 'cream', 'beauty'],
+  ],
+  [
+    'Matte Red Lipstick',
+    'beauty',
+    14,
+    'Bold matte lipstick with smooth color and comfortable wear.',
+    'VelvetCos',
+    ['lipstick', 'makeup', 'beauty'],
+  ],
+  [
+    'Luxury Eau De Parfum',
+    'fragrances',
+    48,
+    'Long-lasting fragrance with warm and fresh notes.',
+    'ScentHouse',
+    ['perfume', 'fragrance', 'beauty'],
+  ],
+  [
+    'Yoga Exercise Mat',
+    'sports-accessories',
+    21,
+    'Non-slip mat for yoga, stretching, workouts, and meditation.',
+    'FlexFit',
+    ['yoga', 'fitness', 'sports'],
+  ],
+  [
+    'Adjustable Dumbbell Pair',
+    'sports-accessories',
+    70,
+    'Space-saving dumbbells for home strength training.',
+    'IronFlex',
+    ['dumbbell', 'fitness', 'gym'],
+  ],
+  [
+    'Car Phone Holder',
+    'vehicle',
+    13,
+    'Secure phone mount for dashboards and windshields.',
+    'DriveGrip',
+    ['car', 'phone-holder', 'auto'],
+  ],
+  [
+    'Motorcycle Riding Gloves',
+    'motorcycle',
+    26,
+    'Protective gloves with comfortable grip and breathable material.',
+    'RideSafe',
+    ['motorcycle', 'gloves', 'auto'],
+  ],
+  [
+    'Premium Dog Food Bag',
+    'groceries',
+    33,
+    'Nutritious dry food blend for active dogs.',
+    'PetBowl',
+    ['dog', 'pet', 'food'],
+  ],
+  [
+    'Fresh Cooking Oil Pack',
+    'groceries',
+    19,
+    'Quality cooking oil for home meals and food businesses.',
+    'KitchenGold',
+    ['oil', 'food', 'grocery'],
+  ],
+  [
+    'Apple Fruit Pack',
+    'groceries',
+    12,
+    'Fresh apples packed for snacks, juicing, and family meals.',
+    'FreshFarm',
+    ['apple', 'fruit', 'grocery'],
+  ],
 ].map(([title, category, price, description, brand, tags], index) => ({
   id: `fallback-${index + 1}`,
   title,
@@ -87,7 +268,9 @@ const FALLBACK_PRODUCTS = [
 
 function assertOk(response, label) {
   if (!response.ok) {
-    throw new Error(`${label} failed with ${response.status} ${response.statusText}`);
+    throw new Error(
+      `${label} failed with ${response.status} ${response.statusText}`,
+    );
   }
 }
 
@@ -96,7 +279,9 @@ function pick(items, index) {
 }
 
 function slugToWords(value = '') {
-  return value.replace(/-/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+  return value
+    .replace(/-/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 function getExtension(contentType = '') {
@@ -145,7 +330,9 @@ async function fetchSourceProducts() {
 
     throw new Error('Source returned no products');
   } catch (error) {
-    console.warn(`Source API unavailable, using built-in fallback catalog: ${error.message}`);
+    console.warn(
+      `Source API unavailable, using built-in fallback catalog: ${error.message}`,
+    );
     return FALLBACK_PRODUCTS.slice(0, LIMIT);
   }
 }
@@ -206,7 +393,9 @@ async function uploadImages(product) {
       formData.append('images', image.blob, image.filename);
       appendedImages++;
     } catch (error) {
-      console.warn(`Image download failed for ${product.title}: ${error.message}`);
+      console.warn(
+        `Image download failed for ${product.title}: ${error.message}`,
+      );
     }
   }
 
@@ -223,7 +412,9 @@ async function uploadImages(product) {
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(`Image upload failed: ${data?.message || response.statusText}`);
+    throw new Error(
+      `Image upload failed: ${data?.message || response.statusText}`,
+    );
   }
 
   const uploadedFiles = data.files || [];
@@ -238,16 +429,17 @@ async function uploadImages(product) {
 function buildPayload(product, categories, index, images) {
   const brandText = product.brand ? `${product.brand} ` : '';
   const categoryText = slugToWords(product.category);
-  const priceInNaira = Math.max(1000, Math.round(Number(product.price || 10) * 1500));
-  const tags = Array.from(new Set([
-    product.brand,
-    product.category,
-    categoryText,
-    ...(product.tags || []),
-  ]
-    .filter(Boolean)
-    .map((tag) => String(tag).toLowerCase().replace(/\s+/g, '-'))))
-    .slice(0, 6);
+  const priceInNaira = Math.max(
+    1000,
+    Math.round(Number(product.price || 10) * 1500),
+  );
+  const tags = Array.from(
+    new Set(
+      [product.brand, product.category, categoryText, ...(product.tags || [])]
+        .filter(Boolean)
+        .map((tag) => String(tag).toLowerCase().replace(/\s+/g, '-')),
+    ),
+  ).slice(0, 6);
 
   return {
     name: `${brandText}${product.title}`.slice(0, 180),
@@ -315,12 +507,18 @@ async function main() {
       results.push({ name: product.title, status: 'created' });
       console.log(`Created ${product.title}`);
     } catch (error) {
-      results.push({ name: product.title, status: 'failed', error: error.message });
+      results.push({
+        name: product.title,
+        status: 'failed',
+        error: error.message,
+      });
       console.error(`Failed ${product.title}: ${error.message}`);
     }
   }
 
-  const created = results.filter((result) => result.status === 'created').length;
+  const created = results.filter(
+    (result) => result.status === 'created',
+  ).length;
   const failed = results.length - created;
 
   console.log('\nSeed complete');

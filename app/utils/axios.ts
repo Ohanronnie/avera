@@ -3,11 +3,12 @@ import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
 // Use environment variable or fallback
-export const BASE_URL = __DEV__
-  ? Platform.OS === "ios"
-    ? "http://localhost:3000/"
-    : "10.0.2.2:3000"
-  : "https://hcvgt5vt-3000.uks1.devtunnels.ms/";
+ export const BASE_URL = "https://fox-delta-arrow.tunnel.rxnnie.tech"
+// || !__DEV__
+//   ? Platform.OS === "ios"
+//     ? "http://localhost:3000/"
+//     : "10.0.2.2:3000"
+//   : "https://fern-jungle-mountain.tunnel.rxnnie.tech";
 
 // In-memory cache for tokens (faster than SecureStore lookups on every request)
 let accessToken: string | null = null;

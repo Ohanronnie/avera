@@ -16,11 +16,10 @@ export class UploadsController {
   @Post('images')
   @UseInterceptors(
     FilesInterceptor('images', 5, {
-      limits: { 
-        fileSize: 5 * 1024 * 1024 
+      limits: {
+        fileSize: 5 * 1024 * 1024,
       },
       fileFilter: (req, file, cb) => {
-
         const allowedMimeTypes =
           /^(image\/(png|jpe?g|bmp|webp|tiff?|svg\+xml))$/i;
         if (!allowedMimeTypes.test(file.mimetype)) {
@@ -39,9 +38,9 @@ export class UploadsController {
       },
     }),
   )
-  uploadImages(@UploadedFiles() files: Express.Multer.File[], @Req()req:any) {
+  uploadImages(@UploadedFiles() files: Express.Multer.File[], @Req() req: any) {
     console.log(files);
-    if(!files) return false;
+    if (!files) return false;
     return {
       files: files.map((file) => ({
         path: file.filename,
@@ -50,6 +49,5 @@ export class UploadsController {
         ? 'Files uploaded successfully'
         : 'No files uploaded',
     };
-
   }
-} 
+}

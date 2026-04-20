@@ -233,8 +233,8 @@ export default function MessageDetailsScreen() {
                 numberOfLines={2}
                 className="text-base font-bold text-gray-950 dark:text-white"
               >
-                {productName}
-              </Text>
+                {productName} (6)
+              </Text>yu
               <View className="mt-1 flex-row items-center">
                 <Text className="text-sm font-black text-brand">
                   {productPrice}

@@ -46,7 +46,6 @@ export class AuthController {
    */
   @Post('google-login')
   async googleLogin(@Body('token') token: string) {
-    
     try {
       return await this.authService.validateGoogleToken(token);
     } catch (error) {

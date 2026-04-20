@@ -1,6 +1,8 @@
 import {
+  BadRequestException,
   Body,
   Controller,
+  DefaultValuePipe,
   Get,
   HttpException,
   InternalServerErrorException,
@@ -8,6 +10,7 @@ import {
   ParseIntPipe,
   Patch,
   Put,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -70,10 +73,24 @@ export class UsersController {
       this.handleError(error);
     }
   }
+
+  @Get(':userId/listings')
+  async getSellerListings(
+    @Param('userId', ParseIntPipe) userId: number,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
+    @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
+  ) {
+    try {
+      return await this.usersService.getSellerListings(userId, limit, offset);
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
   @Get(':userId')
   async getUserById(@Param('userId', ParseIntPipe) userId: number) {
     try {
-      return await this.usersService.getUserProfileById(userId);
+      return await this.usersService.getUserById(userId);
     } catch (error) {
       this.handleError(error);
     }

@@ -68,7 +68,11 @@ export class AuthService {
       this.jwtService.signAsync({ sub: userId, email }, { expiresIn: '30d' }),
       this.jwtService.signAsync({ sub: userId, email }, { expiresIn: '30d' }),
     ]);
-    return { accessToken: access_token, refreshToken: refresh_token, user: userData };
+    return {
+      accessToken: access_token,
+      refreshToken: refresh_token,
+      user: userData,
+    };
   }
 
   /**
@@ -146,7 +150,7 @@ export class AuthService {
    * Validates a Google token and logs in or registers the user.
    */
   async validateGoogleToken(token: string): Promise<TokensResponse> {
-    if(!token) throw new BadRequestException('Google token is required');
+    if (!token) throw new BadRequestException('Google token is required');
     const ticket = await this.googleClient.verifyIdToken({
       idToken: token,
       audience: process.env.GOOGLE_CLIENT_ID,
@@ -318,13 +322,19 @@ export class AuthService {
    */
   async isUsernameAvailable(username: string): Promise<{ available: boolean }> {
     if (username.length < 4) {
-      throw new BadRequestException('Username is too short (minimum 4 characters)');
+      throw new BadRequestException(
+        'Username is too short (minimum 4 characters)',
+      );
     }
     if (username.length > 15) {
-      throw new BadRequestException('Username is too long (maximum 15 characters)');
+      throw new BadRequestException(
+        'Username is too long (maximum 15 characters)',
+      );
     }
     if (!this.validateUsername(username)) {
-      throw new BadRequestException('Username must start with a letter and can contain only letters, numbers, and underscores.');
+      throw new BadRequestException(
+        'Username must start with a letter and can contain only letters, numbers, and underscores.',
+      );
     }
     const user = await this.prisma.user.findUnique({
       where: { username },

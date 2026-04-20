@@ -18,8 +18,8 @@ export interface IProduct {
   originalPrice: number;
   rating: number;
   reviews: number;
-  onPress: () => void;
-  onFavorite: () => void;
+  onPress?: () => void;
+  onFavorite?: () => void;
   discount: string;
   condition: string;
   location: string;
@@ -70,7 +70,7 @@ export function ProductCard({ product }: { product: IProduct }) {
           android_ripple={{ color: "#f0f0f0", radius: 18 }}
         >
           <Ionicons
-            name={isFavorited ? "bookmark" : "bookmark-outline"}
+            name={isFavorited ? "heart" : "heart-outline"}
             size={18}
             color={isFavorited ? "#EF4444" : isDark ? "#FFF" : "#9CA3AF"}
             fill={isFavorited ? "#EF4444" : "none"}
@@ -100,11 +100,11 @@ export function ProductCard({ product }: { product: IProduct }) {
         {/* Price */}
         <View className="flex-row items-baseline">
           <Text className="text-lg font-bold text-gray-900 dark:text-white mr-2">
-            ₦{price.toLocaleString()}
+            ₦{Number(price).toLocaleString()}
           </Text>
           {originalPrice > 0 && (
             <Text className="text-xs text-gray-400 line-through">
-              ₦{originalPrice.toLocaleString()}
+              ₦{Number(originalPrice).toLocaleString()}
             </Text>
           )}
         </View>

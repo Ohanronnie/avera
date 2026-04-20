@@ -99,7 +99,7 @@ export type CreateUserInfo = {
   username: string;
   bio?: string;
   phoneNumber: string;
-/*  country: string;
+  /*  country: string;
   state: string;
   city: string;
   address: string;

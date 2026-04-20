@@ -1,4 +1,5 @@
 import { ProductCard, IProduct } from "@/components/products/product-card";
+import { mapProductToCard } from "@/features/products/types";
 import { Text } from "@/components/themed/theme";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { Input, InputField } from "@/components/ui/input";
@@ -7,9 +8,16 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useColorScheme } from "nativewind";
-import { ActivityIndicator, FlatList, Pressable, View } from "react-native";
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  ScrollView,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Pre } from "@expo/html-elements";
 const PRODUCT_PAGE_SIZE = 10;
 
 type ProductFilters = {
@@ -32,25 +40,6 @@ const sortOptions: Array<{ label: string; value: ProductFilters["sort"] }> = [
   { label: "Budget", value: "budget" },
   { label: "Premium", value: "premium" },
 ];
-
-const mapProductToCard = (item: any): IProduct => {
-  const price = Number(item.price || 0);
-
-  return {
-    id: item.id,
-    title: item.name,
-    price,
-    originalPrice: Math.round(price * 1.18),
-    rating: item.rating || 0,
-    reviews: item.numReviews || 0,
-    onPress: () => void 0,
-    onFavorite: () => void 0,
-    discount: item.isFeatured ? "Featured" : "",
-    condition: item.condition,
-    location: item.location || "Nigeria",
-    imageUrl: item.images?.[0]?.url,
-  };
-};
 
 const getInitialFilters = (params: {
   sort?: string;
@@ -98,16 +87,22 @@ const FilterChip = ({
 
 const SuggestionsScreen = ({
   onSearchTerm,
+  typing,
+  suggestions,
 }: {
   onSearchTerm: (term: string) => void;
+    typing?: boolean;
+  suggestions?: string[];
 }) => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
-  const recentSearches = ["IPhone 15 Pro", "MacBook Pro 16", "AirPods Max"];
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const trendingSearches = [
     "iPhone 14 Pro Max",
+
     "MacBook Air M2",
     "AirPods Pro",
+    "Nike Air Max 270",
   ];
   const popularCategories = [
     { label: "Phones", icon: "phone-portrait-outline" },
@@ -115,90 +110,156 @@ const SuggestionsScreen = ({
     { label: "Fashion", icon: "shirt-outline" },
     { label: "Gaming", icon: "game-controller-outline" },
   ];
-
+  const getRecentSearches = async () => {
+    try {
+      const storedSearches = await AsyncStorage.getItem("recentSearches");
+      if (storedSearches) {
+        setRecentSearches(JSON.parse(storedSearches));
+      }
+    } catch (error) {
+      console.error("Failed to load recent searches:", error);
+    }
+  };
+  const clearSearches = async (index?: number) => {
+    const newSearches = [...recentSearches];
+    if (index !== undefined) {
+      newSearches.splice(index, 1);
+    } else {
+      newSearches.length = 0;
+    }
+    setRecentSearches(newSearches);
+    try {
+      await AsyncStorage.setItem("recentSearches", JSON.stringify(newSearches));
+    } catch (error) {
+      console.error("Failed to save recent searches:", error);
+    }
+  };
+  useEffect(() => {
+    getRecentSearches();
+  }, []);
   return (
-    <View className="mx-4 mt-5">
-      <View>
-        <View className="mb-3 flex-row items-center justify-between">
-          <View className="flex-row items-center gap-2">
-            <Ionicons name="time-outline" size={16} color="#888" />
-            <Text className="text-xl font-semibold">Recent searches</Text>
-          </View>
-          <Text variant="none" className="text-sm font-semibold text-brand">
-            Clear All
-          </Text>
-        </View>
-        <View className="flex-row flex-wrap">
-          {recentSearches.map((item) => (
+    <ScrollView
+      className="mx-4 mt-5"
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+    >
+      {typing ? (
+        <View className="mb-3 ">
+          {suggestions?.map((item) => (
             <Pressable
-              key={item}
-              onPress={() => onSearchTerm(item)}
-              className="mr-2 mt-2 flex-row items-center justify-between rounded-xl bg-gray-100 px-3 py-2 dark:bg-white/5"
+              key={`suggestion-${item}-${Math.random()}`}
+              onPress={() => {
+                onSearchTerm(item);
+              }}
+              className="mb-2 flex-row items-center justify-between rounded-xl  px-3 py-2"
             >
-              <Text className="mr-1 text-sm">{item}</Text>
-              <Ionicons name="close-outline" size={16} color="#888" />
+              <Text className="text-lg font-medium">{item}</Text>
+              <Feather name="search" size={18} color="#888" />
             </Pressable>
           ))}
         </View>
-      </View>
-
-      <View className="mt-12">
-        <View className="mb-3 flex-row items-center justify-between">
-          <View className="flex-row items-center gap-2">
-            <Feather name="trending-up" size={16} color="#888" />
-            <Text className="text-xl font-semibold">Trending searches</Text>
-          </View>
-        </View>
-        <View>
-          {trendingSearches.map((item) => (
-            <Pressable
-              key={item}
-              onPress={() => onSearchTerm(item)}
-              className="mt-2 flex-row items-center justify-between rounded-xl bg-gray-100 px-3 py-3 dark:bg-white/5"
-            >
-              <Text className="text-sm font-medium">{item}</Text>
-              <Feather name="trending-up" size={16} color="#888" />
-            </Pressable>
-          ))}
-        </View>
-      </View>
-
-      <View className="mt-12">
-        <View className="mb-4 flex-row items-center justify-between">
-          <View className="flex-row items-center gap-2">
-            <Ionicons name="grid-outline" size={16} color="#888" />
-            <Text className="text-xl font-semibold">Popular Categories</Text>
-          </View>
-          <Pressable onPress={() => router.push("/product/categories")}>
-            <Text variant="none" className="text-sm font-semibold text-brand">
-              See All
-            </Text>
-          </Pressable>
-        </View>
-        <View className="flex-row flex-wrap justify-between">
-          {popularCategories.map((item) => (
-            <View
-              key={item.label}
-              className="mb-4 w-[25%] items-center justify-center"
-            >
-              <Pressable
-                onPress={() => onSearchTerm(item.label)}
-                className="h-20 w-20 items-center justify-center rounded-full border border-gray-100 bg-background-50 dark:border-white/5 dark:bg-white/5"
-              >
-                <Ionicons
-                  name={item.icon as any}
-                  size={28}
-                  color={isDark ? "white" : "black"}
-                />
+      ) : (
+        <>
+          <View>
+            <View className="mb-3 flex-row items-center justify-between">
+              <View className="flex-row items-center gap-2">
+                <Ionicons name="time-outline" size={16} color="#888" />
+                <Text className="text-xl font-semibold">Recent searches</Text>
+              </View>
+              <Pressable onPress={() => clearSearches()}>
+                <Text
+                  variant="none"
+                  className="text-sm font-semibold text-brand"
+                >
+                  Clear All
+                </Text>
               </Pressable>
-              <Text className="mt-2 text-center text-sm font-medium">
-                {item.label}
-              </Text>
             </View>
-          ))}
-        </View>
-      </View>
-    </View>
+            <View className="flex-row flex-wrap">
+              {recentSearches.map((item, index) => (
+                <View
+                  key={item}
+                  className="mr-2 mt-2 flex-row items-center justify-between rounded-xl  bg-gray-100 px-3 py-2 dark:bg-white/5"
+                >
+                  <Pressable onPress={() => onSearchTerm(item)} className="">
+                    <Text className="mr-1 text-sm">{item}</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => clearSearches(index)}
+                    className="p-1"
+                  >
+                    <Ionicons name="close-outline" size={16} color="#888" />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          <View className="mt-12">
+            <View className="mb-3 flex-row items-center justify-between">
+              <View className="flex-row items-center gap-2">
+                <Feather name="trending-up" size={16} color="#888" />
+                <Text className="text-xl font-semibold">Trending searches</Text>
+              </View>
+            </View>
+            <View>
+              {trendingSearches.map((item) => (
+                <View
+                  key={`trending-${item}-${Math.random()}`}
+                  className="mb-2 flex-row items-center justify-between rounded-xl  px-3 py-2  bg-gray-100 px-3 py-2 dark:bg-white/5"
+                >
+                  <Pressable onPress={() => onSearchTerm(item)} className="">
+                    <Text className="text-lg font-medium">{item}</Text>
+                  </Pressable>
+                  <Feather name="trending-up" size={18} color="#888" />
+                </View>
+              ))}
+            </View>
+          </View>
+
+          <View className="mt-12">
+            <View className="mb-4 flex-row items-center justify-between">
+              <View className="flex-row items-center gap-2">
+                <Ionicons name="grid-outline" size={16} color="#888" />
+                <Text className="text-xl font-semibold">
+                  Popular Categories
+                </Text>
+              </View>
+              <Pressable onPress={() => router.push("/product/categories")}>
+                <Text
+                  variant="none"
+                  className="text-sm font-semibold text-brand"
+                >
+                  See All
+                </Text>
+              </Pressable>
+            </View>
+            <View className="flex-row flex-wrap justify-between">
+              {popularCategories.map((item) => (
+                <View
+                  key={item.label}
+                  className="mb-4 w-[25%] items-center justify-center"
+                >
+                  <Pressable
+                    onPress={() => onSearchTerm(item.label)}
+                    className="h-20 w-20 items-center justify-center rounded-full border border-gray-100 bg-background-50 dark:border-white/5 dark:bg-white/5"
+                  >
+                    <Ionicons
+                      name={item.icon as any}
+                      size={28}
+                      color={isDark ? "white" : "black"}
+                    />
+                  </Pressable>
+                  <Text className="mt-2 text-center text-sm font-medium">
+                    {item.label}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        </>
+      )}
+    </ScrollView>
   );
 };
 
@@ -233,7 +294,27 @@ export default function SearchScreen() {
   const nextOffsetRef = useRef(0);
   const requestIdRef = useRef(0);
   const isFetchingRef = useRef(false);
+  const [typing, setTyping] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
 
+  
+  const setRecentSearchesAndStore = async (searchTerm: string) => {
+    const newSearches = [searchTerm];
+
+    try {
+      const storedSearches = await AsyncStorage.getItem("recentSearches");
+      if (storedSearches) {
+        const parsedSearches = JSON.parse(storedSearches);
+        const filteredSearches = parsedSearches.filter(
+          (s: string) => s.toLowerCase() !== searchTerm.toLowerCase(),
+        );
+        newSearches.push(...filteredSearches);
+      }
+      await AsyncStorage.setItem("recentSearches", JSON.stringify(newSearches));
+    } catch (error) {
+      console.error("Failed to save recent searches:", error);
+    }
+  };
   const fetchProductsPage = useCallback(
     async ({
       nextQuery = activeQuery,
@@ -342,6 +423,7 @@ export default function SearchScreen() {
   const submitSearch = (nextQuery = searchQuery) => {
     setActiveQuery(nextQuery);
     fetchProductsPage({ nextQuery, reset: true });
+    setRecentSearchesAndStore(nextQuery);
   };
 
   const handleSearchTerm = (term: string) => {
@@ -371,14 +453,35 @@ export default function SearchScreen() {
     setFilterSheetOpen(false);
     fetchProductsPage({ nextQuery: activeQuery, reset: true, nextFilters });
   };
-
   const activeFilterCount =
     (filters.condition !== "all" ? 1 : 0) +
     (filters.sort !== "newest" ? 1 : 0) +
     (filters.featured ? 1 : 0);
 
   const title = params.categoryName || params.section || "All Products";
+  const fetchSuggestions = async (query: string) => {
+    try {
+      const response = await axiosInstance.get("/products/search/suggestions", {
+        params: { q: query },
+      });
+      console.log("Suggestions response:", response.data);
+      setSuggestions(response.data);
+    } catch (error) {
+      console.error("Failed to fetch suggestions:", error);
+    }
+  };
 
+  useEffect(() => {
+    if (typing && searchQuery.trim().length > 0) {
+      const delayDebounce = setTimeout(() => {
+        fetchSuggestions(searchQuery.trim());
+      }, 300);
+
+      return () => clearTimeout(delayDebounce);
+    } else {
+      setSuggestions([]);
+    }
+  }, [searchQuery, typing]);
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-[#0A0A0A]">
       <View className="flex-row items-center justify-between gap-x-2 border-b border-gray-200 bg-white px-4 py-4 dark:border-white/5 dark:bg-[#0A0A0A]">
@@ -402,8 +505,14 @@ export default function SearchScreen() {
             }
             className="flex-1 text-base text-black dark:text-white"
             value={searchQuery}
-            onChangeText={setSearchQuery}
-            onFocus={() => setShowSuggestions(true)}
+            onChangeText={(text) => {
+              setSearchQuery(text);
+              setTyping(text.length > 0);
+            }}
+            onFocus={() => {
+              setShowSuggestions(true);
+            }}
+            onBlur={() => setTyping(false)}
             placeholderTextColor="#888"
             returnKeyType="search"
             onSubmitEditing={() => submitSearch()}
@@ -452,7 +561,7 @@ export default function SearchScreen() {
             <ActivityIndicator color="#2563EB" />
           </View>
         ) : showSuggestions ? (
-          <SuggestionsScreen onSearchTerm={handleSearchTerm} />
+          <SuggestionsScreen suggestions={suggestions} onSearchTerm={handleSearchTerm} typing={typing} />
         ) : products.length > 0 ? (
           <FlatList
             data={products}

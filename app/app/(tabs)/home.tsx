@@ -1,4 +1,5 @@
 import { ProductCard, IProduct } from "@/components/products/product-card";
+import { ApiProduct, mapProductToCard } from "@/features/products/types";
 import { Text } from "@/components/themed/theme";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { axiosInstance } from "@/utils/axios";
@@ -27,26 +28,7 @@ type HomeProductSection = {
   products: IProduct[];
 };
 
-const mapProductToCard = (item: any): IProduct => {
-  const price = Number(item.price || 0);
-
-  return {
-    id: item.id,
-    title: item.name,
-    price,
-    originalPrice: Math.round(price * 1.18),
-    rating: item.rating || 0,
-    reviews: item.numReviews || 0,
-    onPress: () => void 0,
-    onFavorite: () => void 0,
-    discount: item.isFeatured ? "Featured" : "",
-    condition: item.condition,
-    location: item.location || "Nigeria",
-    imageUrl: item.images?.[0]?.url,
-  };
-};
-
-const buildHomeSections = (items: any[]): HomeProductSection[] => {
+const buildHomeSections = (items: ApiProduct[]): HomeProductSection[] => {
   const products = items.map(mapProductToCard);
   const featuredProducts = items
     .filter((item) => item.isFeatured)

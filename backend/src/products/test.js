@@ -59,8 +59,6 @@ async function getCategoryId(name) {
   }
 }
 
-
-
 // Upload images and return array of uploaded paths
 async function uploadImages(urls) {
   const uploadedPaths = [];
@@ -118,7 +116,7 @@ async function createProduct(product) {
     console.log(`✅ Created product: ${res.data.id} - ${product.name}`);
     return { product: product.name, status: 'success', data: res.data };
   } catch (err) {
-    console.log(err)
+    console.log(err);
     console.error(
       `❌ Failed to create product ${product.name}: ${err.message}`,
     );

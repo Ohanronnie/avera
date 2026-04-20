@@ -6,6 +6,7 @@ import {
   IsNumber,
   IsString,
   MaxLength,
+  MinLength,
 } from 'class-validator';
 
 export type GetProducts = {
@@ -42,6 +43,7 @@ export class GetProductsDto implements GetProducts {
   @IsOptional()
   @IsString()
   @MaxLength(200)
+  @MinLength(2)
   query?: string;
 
   @IsOptional()

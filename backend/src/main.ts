@@ -7,12 +7,14 @@ import { LoggingInterceptor } from './logger/logger.service';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  app.useGlobalPipes(new CustomValidationPipe({
-    transform: true,
-    whitelist: true
-  }));
+  app.useGlobalPipes(
+    new CustomValidationPipe({
+      transform: true,
+      whitelist: true,
+    }),
+  );
   app.useGlobalInterceptors(new LoggingInterceptor());
-  
+
   await app.listen(process.env.PORT ?? 3000);
 }
 bootstrap();

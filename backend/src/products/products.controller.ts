@@ -24,16 +24,19 @@ export class ProductsController {
   @Post('/create')
   createProduct(@Body() body: CreateProductDto, @Req() req: any) {
     const user = req.user.userId;
-    return this.productsService.createProduct(user, body)
+    return this.productsService.createProduct(user, body);
   }
-  
+
   @Get()
   getProducts(@Query() query: GetProductsDto) {
     return this.productsService.getProducts(query);
   }
-  
-  @Get("/search/suggestions")
-  getSearchSuggestions(@Query('q') query: string, @Query("categoryId") categoryId: number) {
+
+  @Get('/search/suggestions')
+  getSearchSuggestions(
+    @Query('q') query: string,
+    @Query('categoryId') categoryId: number,
+  ) {
     return this.productsService.getSearchSuggestions(query, categoryId);
   }
 }

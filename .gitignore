@@ -38,3 +38,6 @@ pnpm-debug.*
 # Uploads/runtime data
 backend/uploads/
 backend/generated/prisma/
+
+# Local agent memory
+AGENTS.md

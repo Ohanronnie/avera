@@ -38,7 +38,7 @@ export function BottomSheet({
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   const insets = useSafeAreaInsets();
-  const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const translateY =useRef (new Animated.Value(SCREEN_HEIGHT)).current;
 
   const closeSheet = () => {
     if (alwaysVisible) return;

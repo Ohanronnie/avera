@@ -11,7 +11,7 @@ import { UsersModule } from './users/users.module';
 import { LoggerModule } from './logger/logger.module';
 import { CategoriesModule } from './categories/categories.module';
 import { ProductsModule } from './products/products.module';
-import { MulterModule } from "@nestjs/platform-express"
+import { MulterModule } from '@nestjs/platform-express';
 import { UploadsModule } from './uploads/uploads.module';
 import { MediaModule } from './media/media.module';
 @Module({
@@ -29,10 +29,10 @@ import { MediaModule } from './media/media.module';
     LoggerModule,
     CategoriesModule,
     ProductsModule,
-    
+
     UploadsModule,
-    
-    MediaModule
+
+    MediaModule,
   ],
   controllers: [AppController],
   providers: [AppService],
