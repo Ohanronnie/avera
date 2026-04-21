@@ -5,14 +5,13 @@ import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { axiosInstance } from "@/utils/axios";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { ComponentProps } from "react";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   Pressable,
   ScrollView,
   View,
-  TouchableOpacity,
   Dimensions,
 } from "react-native";
 import Categories from "@/components/products/categories";
@@ -20,6 +19,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useColorScheme } from "nativewind";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
+type BannerIconName = ComponentProps<typeof Ionicons>["name"];
 
 type HomeProductSection = {
   key: string;
@@ -98,9 +98,6 @@ const sectionSearchParams: Record<string, Record<string, string>> = {
 export default function HomeScreen() {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
-  const IphoneImage = require("@/assets/images/566656.png");
-  const ShoeImage = require("@/assets/images/shoe.jpg");
-  const TechImage = require("@/assets/images/5252484.png");
 
   const router = useRouter();
   const [activeBanner, setActiveBanner] = useState(0);
@@ -112,27 +109,33 @@ export default function HomeScreen() {
   const banners = [
     {
       id: 1,
-      title: "iPhone 16 Pro",
-      subtitle: "The ultimate visual & power",
-      label: "New Arrival",
-      image: IphoneImage,
+      title: "Find What Fits",
+      subtitle: "Browse real listings from sellers across Avera.",
+      label: "Avera Market",
+      action: "Browse",
+      icon: "storefront-outline" as BannerIconName,
       color: "#2563EB",
+      route: "/product/search" as const,
     },
     {
       id: 2,
-      title: "Air Max Pulse",
-      subtitle: "Next generation of comfort",
-      label: "Limited Edition",
-      image: ShoeImage,
-      color: "#3b82f6",
+      title: "Sell With Ease",
+      subtitle: "Create a listing, add photos, and reach buyers fast.",
+      label: "Seller Tools",
+      action: "List Item",
+      icon: "add-circle-outline" as BannerIconName,
+      color: "#0F766E",
+      route: "/product/create" as const,
     },
     {
       id: 3,
-      title: "Gadget Fest",
-      subtitle: "Save up to 40% on tech",
-      label: "Season Sale",
-      image: TechImage,
-      color: "#8b5cf6",
+      title: "Ask Before You Buy",
+      subtitle: "Message sellers, confirm details, and move with confidence.",
+      label: "Avera Chat",
+      action: "Find Sellers",
+      icon: "chatbubbles-outline" as BannerIconName,
+      color: "#7C3AED",
+      route: "/product/search" as const,
     },
   ];
 
@@ -223,25 +226,28 @@ export default function HomeScreen() {
                     <Text className="text-xs mt-1 text-white/80 font-medium">
                       {banner.subtitle}
                     </Text>
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      className="mt-4 bg-white self-start px-5 py-2.5 rounded-xl transition-all active:scale-95"
+                    <Pressable
+                      onPress={() => router.push(banner.route)}
+                      className="mt-4 bg-white self-start px-5 py-2.5 rounded-xl"
                     >
                       <Text
                         style={{ color: banner.color }}
                         className="text-sm font-bold"
                       >
-                        Shop Now
+                        {banner.action}
                       </Text>
-                    </TouchableOpacity>
+                    </Pressable>
                   </View>
-                  <View className="w-[40%] items-end justify-center pr-2">
-                    <Image
-                      source={banner.image}
-                      alt={banner.title}
-                      className="w-36 h-36"
-                      style={{ resizeMode: "contain" }}
-                    />
+                  <View className="w-[40%] items-center justify-center pr-4">
+                    <View className="h-28 w-28 items-center justify-center rounded-full bg-white/15">
+                      <View className="h-20 w-20 items-center justify-center rounded-full bg-white">
+                        <Ionicons
+                          name={banner.icon}
+                          size={38}
+                          color={banner.color}
+                        />
+                      </View>
+                    </View>
                   </View>
                 </View>
               </View>
@@ -253,7 +259,7 @@ export default function HomeScreen() {
             {banners.map((_, i) => (
               <View
                 key={i}
-                className={`h-1.5 rounded-full mx-1 transition-all ${
+                className={`h-1.5 rounded-full mx-1 ${
                   activeBanner === i
                     ? "w-6 bg-brand"
                     : "w-1.5 bg-gray-200 dark:bg-white/10"

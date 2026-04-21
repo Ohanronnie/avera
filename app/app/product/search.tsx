@@ -8,6 +8,7 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useColorScheme } from "nativewind";
+import { createMMKV } from "react-native-mmkv";
 import {
   ActivityIndicator,
   FlatList,
@@ -16,9 +17,57 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Pre } from "@expo/html-elements";
 const PRODUCT_PAGE_SIZE = 10;
+const RECENT_SEARCHES_KEY = "recentSearches";
+const fallbackTrendingSearches = [
+  "iPhone 14 Pro Max",
+  "MacBook Air M2",
+  "AirPods Pro",
+  "Nike Air Max 270",
+];
+
+type RecentSearchesStorage = {
+  getItem: (key: string) => Promise<string | null>;
+  setItem: (key: string, value: string) => Promise<void>;
+};
+
+const recentSearchesMMKV = createMMKV({ id: "avera-recent-searches" });
+
+const recentSearchesStorage: RecentSearchesStorage = {
+  getItem: async (key) => recentSearchesMMKV.getString(key) ?? null,
+  setItem: async (key, value) => {
+    recentSearchesMMKV.set(key, value);
+  },
+};
+
+const loadRecentSearches = async () => {
+  try {
+    const storedSearches =
+      await recentSearchesStorage.getItem(RECENT_SEARCHES_KEY);
+    if (!storedSearches) return [];
+
+    const parsedSearches = JSON.parse(storedSearches);
+    return Array.isArray(parsedSearches)
+      ? parsedSearches.filter(
+          (item): item is string => typeof item === "string",
+        )
+      : [];
+  } catch (error) {
+    console.error("Failed to load recent searches:", error);
+    return [];
+  }
+};
+
+const saveRecentSearches = async (searches: string[]) => {
+  try {
+    await recentSearchesStorage.setItem(
+      RECENT_SEARCHES_KEY,
+      JSON.stringify(searches),
+    );
+  } catch (error) {
+    console.error("Failed to save recent searches:", error);
+  }
+};
 
 type ProductFilters = {
   condition: "all" | "new" | "used";
@@ -87,56 +136,28 @@ const FilterChip = ({
 
 const SuggestionsScreen = ({
   onSearchTerm,
+  recentSearches,
+  trendingSearches,
+  onClearRecentSearches,
   typing,
   suggestions,
 }: {
   onSearchTerm: (term: string) => void;
-    typing?: boolean;
+  recentSearches: string[];
+  trendingSearches: string[];
+  onClearRecentSearches: (index?: number) => void;
+  typing?: boolean;
   suggestions?: string[];
 }) => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
-  const [recentSearches, setRecentSearches] = useState<string[]>([]);
-  const trendingSearches = [
-    "iPhone 14 Pro Max",
-
-    "MacBook Air M2",
-    "AirPods Pro",
-    "Nike Air Max 270",
-  ];
   const popularCategories = [
     { label: "Phones", icon: "phone-portrait-outline" },
     { label: "Laptops", icon: "laptop-outline" },
     { label: "Fashion", icon: "shirt-outline" },
     { label: "Gaming", icon: "game-controller-outline" },
   ];
-  const getRecentSearches = async () => {
-    try {
-      const storedSearches = await AsyncStorage.getItem("recentSearches");
-      if (storedSearches) {
-        setRecentSearches(JSON.parse(storedSearches));
-      }
-    } catch (error) {
-      console.error("Failed to load recent searches:", error);
-    }
-  };
-  const clearSearches = async (index?: number) => {
-    const newSearches = [...recentSearches];
-    if (index !== undefined) {
-      newSearches.splice(index, 1);
-    } else {
-      newSearches.length = 0;
-    }
-    setRecentSearches(newSearches);
-    try {
-      await AsyncStorage.setItem("recentSearches", JSON.stringify(newSearches));
-    } catch (error) {
-      console.error("Failed to save recent searches:", error);
-    }
-  };
-  useEffect(() => {
-    getRecentSearches();
-  }, []);
+
   return (
     <ScrollView
       className="mx-4 mt-5"
@@ -147,7 +168,7 @@ const SuggestionsScreen = ({
         <View className="mb-3 ">
           {suggestions?.map((item) => (
             <Pressable
-              key={`suggestion-${item}-${Math.random()}`}
+              key={`suggestion-${item}`}
               onPress={() => {
                 onSearchTerm(item);
               }}
@@ -166,7 +187,7 @@ const SuggestionsScreen = ({
                 <Ionicons name="time-outline" size={16} color="#888" />
                 <Text className="text-xl font-semibold">Recent searches</Text>
               </View>
-              <Pressable onPress={() => clearSearches()}>
+              <Pressable onPress={() => onClearRecentSearches()}>
                 <Text
                   variant="none"
                   className="text-sm font-semibold text-brand"
@@ -185,7 +206,7 @@ const SuggestionsScreen = ({
                     <Text className="mr-1 text-sm">{item}</Text>
                   </Pressable>
                   <Pressable
-                    onPress={() => clearSearches(index)}
+                    onPress={() => onClearRecentSearches(index)}
                     className="p-1"
                   >
                     <Ionicons name="close-outline" size={16} color="#888" />
@@ -205,7 +226,7 @@ const SuggestionsScreen = ({
             <View>
               {trendingSearches.map((item) => (
                 <View
-                  key={`trending-${item}-${Math.random()}`}
+                  key={`trending-${item}`}
                   className="mb-2 flex-row items-center justify-between rounded-xl  px-3 py-2  bg-gray-100 px-3 py-2 dark:bg-white/5"
                 >
                   <Pressable onPress={() => onSearchTerm(item)} className="">
@@ -296,24 +317,61 @@ export default function SearchScreen() {
   const isFetchingRef = useRef(false);
   const [typing, setTyping] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [trendingSearches, setTrendingSearches] = useState(
+    fallbackTrendingSearches,
+  );
 
-  
-  const setRecentSearchesAndStore = async (searchTerm: string) => {
-    const newSearches = [searchTerm];
+  useEffect(() => {
+    loadRecentSearches().then(setRecentSearches);
+  }, []);
 
-    try {
-      const storedSearches = await AsyncStorage.getItem("recentSearches");
-      if (storedSearches) {
-        const parsedSearches = JSON.parse(storedSearches);
-        const filteredSearches = parsedSearches.filter(
-          (s: string) => s.toLowerCase() !== searchTerm.toLowerCase(),
+  useEffect(() => {
+    const fetchTrendingSearches = async () => {
+      try {
+        const { data } = await axiosInstance.get<string[]>(
+          "/products/trending-keywords",
+          {
+            params: { limit: 8 },
+          },
         );
-        newSearches.push(...filteredSearches);
+
+        if (Array.isArray(data) && data.length) {
+          setTrendingSearches(data);
+        }
+      } catch (error) {
+        setTrendingSearches(fallbackTrendingSearches);
       }
-      await AsyncStorage.setItem("recentSearches", JSON.stringify(newSearches));
-    } catch (error) {
-      console.error("Failed to save recent searches:", error);
+    };
+
+    fetchTrendingSearches();
+  }, []);
+
+  const storeRecentSearch = (searchTerm: string) => {
+    const trimmedSearchTerm = searchTerm.trim();
+    if (!trimmedSearchTerm) return;
+
+    const nextSearches = [
+      trimmedSearchTerm,
+      ...recentSearches.filter(
+        (item) => item.toLowerCase() !== trimmedSearchTerm.toLowerCase(),
+      ),
+    ].slice(0, 8);
+
+    setRecentSearches(nextSearches);
+    saveRecentSearches(nextSearches);
+  };
+
+  const clearRecentSearches = (index?: number) => {
+    const nextSearches = [...recentSearches];
+    if (index !== undefined) {
+      nextSearches.splice(index, 1);
+    } else {
+      nextSearches.length = 0;
     }
+
+    setRecentSearches(nextSearches);
+    saveRecentSearches(nextSearches);
   };
   const fetchProductsPage = useCallback(
     async ({
@@ -421,9 +479,19 @@ export default function SearchScreen() {
   ]);
 
   const submitSearch = (nextQuery = searchQuery) => {
-    setActiveQuery(nextQuery);
-    fetchProductsPage({ nextQuery, reset: true });
-    setRecentSearchesAndStore(nextQuery);
+    const submittedQuery = nextQuery.trim();
+    setActiveQuery(submittedQuery);
+    fetchProductsPage({ nextQuery: submittedQuery, reset: true });
+    storeRecentSearch(submittedQuery);
+
+    if (submittedQuery.length >= 2) {
+      axiosInstance
+        .post("/products/search-events", {
+          query: submittedQuery,
+          source: "product-search",
+        })
+        .catch(() => undefined);
+    }
   };
 
   const handleSearchTerm = (term: string) => {
@@ -561,7 +629,14 @@ export default function SearchScreen() {
             <ActivityIndicator color="#2563EB" />
           </View>
         ) : showSuggestions ? (
-          <SuggestionsScreen suggestions={suggestions} onSearchTerm={handleSearchTerm} typing={typing} />
+          <SuggestionsScreen
+            suggestions={suggestions}
+            onSearchTerm={handleSearchTerm}
+            recentSearches={recentSearches}
+            trendingSearches={trendingSearches}
+            onClearRecentSearches={clearRecentSearches}
+            typing={typing}
+          />
         ) : products.length > 0 ? (
           <FlatList
             data={products}
@@ -659,7 +734,7 @@ export default function SearchScreen() {
             </View>
           </View>
 
-          <Pressable
+          {/* <Pressable
             onPress={() =>
               setDraftFilters((current) => ({
                 ...current,
@@ -694,7 +769,7 @@ export default function SearchScreen() {
                 }`}
               />
             </View>
-          </Pressable>
+          </Pressable> */}
 
           <View className="mt-8 flex-row gap-3">
             <Pressable

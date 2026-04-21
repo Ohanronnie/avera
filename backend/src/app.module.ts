@@ -14,6 +14,8 @@ import { ProductsModule } from './products/products.module';
 import { MulterModule } from '@nestjs/platform-express';
 import { UploadsModule } from './uploads/uploads.module';
 import { MediaModule } from './media/media.module';
+import { WishlistModule } from './wishlist/wishlist.module';
+import { ChatModule } from './chat/chat.module';
 @Module({
   imports: [
     LoggerModule,
@@ -33,6 +35,8 @@ import { MediaModule } from './media/media.module';
     UploadsModule,
 
     MediaModule,
+    WishlistModule,
+    ChatModule,
   ],
   controllers: [AppController],
   providers: [AppService],

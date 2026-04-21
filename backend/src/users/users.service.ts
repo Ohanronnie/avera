@@ -1,6 +1,7 @@
 import {
   BadGatewayException,
   BadRequestException,
+  ConflictException,
   HttpException,
   Injectable,
   InternalServerErrorException,
@@ -16,16 +17,50 @@ import * as bcrypt from 'bcrypt';
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private throwUsernameTaken(): never {
+    throw new ConflictException({
+      code: 'USERNAME_TAKEN',
+      message: 'Username is already taken.',
+    });
+  }
+
+  private async ensureUsernameIsAvailable(username: string, userId: number) {
+    const existingUser = await this.prisma.user.findFirst({
+      where: {
+        username,
+        NOT: { id: userId },
+      },
+      select: { id: true },
+    });
+
+    if (existingUser) this.throwUsernameTaken();
+  }
+
+  private isUsernameUniqueError(error: any) {
+    return error?.code === 'P2002' && error?.meta?.target?.includes('username');
+  }
+
   async createUserInfo(
     userInfo: CreateUserInfo,
     userId: number,
   ): Promise<true> {
     const { firstName, lastName, phoneNumber, username, bio } = userInfo;
 
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { firstName, lastName, phoneNumber, username, bio },
-    });
+    await this.ensureUsernameIsAvailable(username, userId);
+
+    try {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { firstName, lastName, phoneNumber, username, bio },
+      });
+    } catch (error: any) {
+      if (this.isUsernameUniqueError(error)) {
+        this.throwUsernameTaken();
+      }
+
+      throw error;
+    }
 
     return true;
   }
@@ -33,12 +68,14 @@ export class UsersService {
   // GET /users/me
   async getCurrentUserProfile(userId: number) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    console.log('User profile:', user, userId);
     if (!user) throw new NotFoundException('User not found');
     if (!user.firstName)
       return {
         infoUpdated: false,
       };
     return {
+      id: user.id,
       infoUpdated: !!user.firstName,
       fullName: `${user.firstName} ${user.lastName}`,
       firstName: user.firstName,
@@ -61,6 +98,10 @@ export class UsersService {
   // PATCH /users/me
   async updateCurrentUserProfile(userId: number, data: UpdateProfile) {
     try {
+      if (data.username) {
+        await this.ensureUsernameIsAvailable(data.username, userId);
+      }
+
       const dataToUpdate: Partial<any> = {
         firstName: data.firstName,
         lastName: data.lastName,
@@ -91,7 +132,15 @@ export class UsersService {
           zipCode: user.zipCode,
         },
       };
-    } catch (e) {
+    } catch (error: any) {
+      if (this.isUsernameUniqueError(error)) {
+        this.throwUsernameTaken();
+      }
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new BadRequestException('Could not update profile');
     }
   }

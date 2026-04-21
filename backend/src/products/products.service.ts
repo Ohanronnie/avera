@@ -1,14 +1,28 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateProduct } from './dto/create-product.dto';
-import { create } from 'domain';
 import { GetProducts } from './dto/get-products.dto';
+
+const TRENDING_WINDOW_DAYS = 7;
+
+const normalizeSearchKeyword = (query: string) =>
+  query
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, ' ')
+    .slice(0, 120);
+
+const getUtcDay = (date = new Date()) =>
+  new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+  );
 
 @Injectable()
 export class ProductsService {
   constructor(private readonly prisma: PrismaService) {}
   async createProduct(userId: number, productData: CreateProduct) {
-    const products = await this.prisma.product.create({
+    await this.prisma.product.create({
       data: {
         sellerId: userId,
         location: `${productData.location}, Nigeria`,
@@ -34,9 +48,9 @@ export class ProductsService {
 
     return true;
   }
-  async getProducts(query: GetProducts) {
+  async getProducts(query: GetProducts, userId?: number) {
     if (query.productId) {
-      return await this.prisma.product.findUnique({
+      const product = await this.prisma.product.findUnique({
         where: {
           id: query.productId,
         },
@@ -57,6 +71,33 @@ export class ProductsService {
           tags: true,
         },
       });
+
+      if (!product) return null;
+
+      if (!userId) {
+        return {
+          ...product,
+          isWishlisted: false,
+          isOwner: false,
+        };
+      }
+
+      const wishlistItem = await this.prisma.wishlist.findUnique({
+        where: {
+          userId_productId: {
+            userId,
+            productId: query.productId,
+          },
+        },
+        select: { id: true },
+      });
+      const isWishlisted = Boolean(wishlistItem);
+
+      return {
+        ...product,
+        isWishlisted,
+        isOwner: product.sellerId === userId,
+      };
     }
     if (query.categoryId && !query.query) {
       console.log(query);
@@ -228,5 +269,78 @@ export class ProductsService {
     }
 
     return suggestions.slice(0, limit);
+  }
+
+  async recordSearchKeyword(query: string) {
+    const keyword = normalizeSearchKeyword(query);
+    if (keyword.length < 2) return { recorded: false };
+
+    const day = getUtcDay();
+
+    await this.prisma.searchKeywordTrend.upsert({
+      where: {
+        keyword_day: {
+          keyword,
+          day,
+        },
+      },
+      create: {
+        keyword,
+        day,
+        count: 1,
+      },
+      update: {
+        count: {
+          increment: 1,
+        },
+      },
+    });
+
+    return { recorded: true };
+  }
+
+  async getTrendingKeywords(limit = 8) {
+    const safeLimit = Math.min(Math.max(Number(limit) || 8, 1), 20);
+    const since = getUtcDay();
+    since.setUTCDate(since.getUTCDate() - (TRENDING_WINDOW_DAYS - 1));
+
+    const rows = await this.prisma.searchKeywordTrend.findMany({
+      where: {
+        day: {
+          gte: since,
+        },
+      },
+      select: {
+        keyword: true,
+        count: true,
+        day: true,
+      },
+    });
+
+    const keywordScores = rows.reduce<
+      Record<string, { keyword: string; score: number; latestDay: Date }>
+    >((scores, row) => {
+      const existing = scores[row.keyword];
+      if (!existing) {
+        scores[row.keyword] = {
+          keyword: row.keyword,
+          score: row.count,
+          latestDay: row.day,
+        };
+        return scores;
+      }
+
+      existing.score += row.count;
+      if (row.day > existing.latestDay) existing.latestDay = row.day;
+      return scores;
+    }, {});
+
+    return Object.values(keywordScores)
+      .sort((first, second) => {
+        if (second.score !== first.score) return second.score - first.score;
+        return second.latestDay.getTime() - first.latestDay.getTime();
+      })
+      .slice(0, safeLimit)
+      .map((item) => item.keyword);
   }
 }

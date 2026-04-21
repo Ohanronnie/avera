@@ -1,16 +1,13 @@
-import React, { useState } from "react";
 import { Image, View, Pressable } from "react-native";
 import { Text } from "../themed/theme";
-import {
-  Heart,
-  Star,
-  ShoppingCart,
-  Bookmark,
-  BookmarkCheck,
-} from "lucide-react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import { router } from "expo-router";
+import {
+  useToggleWishlistMutation,
+  useWishlistProductIds,
+} from "@/features/wishlist/hooks";
+import { useToast } from "@/contexts/ToastContext";
 
 export interface IProduct {
   title: string;
@@ -29,6 +26,9 @@ export interface IProduct {
 export function ProductCard({ product }: { product: IProduct }) {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
+  const toast = useToast();
+  const { data: wishlistIds = [] } = useWishlistProductIds();
+  const toggleWishlist = useToggleWishlistMutation();
 
   const {
     onFavorite,
@@ -41,16 +41,34 @@ export function ProductCard({ product }: { product: IProduct }) {
     id,
     imageUrl,
   } = product;
-  const [isFavorited, setIsFavorited] = useState(false);
+  const isFavorited = wishlistIds.includes(id);
 
   const handleFavorite = () => {
-    setIsFavorited(!isFavorited);
-    onFavorite?.();
+    toggleWishlist.mutate(
+      { productId: id, isWishlisted: isFavorited },
+      {
+        onSuccess: () => {
+          onFavorite?.();
+        },
+        onError: () => {
+          toast.show({
+            title: "Wishlist not updated",
+            description: "Please sign in and try again.",
+            variant: "error",
+          });
+        },
+      },
+    );
   };
 
   return (
     <Pressable
-      onPress={() => router.push(`/product/${id}`)}
+      onPress={() =>
+        router.push({
+          pathname: "/product-details/[id]",
+          params: { id: String(id) },
+        })
+      }
       className="w-[48%] mb-6 bg-white dark:bg-[#1A1A1A] rounded-3xl overflow-hidden border border-gray-200 dark:border-white/5"
       android_ripple={{ color: "#f5f5f5" }}
     >
@@ -65,7 +83,11 @@ export function ProductCard({ product }: { product: IProduct }) {
 
         {/* Favorite Button */}
         <Pressable
-          onPress={handleFavorite}
+          onPress={(event) => {
+            event.stopPropagation();
+            handleFavorite();
+          }}
+          disabled={toggleWishlist.isPending}
           className="absolute top-3 right-3 w-9 h-9 bg-white/95 dark:bg-black/20 rounded-full items-center justify-center z-10 border border-gray-200 dark:border-white/5"
           android_ripple={{ color: "#f0f0f0", radius: 18 }}
         >

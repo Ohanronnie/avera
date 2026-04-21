@@ -1,8 +1,5 @@
 import { Tabs } from "expo-router/tabs";
-import { useEffect } from "react";
-import { axiosInstance } from "@/utils/axios";
-import { useAuth } from "@/contexts/AuthContext";
-import { router } from "expo-router";
+import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import {
   Ionicons,
   Feather,
@@ -10,7 +7,7 @@ import {
   AntDesign,
   MaterialIcons,
 } from "@expo/vector-icons";
-import { View, Platform } from "react-native";
+import { Platform } from "react-native";
 import { useColorScheme } from "nativewind";
 
 /**
@@ -99,40 +96,74 @@ const TabIcon = ({
   return <Library name={iconName as any} size={24} color={color} />;
 };
 
+const IOS_TABS = [
+  {
+    name: "home",
+    label: "Home",
+    sf: { default: "house", selected: "house.fill" },
+  },
+  {
+    name: "wallet",
+    label: "Wallet",
+    sf: { default: "creditcard", selected: "creditcard.fill" },
+  },
+  {
+    name: "wishlist",
+    label: "Wishlist",
+    sf: { default: "heart", selected: "heart.fill" },
+  },
+  {
+    name: "orders",
+    label: "Orders",
+    sf: { default: "bag", selected: "bag.fill" },
+  },
+  {
+    name: "profile",
+    label: "Profile",
+    sf: { default: "person", selected: "person.fill" },
+  },
+] as const;
+
 export default function TabsLayout() {
-  const { login } = useAuth();
-
-  useEffect(() => {
-    const getUser = async () => {
-      try {
-        const response = await axiosInstance.get("/users/me");
-        const data = response.data;
-        if (!data.infoUpdated) {
-          router.replace("/(auth)/user-info");
-        } else {
-          return login(data);
-        }
-      } catch (error: any) {
-        const error_response = error?.response?.data;
-        if (
-          error_response?.message &&
-          (error_response.code as string) === "ACCOUNT_NOT_VERIFIED"
-        ) {
-          return router.replace(
-            "/(auth)/otp-verification?email=" +
-              error_response.email +
-              "&id=" +
-              error_response.userId,
-          );
-        }
-        return router.replace("/(auth)/login");
-      }
-    };
-    getUser();
-  }, []);
-
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
+
+  if (Platform.OS === "ios") {
+    return (
+      <NativeTabs
+        backgroundColor={isDark ? "#0A0A0A" : "#FFFFFF"}
+        blurEffect={
+          isDark ? "systemChromeMaterialDark" : "systemChromeMaterialLight"
+        }
+        disableTransparentOnScrollEdge
+        iconColor={{
+          default: isDark ? "#555" : "#9CA3AF",
+          selected: "#2563EB",
+        }}
+        labelStyle={{
+          default: {
+            color: isDark ? "#555" : "#9CA3AF",
+            fontSize: 10,
+            fontWeight: "700",
+          },
+          selected: {
+            color: "#2563EB",
+            fontSize: 10,
+            fontWeight: "700",
+          },
+        }}
+        shadowColor={isDark ? "#111" : "#F3F4FB"}
+        tintColor="#2563EB"
+      >
+        {IOS_TABS.map((tab) => (
+          <NativeTabs.Trigger key={tab.name} name={tab.name}>
+            <Icon sf={tab.sf} />
+            <Label>{tab.label}</Label>
+          </NativeTabs.Trigger>
+        ))}
+      </NativeTabs>
+    );
+  }
 
   return (
     <Tabs
@@ -141,7 +172,7 @@ export default function TabsLayout() {
           backgroundColor: isDark ? "#0A0A0A" : "#FFFFFF",
           borderTopWidth: 1,
           borderTopColor: isDark ? "#111" : "#F3F4FB",
-          height: Platform.OS === "ios" ? 88 : 68,
+          height: 68,
           elevation: 0,
           shadowOpacity: 0,
         },
@@ -154,10 +185,10 @@ export default function TabsLayout() {
           fontWeight: "700",
           letterSpacing: 0.5,
           marginTop: 4,
-          marginBottom: Platform.OS === "ios" ? 0 : 10,
+          marginBottom: 10,
         },
         tabBarIconStyle: {
-          marginTop: Platform.OS === "ios" ? 6 : 0,
+          marginTop: 0,
         },
       }}
     >

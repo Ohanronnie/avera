@@ -3,7 +3,7 @@ import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
 // Use environment variable or fallback
- export const BASE_URL = "https://fox-delta-arrow.tunnel.rxnnie.tech"
+ export const BASE_URL = "http://172.20.10.2:3000";
 // || !__DEV__
 //   ? Platform.OS === "ios"
 //     ? "http://localhost:3000/"

@@ -3,9 +3,10 @@
     "name": "Avera",
     "slug": "Avera",
     "version": "1.0.0",
-    "scheme": "avera",
     "orientation": "portrait",
+    "icon": "./assets/images/splash.png",
     "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
     "splash": {
       "image": "./assets/images/splash.png",
       "resizeMode": "contain",
@@ -15,7 +16,32 @@
         "backgroundColor": "#0A0A0A"
       }
     },
-    "icon": "./assets/images/splash.png",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "avera.app",
+      "splash": {
+        "image": "./assets/images/splash.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#ffffff"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/splash.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "avera.app",
+      "splash": {
+        "image": "./assets/images/splash.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#ffffff"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "scheme": "avera",
     "plugins": [
       [
         "@react-native-google-signin/google-signin",
@@ -28,33 +54,11 @@
       [
         "./plugins/withAndroidAbiFilters",
         {
-          "abiFilters": ["arm64-v8a"]
+          "abiFilters": [
+            "arm64-v8a"
+          ]
         }
       ]
-    ],
-    "android": {
-      "package": "app.avera",
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/images/splash.png",
-        "backgroundColor": "#ffffff"
-      },
-      "splash": {
-        "image": "./assets/images/splash.png",
-        "resizeMode": "contain",
-        "backgroundColor": "#ffffff"
-      }
-    },
-    "ios": {
-      "bundleIdentifier": "app.avera",
-      "supportsTablet": true,
-      "infoPlist": {
-        "UIViewControllerBasedStatusBarAppearance": false
-      },
-      "splash": {
-        "image": "./assets/images/splash.png",
-        "resizeMode": "contain",
-        "backgroundColor": "#ffffff"
-      }
-    }
+    ]
   }
 }

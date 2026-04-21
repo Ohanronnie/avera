@@ -37,7 +37,12 @@ export default function AccountScreen() {
     {
       title: "Account",
       items: [
-        { icon: "chatbubbles-outline", label: "Messages", count: 2 },
+        {
+          icon: "chatbubbles-outline",
+          label: "Messages",
+          count: 2,
+          route: "/messages",
+        },
         { icon: "heart-outline", label: "Saved Items", count: 45 },
         { icon: "settings-outline", label: "Settings" },
       ],
@@ -99,6 +104,9 @@ export default function AccountScreen() {
                   <TouchableOpacity
                     key={index}
                     activeOpacity={0.7}
+                    onPress={() => {
+                      if (item.route) router.push(item.route as any);
+                    }}
                     className={`flex-row items-center py-3 px-4 ${
                       index !== section.items.length - 1
                         ? "border-b border-gray-100/50 dark:border-white/5"
@@ -177,7 +185,7 @@ export default function AccountScreen() {
       {/* Floating Create Button */}
       <TouchableOpacity
         onPress={() => router.push("/product/create")}
-        className="absolute bottom-8 right-8 w-16 h-16 bg-brand rounded-full items-center justify-center border-4 border-white dark:border-[#0A0A0A] active:scale-95 transition-all"
+        className="absolute bottom-32 right-8 w-16 h-16 bg-brand rounded-full items-center justify-center border-2 border-white dark:border-[#0A0A0A]"
         style={{ elevation: 0 }}
       >
         <Ionicons name="add" size={32} color="white" />

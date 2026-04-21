@@ -19,6 +19,11 @@ import { useColorScheme } from "nativewind";
 import { axiosInstance } from "@/utils/axios";
 import { useToast } from "@/contexts/ToastContext";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  useToggleWishlistMutation,
+  useWishlistProductIds,
+} from "@/features/wishlist/hooks";
 
 const fallbackImage = require("@/assets/images/shoe.jpg");
 const { width } = Dimensions.get("window");
@@ -56,6 +61,8 @@ type ProductDetails = {
     name?: string | null;
   } | null;
   seller?: ProductSeller | null;
+  isWishlisted?: boolean;
+  isOwner?: boolean;
 };
 
 const formatPrice = (value: number | string | undefined) => {
@@ -95,14 +102,20 @@ export default function ProductDetailsPage() {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   const toast = useToast();
+  const { user } = useAuth();
+  const productId = Number(id || 0);
+  const { data: wishlistIds = [] } = useWishlistProductIds();
+  const toggleWishlist = useToggleWishlistMutation();
 
   const [product, setProduct] = useState<ProductDetails | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isBookmarked, setIsBookmarked] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [buyerQuantity, setBuyerQuantity] = useState(1);
+  const [detailWishlistState, setDetailWishlistState] = useState<
+    boolean | null
+  >(null);
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -110,11 +123,13 @@ export default function ProductDetailsPage() {
 
       try {
         setLoading(true);
+        console.log("Fetching product with ID:", id);
         const { data } = await axiosInstance.get("/products", {
           params: { productId: id },
         });
 
         setProduct(data);
+        setDetailWishlistState(data.isWishlisted ?? null);
       } catch (error: any) {
         toast.show({
           title: "Product not available",
@@ -144,12 +159,25 @@ export default function ProductDetailsPage() {
   const sellerName = getSellerName(product?.seller);
   const productImageUrl = product?.images?.[0]?.url;
   const availableQuantity = Math.max(1, Number(product?.quantity || 1));
+  const isBookmarked =
+    detailWishlistState ??
+    (productId ? wishlistIds.includes(productId) : false);
   const subtotal = price * buyerQuantity;
   const serviceFee = Math.round(subtotal * 0.015);
   const total = subtotal + serviceFee;
+  const currentUserId = user?.id ? Number(user.id) : null;
+  const isOwnProduct =
+    product?.isOwner ||
+    Boolean(
+      currentUserId &&
+      product?.seller?.id &&
+      Number(product.seller.id) === currentUserId,
+    );
 
   useEffect(() => {
-    setBuyerQuantity((current) => Math.min(Math.max(current, 1), availableQuantity));
+    setBuyerQuantity((current) =>
+      Math.min(Math.max(current, 1), availableQuantity),
+    );
   }, [availableQuantity]);
 
   const decrementQuantity = () => {
@@ -231,7 +259,44 @@ export default function ProductDetailsPage() {
           </Pressable>
           <View className="flex-row gap-x-3">
             <Pressable
-              onPress={() => setIsBookmarked((current) => !current)}
+              onPress={() => {
+                if (!productId) return;
+
+                const previousWishlistState = detailWishlistState;
+                const nextWishlistState = !isBookmarked;
+                setDetailWishlistState(nextWishlistState);
+                setProduct((current) =>
+                  current
+                    ? {
+                        ...current,
+                        isWishlisted: nextWishlistState,
+                      }
+                    : current,
+                );
+
+                toggleWishlist.mutate(
+                  { productId, isWishlisted: isBookmarked },
+                  {
+                    onError: () => {
+                      setDetailWishlistState(previousWishlistState);
+                      setProduct((current) =>
+                        current
+                          ? {
+                              ...current,
+                              isWishlisted: previousWishlistState ?? false,
+                            }
+                          : current,
+                      );
+                      toast.show({
+                        title: "Wishlist not updated",
+                        description: "Please sign in and try again.",
+                        variant: "error",
+                      });
+                    },
+                  },
+                );
+              }}
+              disabled={toggleWishlist.isPending}
               className="h-10 w-10 items-center justify-center rounded-full border border-gray-100/50 bg-white/90 dark:border-white/10 dark:bg-black/40"
             >
               <Ionicons
@@ -380,7 +445,10 @@ export default function ProductDetailsPage() {
                   </Text>
                 </View>
               </View>
-              <TouchableOpacity onPress={() => router.push(`/seller/${product.seller?.id}`)} className="rounded-xl border border-gray-100 bg-white px-4 py-2 dark:border-white/10 dark:bg-white/10">
+              <TouchableOpacity
+                onPress={() => router.push(`/seller/${product.seller?.id}`)}
+                className="rounded-xl border border-gray-100 bg-white px-4 py-2 dark:border-white/10 dark:bg-white/10"
+              >
                 <Text className="text-sm font-bold text-black dark:text-white">
                   Profile
                 </Text>
@@ -392,19 +460,31 @@ export default function ProductDetailsPage() {
 
       <View className="absolute bottom-0 left-0 right-0 flex-row gap-x-4 border-t border-gray-100 bg-white/95 px-6 py-6 dark:border-white/5 dark:bg-[#0A0A0A]/95">
         <TouchableOpacity
-          onPress={() =>
+          onPress={() => {
+            if (isOwnProduct) return;
+
             router.push({
               pathname: "/messages/[id]",
               params: {
                 id: String(product.seller?.id || product.id),
+                sellerId: String(product.seller?.id || ""),
+                counterpartId: String(product.seller?.id || ""),
                 sellerName,
                 productName: product.name,
                 productPrice: formatPrice(product.price),
+                productId: String(product.id),
+                productQuantity: String(availableQuantity),
+                isOwner: isOwnProduct ? "true" : "false",
                 ...(productImageUrl ? { productImage: productImageUrl } : {}),
               },
-            })
-          }
-          className="h-16 w-16 items-center justify-center rounded-2xl border border-gray-200 bg-gray-100 dark:border-white/10 dark:bg-white/5"
+            });
+          }}
+          disabled={isOwnProduct}
+          className={`h-16 w-16 items-center justify-center rounded-2xl border ${
+            isOwnProduct
+              ? "border-gray-100 bg-gray-100 opacity-50 dark:border-white/5 dark:bg-white/5"
+              : "border-gray-200 bg-gray-100 dark:border-white/10 dark:bg-white/5"
+          }`}
         >
           <Ionicons
             name="chatbubble-ellipses-outline"
@@ -414,10 +494,24 @@ export default function ProductDetailsPage() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          onPress={() => setCheckoutOpen(true)}
-          className="h-16 flex-1 items-center justify-center rounded-2xl bg-brand shadow-none"
+          onPress={() => {
+            if (isOwnProduct) return;
+
+            setCheckoutOpen(true);
+          }}
+          disabled={isOwnProduct}
+          className={`h-16 flex-1 items-center justify-center rounded-2xl shadow-none ${
+            isOwnProduct ? "bg-gray-300 dark:bg-white/10" : "bg-brand"
+          }`}
         >
-          <Text className="text-lg font-bold text-white">Buy Now</Text>
+          <Text
+            variant="none"
+            className={`text-lg font-bold ${
+              isOwnProduct ? "text-gray-500 dark:text-gray-400" : "text-white"
+            }`}
+          >
+            {isOwnProduct ? "Your listing" : "Buy Now"}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -459,7 +553,11 @@ export default function ProductDetailsPage() {
           <View className="mt-5 rounded-3xl border border-brand/20 bg-brand/10 p-4">
             <View className="flex-row items-start">
               <View className="h-10 w-10 items-center justify-center rounded-2xl bg-brand/10">
-                <Ionicons name="shield-checkmark-outline" size={20} color="#2563EB" />
+                <Ionicons
+                  name="shield-checkmark-outline"
+                  size={20}
+                  color="#2563EB"
+                />
               </View>
               <View className="ml-3 flex-1">
                 <Text variant="none" className="font-bold text-brand">
@@ -521,7 +619,10 @@ export default function ProductDetailsPage() {
               { label: "Escrow fee", value: formatPrice(serviceFee) },
               { label: "Delivery", value: "Choose later" },
             ].map((item) => (
-              <View key={item.label} className="mb-3 flex-row items-center justify-between">
+              <View
+                key={item.label}
+                className="mb-3 flex-row items-center justify-between"
+              >
                 <Text className="text-sm text-gray-500 dark:text-gray-400">
                   {item.label}
                 </Text>
@@ -556,7 +657,8 @@ export default function ProductDetailsPage() {
                 setCheckoutOpen(false);
                 toast.show({
                   title: "Checkout coming soon",
-                  description: "Next step is creating the order and escrow payment.",
+                  description:
+                    "Next step is creating the order and escrow payment.",
                   variant: "info",
                 });
               }}

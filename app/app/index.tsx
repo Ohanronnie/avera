@@ -2,35 +2,43 @@ import { useEffect, useRef } from "react";
 import { router } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import { Animated, StyleSheet, View, Dimensions } from "react-native";
-import { useSharedValue } from "react-native-reanimated";
 
 export default function Index() {
-  const fadeAnim = (new Animated.Value(0));
-  console.log("Index screen rendered");
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
-    Animated.timing(fadeAnim, {
+    let isMounted = true;
+
+    const animation = Animated.timing(fadeAnim, {
       toValue: 1,
       duration: 1000,
       useNativeDriver: true,
-    }).start();
+    });
 
     const decideRoute = async () => {
-      // Add a slight delay for animation
-      console.log("Deciding route...");
       const token = await SecureStore.getItemAsync("accessToken");
-      console.log("Storedx token:", token);
+
+      if (!isMounted) return;
 
       if (token) {
-        console.log("Stored token:", token);
         router.replace("/(tabs)/home");
       } else {
-        console.log("here");
         router.replace("/(auth)/onboarding");
       }
     };
 
-    decideRoute();
-  }, []);
+    animation.start(({ finished }) => {
+      if (finished) {
+        decideRoute();
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      animation.stop();
+      fadeAnim.stopAnimation();
+    };
+  }, [fadeAnim]);
 
   return (
     <View style={styles.container}>

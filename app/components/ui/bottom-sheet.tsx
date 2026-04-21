@@ -38,16 +38,39 @@ export function BottomSheet({
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   const insets = useSafeAreaInsets();
-  const translateY =useRef (new Animated.Value(SCREEN_HEIGHT)).current;
+  const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const animationRef = useRef<Animated.CompositeAnimation | null>(null);
+
+  const startAnimation = (animation: Animated.CompositeAnimation) => {
+    animationRef.current?.stop();
+    animationRef.current = animation;
+    animation.start(() => {
+      if (animationRef.current === animation) {
+        animationRef.current = null;
+      }
+    });
+  };
 
   const closeSheet = () => {
     if (alwaysVisible) return;
 
-    Animated.timing(translateY, {
+    animationRef.current?.stop();
+    const animation = Animated.timing(translateY, {
       toValue: SCREEN_HEIGHT,
       duration: 220,
       useNativeDriver: true,
-    }).start(() => onClose?.());
+    });
+
+    animationRef.current = animation;
+    animation.start(({ finished }) => {
+      if (animationRef.current === animation) {
+        animationRef.current = null;
+      }
+
+      if (finished) {
+        onClose?.();
+      }
+    });
   };
 
   const panResponder = useRef(
@@ -64,25 +87,37 @@ export function BottomSheet({
           return;
         }
 
-        Animated.spring(translateY, {
-          toValue: 0,
-          useNativeDriver: true,
-          bounciness: 4,
-        }).start();
+        startAnimation(
+          Animated.spring(translateY, {
+            toValue: 0,
+            useNativeDriver: true,
+            bounciness: 4,
+          }),
+        );
       },
     }),
   ).current;
 
   useEffect(() => {
     if (visible) {
-      Animated.spring(translateY, {
-        toValue: 0,
-        useNativeDriver: true,
-        bounciness: 4,
-      }).start();
+      startAnimation(
+        Animated.spring(translateY, {
+          toValue: 0,
+          useNativeDriver: true,
+          bounciness: 4,
+        }),
+      );
     } else if (!alwaysVisible) {
+      animationRef.current?.stop();
+      animationRef.current = null;
       translateY.setValue(SCREEN_HEIGHT);
     }
+
+    return () => {
+      animationRef.current?.stop();
+      animationRef.current = null;
+      translateY.stopAnimation();
+    };
   }, [alwaysVisible, translateY, visible]);
 
   const sheet = (
