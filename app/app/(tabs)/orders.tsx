@@ -1,8 +1,9 @@
 import { Text } from "@/components/themed/theme";
+import { axiosInstance } from "@/utils/axios";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { useColorScheme } from "nativewind";
-import { ComponentProps, useMemo, useState } from "react";
+import { ComponentProps, useCallback, useMemo, useState } from "react";
 import { Image, Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -155,8 +156,28 @@ const getStatusTone = (status: OrderStatus) => {
 export default function OrdersScreen() {
   const [activeMode, setActiveMode] = useState<OrderMode>("buying");
   const [activeStatus, setActiveStatus] = useState<OrderStatus>("active");
+  const [unreadMessages, setUnreadMessages] = useState(0);
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
+
+  useFocusEffect(
+    useCallback(() => {
+      let isMounted = true;
+
+      axiosInstance
+        .get("/chat/conversations/unread-count")
+        .then(({ data }) => {
+          if (isMounted) setUnreadMessages(Number(data.count || 0));
+        })
+        .catch(() => {
+          if (isMounted) setUnreadMessages(0);
+        });
+
+      return () => {
+        isMounted = false;
+      };
+    }, []),
+  );
 
   const filteredOrders = useMemo(
     () =>
@@ -182,13 +203,23 @@ export default function OrdersScreen() {
 
           <Pressable
             onPress={() => router.push("/messages")}
-            className="h-11 w-11 items-center justify-center rounded-full border border-gray-100 bg-gray-50 dark:border-white/10 dark:bg-white/5"
+            className="relative h-11 w-11 items-center justify-center rounded-full border border-gray-100 bg-gray-50 dark:border-white/10 dark:bg-white/5"
           >
             <Ionicons
               name="chatbubbles-outline"
               size={21}
               color={isDark ? "white" : "#111827"}
             />
+            {unreadMessages ? (
+              <View className="absolute -right-1 -top-1 min-w-5 items-center justify-center rounded-full bg-brand px-1.5 py-0.5">
+                <Text
+                  variant="none"
+                  className="text-[10px] font-black text-white"
+                >
+                  {unreadMessages > 9 ? "9+" : unreadMessages}
+                </Text>
+              </View>
+            ) : null}
           </Pressable>
         </View>
       </View>

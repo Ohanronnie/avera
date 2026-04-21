@@ -9,9 +9,15 @@ import {
 } from 'class-validator';
 
 export class SendMessageDto {
+  @IsOptional()
   @IsString()
   @MaxLength(2000)
-  content: string;
+  content?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  imageUrl?: string;
 
   @IsOptional()
   @Type(() => Number)

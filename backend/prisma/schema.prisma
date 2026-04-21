@@ -14,17 +14,17 @@ datasource db {
 }
 
 model User {
-  id              Int     @id @default(autoincrement())
-  email           String  @unique
-  username        String? @unique
+  id              Int       @id @default(autoincrement())
+  email           String    @unique
+  username        String?   @unique
   firstName       String?
   lastName        String?
-  phoneNumber     String? 
+  phoneNumber     String?
   avatarUrl       String?
   bio             String?
-  trustScore      Decimal @default(0.0) @db.Decimal(5, 2)
-  googleId        String? @unique
-  accountVerified Boolean @default(false)
+  trustScore      Decimal   @default(0.0) @db.Decimal(5, 2)
+  googleId        String?   @unique
+  accountVerified Boolean   @default(false)
   password        String?
   refreshHashed   String?
   country         String?
@@ -33,22 +33,22 @@ model User {
   address         String?
   zipCode         String?
   // Seller / Buyer fields
-  isActive    Boolean   @default(true) // can be suspended/disabled
-  rating      Float     @default(0.0) // avg rating from reviews
-  numReviews  Int       @default(0)
-  location    String? // city/state/country
-  lastSeen    DateTime? // last online
-  deviceToken String? // for push notifications
+  isActive        Boolean   @default(true) // can be suspended/disabled
+  rating          Float     @default(0.0) // avg rating from reviews
+  numReviews      Int       @default(0)
+  location        String? // city/state/country
+  lastSeen        DateTime? // last online
+  deviceToken     String? // for push notifications
 
   // Relations
-  products              Product[] // products being sold
-  reviews               Review[]  
-  wishlist              Wishlist[]
-  buyerConversations    Conversation[] @relation("BuyerConversations")
-  sellerConversations   Conversation[] @relation("SellerConversations")
-  sentMessages          Message[]      @relation("SentMessages")
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  products            Product[] // products being sold
+  reviews             Review[]
+  wishlist            Wishlist[]
+  buyerConversations  Conversation[] @relation("BuyerConversations")
+  sellerConversations Conversation[] @relation("SellerConversations")
+  sentMessages        Message[]      @relation("SentMessages")
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
 }
 
 model Category {
@@ -63,20 +63,19 @@ model Category {
 }
 
 model Product {
-  id          Int     @id @default(autoincrement())
-  name       String
+  id          Int          @id @default(autoincrement())
+  name        String
   description String
-  price       Decimal @db.Decimal(10, 2)
+  price       Decimal      @db.Decimal(10, 2)
   condition   String // e.g. "New", "Used - Like New", "Used - Good"
-  quantity    Int     @default(1)
-  currency    String  @default("USD") // ISO currency code
+  quantity    Int          @default(1)
+  currency    String       @default("USD") // ISO currency code
   // Relations
-  sellerId   Int
-  seller     User         @relation(fields: [sellerId], references: [id])
-  categoryId Int
-  category   Category     @relation(fields: [categoryId], references: [id])
-  tags       ProductTag[]
-
+  sellerId    Int
+  seller      User         @relation(fields: [sellerId], references: [id])
+  categoryId  Int
+  category    Category     @relation(fields: [categoryId], references: [id])
+  tags        ProductTag[]
 
   location String?
 
@@ -86,9 +85,9 @@ model Product {
   conversations Conversation[]
 
   // Reviews
-  reviews Review[]
-  rating  Float @default(0.0) // avg rating for this product
-  numReviews Int @default(0)
+  reviews    Review[]
+  rating     Float    @default(0.0) // avg rating for this product
+  numReviews Int      @default(0)
 
   // Status
   status     ProductStatus @default(ACTIVE)
@@ -102,6 +101,7 @@ model Product {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
 model Wishlist {
   id        Int      @id @default(autoincrement())
   userId    Int
@@ -113,6 +113,7 @@ model Wishlist {
   @@unique([userId, productId])
   @@index([productId])
 }
+
 model ProductTag {
   id        Int     @id @default(autoincrement())
   name      String
@@ -165,13 +166,21 @@ model Message {
   senderId       Int
   sender         User         @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
   content        String
+  imageUrl       String?
   offerAmount    Decimal?     @db.Decimal(10, 2)
   offerQuantity  Int?
+  offerStatus    OfferStatus?
   readAt         DateTime?
   createdAt      DateTime     @default(now())
 
   @@index([conversationId, createdAt])
   @@index([senderId])
+}
+
+enum OfferStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
 }
 
 model ProductVerification {
@@ -185,15 +194,15 @@ model ProductVerification {
 }
 
 model Review {
-  id         Int      @id @default(autoincrement())
-  productId  Int
-  product    Product  @relation(fields: [productId], references: [id])
-  userId     Int
-  user       User     @relation(fields: [userId], references: [id])
-  rating     Int      @default(5) // 1-5
-  comment    String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        Int      @id @default(autoincrement())
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id])
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  rating    Int      @default(5) // 1-5
+  comment   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([productId, userId]) // one review per user per product
 }

@@ -42,10 +42,9 @@ function AuthGate() {
       try {
         const response = await axiosInstance.get("/users/me");
         const data = response.data;
+        login(data);
         if (!data.infoUpdated) {
           router.replace("/(auth)/user-info");
-        } else {
-          return login(data);
         }
       } catch (error: any) {
         const errorResponse = error?.response?.data;

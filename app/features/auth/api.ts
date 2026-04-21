@@ -1,5 +1,4 @@
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
-import * as SecureStore from "expo-secure-store";
 
 import type {
   AuthTokensResponse,
@@ -7,11 +6,10 @@ import type {
   RegisterPayload,
   RegisterResponse,
 } from "@/features/auth/types";
-import { axiosInstance } from "@/utils/axios";
+import { axiosInstance, saveTokens } from "@/utils/axios";
 
 export async function persistAuthSession(tokens: AuthTokensResponse) {
-  await SecureStore.setItemAsync("accessToken", tokens.accessToken);
-  await SecureStore.setItemAsync("refreshToken", tokens.refreshToken);
+  await saveTokens(tokens.accessToken, tokens.refreshToken);
 }
 
 export async function loginUser(payload: LoginPayload) {

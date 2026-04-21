@@ -1,11 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { router, useLocalSearchParams } from "expo-router";
 import { useColorScheme } from "nativewind";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -18,7 +21,7 @@ import { Text } from "@/components/themed/theme";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
-import { axiosInstance } from "@/utils/axios";
+import { BASE_URL, axiosInstance } from "@/utils/axios";
 import { connectSocket } from "@/utils/socket";
 
 const quickReplies = [
@@ -29,6 +32,7 @@ const quickReplies = [
 ];
 
 const MIN_OFFER_PERCENT = 80;
+const MAX_CHAT_IMAGES = 5;
 
 type ChatMessage = {
   id: number;
@@ -36,11 +40,14 @@ type ChatMessage = {
   senderId: number;
   senderName?: string;
   content: string;
+  imageUrl?: string | null;
   offerAmount?: number | null;
   offerQuantity?: number | null;
+  offerStatus?: "PENDING" | "ACCEPTED" | "REJECTED" | null;
   readAt?: string | null;
   deliveredAt?: string | null;
   createdAt: string;
+  localStatus?: "sending" | "failed";
 };
 
 type ChatConversation = {
@@ -51,6 +58,13 @@ type ChatConversation = {
   product?: {
     quantity?: number;
   };
+};
+
+type SendChatMessageInput = {
+  content: string;
+  imageUrl?: string;
+  offerAmount?: number;
+  offerQuantity?: number;
 };
 
 const actionItems = [
@@ -92,6 +106,8 @@ export default function MessageDetailsScreen() {
   const { user } = useAuth();
   const toast = useToast();
   const scrollViewRef = useRef<ScrollView>(null);
+  const imageViewerRef = useRef<ScrollView>(null);
+  const messageInputRef = useRef<TextInput>(null);
   const [message, setMessage] = useState("");
   const [actionsOpen, setActionsOpen] = useState(false);
   const [offerOpen, setOfferOpen] = useState(false);
@@ -105,7 +121,13 @@ export default function MessageDetailsScreen() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loadingConversation, setLoadingConversation] = useState(true);
   const [sending, setSending] = useState(false);
+  const [sendingImage, setSendingImage] = useState(false);
+  const [pendingImageUris, setPendingImageUris] = useState<string[]>([]);
+  const [viewingImageUrls, setViewingImageUrls] = useState<string[]>([]);
+  const [viewingImageIndex, setViewingImageIndex] = useState(0);
+  const [imageViewerWidth, setImageViewerWidth] = useState(0);
   const [counterpartOnline, setCounterpartOnline] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const params = useLocalSearchParams<{
     id?: string;
     conversationId?: string;
@@ -138,6 +160,7 @@ export default function MessageDetailsScreen() {
     1,
     Number(conversation?.product?.quantity || params.productQuantity || 1),
   );
+  const hasPendingImages = pendingImageUris.length > 0;
   const numericOfferAmount = Number(offerAmount.replace(/[^0-9.]/g, "")) || 0;
   const offerTotal = numericOfferAmount * offerQuantity;
   const buyTotal = productNumericPrice * buyQuantity;
@@ -177,26 +200,15 @@ export default function MessageDetailsScreen() {
     setBuyQuantity((current) => Math.min(availableQuantity, current + 1));
   };
   const latestIncomingOffer = useMemo(() => {
-    const latestOfferIndex = messages
-      .map((item, index) => ({ item, index }))
+    return messages
+      .slice()
       .reverse()
       .find(
-        ({ item }) =>
-          Boolean(item.offerAmount) && item.senderId !== currentUserId,
-      )?.index;
-
-    if (latestOfferIndex === undefined) return undefined;
-
-    const hasSellerResponse = messages
-      .slice(latestOfferIndex + 1)
-      .some(
         (item) =>
-          item.senderId === currentUserId &&
-          (item.content.startsWith("Offer accepted:") ||
-            item.content.startsWith("Offer rejected:")),
+          Boolean(item.offerAmount) &&
+          item.senderId !== currentUserId &&
+          (item.offerStatus || "PENDING") === "PENDING",
       );
-
-    return hasSellerResponse ? undefined : messages[latestOfferIndex];
   }, [currentUserId, messages]);
 
   const appendMessage = useCallback((nextMessage: ChatMessage) => {
@@ -206,6 +218,33 @@ export default function MessageDetailsScreen() {
     });
   }, []);
 
+  const replaceMessage = useCallback(
+    (targetId: number, nextMessage: ChatMessage) => {
+      setMessages((current) => {
+        if (current.some((item) => item.id === nextMessage.id)) {
+          return current.filter((item) => item.id !== targetId);
+        }
+
+        return current.map((item) =>
+          item.id === targetId ? nextMessage : item,
+        );
+      });
+    },
+    [],
+  );
+
+  const updateMessage = useCallback((nextMessage: ChatMessage) => {
+    setMessages((current) =>
+      current.map((item) => (item.id === nextMessage.id ? nextMessage : item)),
+    );
+  }, []);
+
+  const getMediaUrl = (path?: string | null) => {
+    if (!path) return null;
+    if (/^https?:\/\//i.test(path)) return path;
+    return `${BASE_URL}/media/${path}`;
+  };
+
   const formatMessageTime = (createdAt: string) =>
     new Date(createdAt).toLocaleTimeString([], {
       hour: "2-digit",
@@ -213,6 +252,8 @@ export default function MessageDetailsScreen() {
     });
 
   const getMessageStatus = (item: ChatMessage) => {
+    if (item.localStatus === "failed") return "Failed";
+    if (item.localStatus === "sending") return "Sending";
     if (item.readAt) return "Seen";
     if (item.deliveredAt || item.createdAt) return "Delivered";
     return "Sent";
@@ -229,6 +270,27 @@ export default function MessageDetailsScreen() {
       scrollToBottom();
     }
   }, [loadingConversation, messages.length, scrollToBottom]);
+
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showSubscription = Keyboard.addListener(showEvent, () => {
+      setKeyboardVisible(true);
+      setTimeout(() => scrollToBottom(), 80);
+      setTimeout(() => scrollToBottom(), 260);
+    });
+    const hideSubscription = Keyboard.addListener(hideEvent, () => {
+      setKeyboardVisible(false);
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, [scrollToBottom]);
 
   useEffect(() => {
     let isMounted = true;
@@ -279,11 +341,10 @@ export default function MessageDetailsScreen() {
         const socket = connectSocket();
         const handleNewMessage = (nextMessage: ChatMessage) => {
           if (nextMessage.conversationId !== activeConversationId) return;
+          if (nextMessage.senderId === currentUserId) return;
           appendMessage(nextMessage);
 
-          if (nextMessage.senderId !== currentUserId) {
-            socket.emit("conversation:read", { conversationId });
-          }
+          socket.emit("conversation:read", { conversationId });
         };
         const handlePresenceSnapshot = (payload: {
           onlineUserIds?: number[];
@@ -320,6 +381,14 @@ export default function MessageDetailsScreen() {
             ),
           );
         };
+        const handleOfferUpdated = (payload: {
+          conversationId?: number;
+          offer?: ChatMessage;
+        }) => {
+          if (Number(payload.conversationId) !== activeConversationId) return;
+          if (!payload.offer) return;
+          updateMessage(payload.offer);
+        };
 
         socket.emit("conversation:join", { conversationId });
         socket.emit("conversation:read", { conversationId });
@@ -327,12 +396,14 @@ export default function MessageDetailsScreen() {
         socket.on("presence:snapshot", handlePresenceSnapshot);
         socket.on("presence:update", handlePresenceUpdate);
         socket.on("conversation:read", handleReadState);
+        socket.on("offer:updated", handleOfferUpdated);
 
         return () => {
           socket.off("message:new", handleNewMessage);
           socket.off("presence:snapshot", handlePresenceSnapshot);
           socket.off("presence:update", handlePresenceUpdate);
           socket.off("conversation:read", handleReadState);
+          socket.off("offer:updated", handleOfferUpdated);
         };
       } catch (error: any) {
         toast.show({
@@ -366,6 +437,7 @@ export default function MessageDetailsScreen() {
     params.productId,
     routeSellerId,
     toast,
+    updateMessage,
   ]);
 
   const openSellerProfile = () => {
@@ -381,30 +453,330 @@ export default function MessageDetailsScreen() {
     });
   };
 
+  const useQuickReply = (reply: string) => {
+    setMessage(reply);
+    requestAnimationFrame(() => {
+      messageInputRef.current?.focus();
+      scrollToBottom();
+    });
+  };
+
+  const sendChatMessage = async (
+    input: SendChatMessageInput,
+  ): Promise<ChatMessage> => {
+    if (!conversation?.id) throw new Error("Conversation not available");
+
+    const payload = {
+      conversationId: conversation.id,
+      ...input,
+    };
+
+    const sendWithRest = async () => {
+      const { data } = await axiosInstance.post(
+        `/chat/conversations/${conversation.id}/messages`,
+        input,
+      );
+      return data as ChatMessage;
+    };
+
+    try {
+      const socket = connectSocket();
+      const clientRequestId = `${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2)}`;
+      const response = await new Promise<{
+        ok?: boolean;
+        message?: ChatMessage | string;
+      }>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          socket.off("message:sent", handleSent);
+          reject(new Error("Socket send timed out"));
+        }, 8000);
+
+        const handleSent = (nextResponse: any) => {
+          if (nextResponse?.clientRequestId !== clientRequestId) return;
+          clearTimeout(timeout);
+          socket.off("message:sent", handleSent);
+          resolve(nextResponse);
+        };
+
+        socket.on("message:sent", handleSent);
+        socket.emit("message:send", {
+          ...payload,
+          clientRequestId,
+        });
+      });
+
+      if (
+        !response?.ok ||
+        typeof response.message === "string" ||
+        !response.message
+      ) {
+        throw new Error(
+          typeof response?.message === "string"
+            ? response.message
+            : "Message not sent",
+        );
+      }
+
+      return response.message;
+    } catch {
+      console.log("Falling back to REST for sending message");
+      return sendWithRest();
+    }
+  };
+
+  const respondToOfferRequest = async (
+    offerMessageId: number,
+    accepted: boolean,
+  ): Promise<{ offer: ChatMessage; message: ChatMessage }> => {
+    if (!conversation?.id) throw new Error("Conversation not available");
+
+    const respondWithRest = async () => {
+      const { data } = await axiosInstance.post(
+        `/chat/conversations/${conversation.id}/offers/${offerMessageId}/respond`,
+        { accepted },
+      );
+      return data as { offer: ChatMessage; message: ChatMessage };
+    };
+
+    try {
+      const socket = connectSocket();
+      const clientRequestId = `${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2)}`;
+      const response = await new Promise<{
+        ok?: boolean;
+        offer?: ChatMessage;
+        message?: ChatMessage | string;
+      }>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          socket.off("offer:responded", handleResponded);
+          reject(new Error("Socket offer response timed out"));
+        }, 8000);
+
+        const handleResponded = (nextResponse: any) => {
+          if (nextResponse?.clientRequestId !== clientRequestId) return;
+          clearTimeout(timeout);
+          socket.off("offer:responded", handleResponded);
+          resolve(nextResponse);
+        };
+
+        socket.on("offer:responded", handleResponded);
+        socket.emit("offer:respond", {
+          clientRequestId,
+          conversationId: conversation.id,
+          offerMessageId,
+          accepted,
+        });
+      });
+
+      if (
+        !response?.ok ||
+        !response.offer ||
+        typeof response.message === "string" ||
+        !response.message
+      ) {
+        throw new Error(
+          typeof response?.message === "string"
+            ? response.message
+            : "Offer response not sent",
+        );
+      }
+
+      return { offer: response.offer, message: response.message };
+    } catch {
+      return respondWithRest();
+    }
+  };
+
+  const createOptimisticMessage = (
+    input: SendChatMessageInput,
+  ): ChatMessage => ({
+    id: -Date.now() - Math.round(Math.random() * 10000),
+    conversationId: Number(conversation?.id || 0),
+    senderId: Number(currentUserId || 0),
+    senderName: (user as any)?.username || (user as any)?.firstName || "You",
+    content: input.content,
+    imageUrl: input.imageUrl,
+    offerAmount: input.offerAmount || null,
+    offerQuantity: input.offerQuantity || null,
+    offerStatus: input.offerAmount ? "PENDING" : null,
+    createdAt: new Date().toISOString(),
+    localStatus: "sending",
+  });
+
+  const markOptimisticMessageFailed = (messageId: number) => {
+    setMessages((current) =>
+      current.map((item) =>
+        item.id === messageId ? { ...item, localStatus: "failed" } : item,
+      ),
+    );
+  };
+
   const sendMessage = async () => {
     const trimmed = message.trim();
-    if (!trimmed || !conversation?.id || sending) return;
+    if ((!trimmed && !hasPendingImages) || !conversation?.id || sending) return;
+
+    const imageUris = pendingImageUris;
 
     try {
       setSending(true);
+      if (imageUris.length) setSendingImage(true);
       setMessage("");
-      const { data } = await axiosInstance.post(
-        `/chat/conversations/${conversation.id}/messages`,
-        { content: trimmed },
-      );
-      appendMessage(data);
+      setPendingImageUris([]);
+
+      const imageUrls = imageUris.length
+        ? await uploadChatImages(imageUris)
+        : [];
+      if (imageUris.length && imageUrls.length !== imageUris.length) {
+        throw new Error("Image upload failed");
+      }
+
+      if (imageUrls.length) {
+        for (let index = 0; index < imageUrls.length; index += 1) {
+          const payload = {
+            content: index === 0 ? trimmed : "",
+            imageUrl: imageUrls[index],
+          };
+          const optimisticMessage = createOptimisticMessage(payload);
+          appendMessage(optimisticMessage);
+          try {
+            const data = await sendChatMessage(payload);
+            replaceMessage(optimisticMessage.id, data);
+          } catch (error) {
+            markOptimisticMessageFailed(optimisticMessage.id);
+            throw error;
+          }
+        }
+      } else {
+        const payload = { content: trimmed };
+        const optimisticMessage = createOptimisticMessage(payload);
+        appendMessage(optimisticMessage);
+        try {
+          const data = await sendChatMessage(payload);
+          replaceMessage(optimisticMessage.id, data);
+        } catch (error) {
+          markOptimisticMessageFailed(optimisticMessage.id);
+          throw error;
+        }
+      }
     } catch (error: any) {
       setMessage(trimmed);
+      setPendingImageUris(imageUris);
       toast.show({
         title: "Message not sent",
         description:
-          error?.response?.data?.message || "Please check your connection.",
+          error?.response?.data?.message ||
+          "Please check your connection and try again.",
         variant: "error",
       });
     } finally {
       setSending(false);
+      setSendingImage(false);
     }
   };
+
+  const uploadChatImages = async (uris: string[]) => {
+    const formData = new FormData();
+    uris.forEach((uri, index) => {
+      formData.append("images", {
+        uri,
+        name: uri.split("/").pop() || `chat-image-${index + 1}.jpg`,
+        type: "image/jpeg",
+      } as unknown as Blob);
+    });
+
+    const { data } = await axiosInstance.post<{
+      files: Array<{ path: string }>;
+    }>("/uploads/images", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+
+    return data.files.map((file) => file.path).filter(Boolean);
+  };
+
+  const pickImageMessage = async () => {
+    if (!conversation?.id || sendingImage) return;
+    if (pendingImageUris.length >= MAX_CHAT_IMAGES) {
+      toast.show({
+        title: "Image limit reached",
+        description: `You can send up to ${MAX_CHAT_IMAGES} images at once.`,
+        variant: "error",
+      });
+      return;
+    }
+
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      toast.show({
+        title: "Photos unavailable",
+        description: "Allow photo access to send images in chat.",
+        variant: "error",
+      });
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      quality: 0.8,
+      allowsMultipleSelection: true,
+      selectionLimit: Math.max(1, MAX_CHAT_IMAGES - pendingImageUris.length),
+    });
+
+    if (result.canceled) return;
+
+    const pickedUris = result.assets
+      .map((asset) => asset.uri)
+      .filter(Boolean)
+      .slice(0, MAX_CHAT_IMAGES - pendingImageUris.length);
+    if (!pickedUris.length) return;
+
+    setPendingImageUris((current) =>
+      [...current, ...pickedUris].slice(0, MAX_CHAT_IMAGES),
+    );
+    setTimeout(() => scrollToBottom(), 80);
+  };
+
+  const removePendingImage = (index: number) => {
+    setPendingImageUris((current) =>
+      current.filter((_, itemIndex) => itemIndex !== index),
+    );
+  };
+
+  const closeImageViewer = () => {
+    setViewingImageUrls([]);
+    setViewingImageIndex(0);
+  };
+
+  const openImageViewer = (urls: Array<string | null>, index = 0) => {
+    const safeUrls = urls.filter(Boolean) as string[];
+    if (!safeUrls.length) return;
+
+    const safeIndex = Math.min(Math.max(index, 0), safeUrls.length - 1);
+    setViewingImageUrls(safeUrls);
+    setViewingImageIndex(safeIndex);
+    requestAnimationFrame(() => {
+      if (!imageViewerWidth) return;
+      imageViewerRef.current?.scrollTo({
+        x: safeIndex * imageViewerWidth,
+        animated: false,
+      });
+    });
+  };
+
+  useEffect(() => {
+    if (!viewingImageUrls.length || !imageViewerWidth) return;
+
+    requestAnimationFrame(() => {
+      imageViewerRef.current?.scrollTo({
+        x: viewingImageIndex * imageViewerWidth,
+        animated: false,
+      });
+    });
+  }, [imageViewerWidth, viewingImageIndex, viewingImageUrls.length]);
 
   const formatOfferInput = (value: string) => {
     const numericValue = value.replace(/[^0-9]/g, "");
@@ -426,18 +798,23 @@ export default function MessageDetailsScreen() {
 
     try {
       setSending(true);
-      const { data } = await axiosInstance.post(
-        `/chat/conversations/${conversation.id}/messages`,
-        {
-          content: `I would like to offer ₦${amount.toLocaleString()} x ${offerQuantity} for this item.`,
-          offerAmount: amount,
-          offerQuantity,
-        },
-      );
-      appendMessage(data);
+      const payload = {
+        content: `I would like to offer ₦${amount.toLocaleString()} x ${offerQuantity} for this item.`,
+        offerAmount: amount,
+        offerQuantity,
+      };
+      const optimisticMessage = createOptimisticMessage(payload);
+      appendMessage(optimisticMessage);
       setOfferAmount("");
       setOfferQuantity(1);
       setOfferOpen(false);
+      try {
+        const data = await sendChatMessage(payload);
+        replaceMessage(optimisticMessage.id, data);
+      } catch (error) {
+        markOptimisticMessageFailed(optimisticMessage.id);
+        throw error;
+      }
     } catch (error: any) {
       toast.show({
         title: "Offer not sent",
@@ -464,11 +841,25 @@ export default function MessageDetailsScreen() {
 
     try {
       setSending(true);
-      const { data } = await axiosInstance.post(
-        `/chat/conversations/${conversation.id}/messages`,
-        { content },
-      );
-      appendMessage(data);
+      const optimisticOffer = {
+        ...latestIncomingOffer,
+        offerStatus: accepted ? ("ACCEPTED" as const) : ("REJECTED" as const),
+      };
+      updateMessage(optimisticOffer);
+      const optimisticMessage = createOptimisticMessage({ content });
+      appendMessage(optimisticMessage);
+      try {
+        const data = await respondToOfferRequest(
+          latestIncomingOffer.id,
+          accepted,
+        );
+        updateMessage(data.offer);
+        replaceMessage(optimisticMessage.id, data.message);
+      } catch (error) {
+        updateMessage(latestIncomingOffer);
+        markOptimisticMessageFailed(optimisticMessage.id);
+        throw error;
+      }
     } catch (error: any) {
       toast.show({
         title: accepted ? "Offer not accepted" : "Offer not rejected",
@@ -553,7 +944,11 @@ export default function MessageDetailsScreen() {
           ref={scrollViewRef}
           className="flex-1"
           contentContainerClassName="px-4 pb-6 pt-4"
+          contentContainerStyle={{
+            paddingBottom: keyboardVisible ? 18 : 24,
+          }}
           onContentSizeChange={() => scrollToBottom()}
+          keyboardShouldPersistTaps="always"
           showsVerticalScrollIndicator={false}
         >
           <Pressable className="mb-3 flex-row rounded-[28px] border border-gray-100 bg-gray-50 p-3 dark:border-white/5 dark:bg-white/5">
@@ -642,11 +1037,46 @@ export default function MessageDetailsScreen() {
 
           {messages.map((item, index) => {
             const previous = messages[index - 1];
-            const next = messages[index + 1];
             const itemFromMe = item.senderId === currentUserId;
+            const isImageOnly = Boolean(item.imageUrl) && !item.content;
+            const isImageBatchContinuation =
+              isImageOnly &&
+              previous?.senderId === item.senderId &&
+              Boolean(previous.imageUrl) &&
+              !previous.content;
+
+            if (isImageBatchContinuation) return null;
+
+            const imageBatch: ChatMessage[] = [];
+            if (isImageOnly) {
+              for (
+                let batchIndex = index;
+                batchIndex < messages.length;
+                batchIndex += 1
+              ) {
+                const batchItem = messages[batchIndex];
+                if (
+                  batchItem.senderId !== item.senderId ||
+                  !batchItem.imageUrl ||
+                  batchItem.content
+                ) {
+                  break;
+                }
+                imageBatch.push(batchItem);
+              }
+            } else {
+              imageBatch.push(item);
+            }
+            const imageBatchUrls = imageBatch.map((batchItem) =>
+              getMediaUrl(batchItem.imageUrl),
+            );
+            const next = messages[index + imageBatch.length];
             const groupedBefore =
               previous && previous.senderId === item.senderId;
             const groupedAfter = next && next.senderId === item.senderId;
+            const hasImage = Boolean(item.imageUrl);
+            const hasText = Boolean(item.content);
+            const isImageBatch = imageBatch.length > 1 && !hasText;
             const groupPosition =
               !groupedBefore && !groupedAfter
                 ? "single"
@@ -668,11 +1098,28 @@ export default function MessageDetailsScreen() {
                   middle: "rounded-[24px] rounded-l-md",
                   last: "rounded-[24px] rounded-tl-md",
                 }[groupPosition];
+            const imageRadius = hasText
+              ? "rounded-[20px] rounded-b"
+              : itemFromMe
+                ? {
+                    single: "rounded-[20px] rounded-br",
+                    first: "rounded-[20px] rounded-br",
+                    middle: "rounded-[20px] rounded-r",
+                    last: "rounded-[20px] rounded-tr",
+                  }[groupPosition]
+                : {
+                    single: "rounded-[20px] rounded-bl",
+                    first: "rounded-[20px] rounded-bl",
+                    middle: "rounded-[20px] rounded-l",
+                    last: "rounded-[20px] rounded-tl",
+                  }[groupPosition];
 
             return (
               <View
                 key={item.id}
-                className={`mb-2 max-w-[84%] ${
+                className={`mb-2 ${
+                  isImageBatch ? "max-w-[92%]" : "max-w-[84%]"
+                } ${
                   itemFromMe ? "self-end items-end" : "self-start items-start"
                 } ${groupedBefore ? "mt-0" : "mt-3"}`}
               >
@@ -682,20 +1129,130 @@ export default function MessageDetailsScreen() {
                   </Text>
                 )}
                 <View
-                  className={`${bubbleRadius} px-4 py-3 ${
+                  className={`${bubbleRadius} ${
+                    hasImage ? "p-1" : "px-4 py-3"
+                  } ${
                     itemFromMe ? "bg-brand" : "bg-gray-100 dark:bg-white/10"
                   }`}
                 >
-                  <Text
-                    variant="none"
-                    className={`text-sm leading-5 ${
-                      itemFromMe
-                        ? "text-white"
-                        : "text-gray-900 dark:text-white"
-                    }`}
-                  >
-                    {item.content}
-                  </Text>
+                  {item.imageUrl ? (
+                    isImageBatch ? (
+                      <View className="w-[244px] flex-row flex-wrap">
+                        {imageBatch.slice(0, 4).map((batchItem, batchIndex) => {
+                          const mediaUrl = imageBatchUrls[batchIndex];
+                          const hiddenCount = imageBatch.length - 4;
+
+                          return (
+                            <Pressable
+                              key={batchItem.id}
+                              onPress={() =>
+                                openImageViewer(imageBatchUrls, batchIndex)
+                              }
+                              className="relative"
+                            >
+                              <Image
+                                source={{ uri: mediaUrl || undefined }}
+                                className={`h-[120px] w-[120px] bg-gray-200 dark:bg-white/10 ${
+                                  batchIndex % 2 === 0 ? "mr-1" : ""
+                                } ${batchIndex < 2 ? "mb-1" : ""} ${
+                                  batchIndex === 0 ? "rounded-tl-[20px]" : ""
+                                } ${
+                                  batchIndex === 1 ||
+                                  (imageBatch.length === 1 && batchIndex === 0)
+                                    ? "rounded-tr-[20px]"
+                                    : ""
+                                } ${
+                                  batchIndex === 2 ||
+                                  (imageBatch.length === 2 && batchIndex === 0)
+                                    ? "rounded-bl-[20px]"
+                                    : ""
+                                } ${
+                                  batchIndex === 3 ||
+                                  (imageBatch.length <= 3 &&
+                                    batchIndex === imageBatch.length - 1)
+                                    ? "rounded-br-[20px]"
+                                    : ""
+                                }`}
+                                resizeMode="cover"
+                              />
+                              {batchIndex === 3 && hiddenCount > 0 ? (
+                                <View className="absolute inset-0 items-center justify-center rounded-br-[20px] bg-black/45">
+                                  <Text
+                                    variant="none"
+                                    className="text-lg font-black text-white"
+                                  >
+                                    +{hiddenCount}
+                                  </Text>
+                                </View>
+                              ) : null}
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    ) : (
+                      <Pressable
+                        onPress={() =>
+                          openImageViewer([getMediaUrl(item.imageUrl)])
+                        }
+                      >
+                        <Image
+                          source={{
+                            uri: getMediaUrl(item.imageUrl) || undefined,
+                          }}
+                          className={`h-48 w-56 ${imageRadius} bg-gray-200 dark:bg-white/10 ${
+                            hasText ? "mb-2" : ""
+                          }`}
+                          resizeMode="cover"
+                        />
+                      </Pressable>
+                    )
+                  ) : null}
+                  {hasText ? (
+                    <Text
+                      variant="none"
+                      className={`text-sm leading-5 ${
+                        hasImage ? "px-3 pb-2 pt-1" : ""
+                      } ${
+                        itemFromMe
+                          ? "text-white"
+                          : "text-gray-900 dark:text-white"
+                      }`}
+                    >
+                      {item.content}
+                    </Text>
+                  ) : null}
+                  {item.offerAmount ? (
+                    <View
+                      className={`mx-3 mt-2 self-start rounded-full px-2.5 py-1 ${
+                        item.offerStatus === "ACCEPTED"
+                          ? "bg-emerald-500/15"
+                          : item.offerStatus === "REJECTED"
+                            ? "bg-red-500/15"
+                            : itemFromMe
+                              ? "bg-white/15"
+                              : "bg-brand/10"
+                      }`}
+                    >
+                      <Text
+                        variant="none"
+                        className={`text-[10px] font-black uppercase ${
+                          item.offerStatus === "ACCEPTED"
+                            ? "text-emerald-500"
+                            : item.offerStatus === "REJECTED"
+                              ? "text-red-500"
+                              : itemFromMe
+                                ? "text-white"
+                                : "text-brand"
+                        }`}
+                      >
+                        {item.offerStatus === "ACCEPTED"
+                          ? "Accepted"
+                          : item.offerStatus === "REJECTED"
+                            ? "Rejected"
+                            : "Pending offer"}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
                 {!groupedAfter && (
                   <View
@@ -731,12 +1288,16 @@ export default function MessageDetailsScreen() {
             <Text className="mb-2 text-xs font-bold uppercase tracking-widest text-gray-400">
               Quick replies
             </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <ScrollView
+              horizontal
+              keyboardShouldPersistTaps="always"
+              showsHorizontalScrollIndicator={false}
+            >
               <View className="flex-row pr-4">
                 {quickReplies.map((reply) => (
                   <Pressable
                     key={reply}
-                    onPress={() => setMessage(reply)}
+                    onPress={() => useQuickReply(reply)}
                     className="mr-2 rounded-full border border-gray-100 bg-gray-50 px-4 py-2 dark:border-white/10 dark:bg-white/5"
                   >
                     <Text className="text-xs font-semibold text-gray-700 dark:text-gray-300">
@@ -854,17 +1415,92 @@ export default function MessageDetailsScreen() {
             </View>
           )}
 
+          {hasPendingImages ? (
+            <View className="mb-3 rounded-3xl border border-gray-100 bg-gray-50 p-3 dark:border-white/10 dark:bg-white/5">
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View className="flex-row gap-3 pr-4">
+                  {pendingImageUris.map((uri, index) => (
+                    <Pressable
+                      key={`${uri}-${index}`}
+                      onPress={() => openImageViewer(pendingImageUris, index)}
+                      className="relative"
+                    >
+                      <Image
+                        source={{ uri }}
+                        className="h-20 w-20 rounded-2xl bg-gray-200 dark:bg-white/10"
+                        resizeMode="cover"
+                      />
+                      <Pressable
+                        onPress={() => removePendingImage(index)}
+                        disabled={sendingImage}
+                        className="absolute right-1 top-1 h-7 w-7 items-center justify-center rounded-full bg-black/70"
+                      >
+                        <Ionicons name="close" size={15} color="white" />
+                      </Pressable>
+                    </Pressable>
+                  ))}
+                  {pendingImageUris.length < MAX_CHAT_IMAGES ? (
+                    <Pressable
+                      onPress={pickImageMessage}
+                      disabled={sendingImage}
+                      className="h-20 w-20 items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-white dark:border-white/20 dark:bg-white/10"
+                    >
+                      <Ionicons
+                        name="add"
+                        size={22}
+                        color={isDark ? "white" : "#111827"}
+                      />
+                    </Pressable>
+                  ) : null}
+                </View>
+              </ScrollView>
+              <View className="mt-3 flex-row items-center justify-between">
+                <Text className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                  {pendingImageUris.length}/{MAX_CHAT_IMAGES} selected
+                </Text>
+                <Pressable
+                  onPress={() => setPendingImageUris([])}
+                  disabled={sendingImage}
+                >
+                  <Text
+                    variant="none"
+                    className="text-xs font-bold text-red-500"
+                  >
+                    Clear
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
+
           <View className="flex-row items-end justify-center rounded-3xl border border-gray-100 bg-gray-50 px-3 py-2 dark:border-white/10 dark:bg-white/5">
-            <Pressable className="mb-1 h-10 w-10 items-center justify-center rounded-full bg-white dark:bg-white/10">
-              <Ionicons
-                name="add"
-                size={22}
-                color={isDark ? "white" : "#111827"}
-              />
+            <Pressable
+              onPress={pickImageMessage}
+              disabled={!conversation?.id || sendingImage}
+              className={`mb-1 h-10 w-10 items-center justify-center rounded-full ${
+                sendingImage
+                  ? "bg-gray-200 dark:bg-white/10"
+                  : "bg-white dark:bg-white/10"
+              }`}
+            >
+              {sendingImage ? (
+                <ActivityIndicator size="small" color="#2563EB" />
+              ) : (
+                <Ionicons
+                  name="add"
+                  size={22}
+                  color={isDark ? "white" : "#111827"}
+                />
+              )}
             </Pressable>
             <TextInput
+              ref={messageInputRef}
               value={message}
               onChangeText={setMessage}
+              onFocus={() => {
+                setTimeout(() => scrollToBottom(), 80);
+                setTimeout(() => scrollToBottom(), 260);
+              }}
               placeholder="Message seller..."
               placeholderTextColor="#888"
               multiline
@@ -872,9 +1508,15 @@ export default function MessageDetailsScreen() {
             />
             <Pressable
               onPress={sendMessage}
-              disabled={!message.trim() || !conversation?.id || sending}
+              disabled={
+                (!message.trim() && !hasPendingImages) ||
+                !conversation?.id ||
+                sending
+              }
               className={`mb-1 h-10 w-10 items-center justify-center rounded-full ${
-                message.trim() && conversation?.id && !sending
+                (message.trim() || hasPendingImages) &&
+                conversation?.id &&
+                !sending
                   ? "bg-brand"
                   : "bg-gray-200 dark:bg-white/10"
               }`}
@@ -883,7 +1525,9 @@ export default function MessageDetailsScreen() {
                 name="send"
                 size={18}
                 color={
-                  message.trim() && conversation?.id && !sending
+                  (message.trim() || hasPendingImages) &&
+                  conversation?.id &&
+                  !sending
                     ? "white"
                     : isDark
                       ? "#9CA3AF"
@@ -894,6 +1538,78 @@ export default function MessageDetailsScreen() {
           </View>
         </View>
       </KeyboardAvoidingView>
+
+      <Modal
+        visible={Boolean(viewingImageUrls.length)}
+        transparent
+        animationType="fade"
+        onRequestClose={closeImageViewer}
+      >
+        <View className="flex-1 bg-black">
+          <SafeAreaView className="flex-1 flex-col">
+            <View className="flex-row items-center justify-between px-4 py-3">
+              <Pressable
+                onPress={closeImageViewer}
+                className="h-11 min-w-20 items-start justify-center"
+              >
+                <Text variant="none" className="text-lg font-bold text-white">
+                  Close
+                </Text>
+              </Pressable>
+              <Text variant="none" className="text-lg font-bold text-white">
+                {viewingImageUrls.length > 1
+                  ? `${viewingImageIndex + 1}/${viewingImageUrls.length}`
+                  : "Image"}
+              </Text>
+              <View className="h-11 min-w-20" />
+            </View>
+            <View
+              onLayout={(event) =>
+                setImageViewerWidth(event.nativeEvent.layout.width)
+              }
+              className="flex-1 items-center justify-center px-4 pb-10"
+            >
+              {viewingImageUrls.length ? (
+                <View className="h-full max-h-[86%] w-full items-center justify-center">
+                  <ScrollView
+                    ref={imageViewerRef}
+                    horizontal
+                    pagingEnabled
+                    showsHorizontalScrollIndicator={false}
+                    scrollEventThrottle={16}
+                    onMomentumScrollEnd={(event) => {
+                      if (!imageViewerWidth) return;
+                      const nextIndex = Math.round(
+                        event.nativeEvent.contentOffset.x / imageViewerWidth,
+                      );
+                      setViewingImageIndex(
+                        Math.min(
+                          Math.max(nextIndex, 0),
+                          viewingImageUrls.length - 1,
+                        ),
+                      );
+                    }}
+                  >
+                    {viewingImageUrls.map((url, index) => (
+                      <View
+                        key={`${url}-${index}`}
+                        className="h-full items-center justify-center"
+                        style={{ width: imageViewerWidth || 1 }}
+                      >
+                        <Image
+                          source={{ uri: url }}
+                          className="h-full w-full"
+                          resizeMode="contain"
+                        />
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              ) : null}
+            </View>
+          </SafeAreaView>
+        </View>
+      </Modal>
 
       <BottomSheet
         visible={actionsOpen}
@@ -908,47 +1624,47 @@ export default function MessageDetailsScreen() {
               key={item.title}
               onPress={() => {
                 setActionsOpen(false);
-                const productId = params.productId || params.id;
-                if (item.action && productId) item.action(productId);
+                item.action?.(String(params.productId || params.id || ""));
               }}
-              className="flex-row items-center rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-white/5 dark:bg-white/5"
+              className={`flex-row items-center rounded-3xl border p-4 ${
+                item.tone === "danger"
+                  ? "border-red-500/10 bg-red-500/5"
+                  : item.tone === "warning"
+                    ? "border-yellow-500/10 bg-yellow-500/5"
+                    : "border-gray-100 bg-gray-50 dark:border-white/10 dark:bg-white/5"
+              }`}
             >
               <View
                 className={`h-11 w-11 items-center justify-center rounded-2xl ${
                   item.tone === "danger"
                     ? "bg-red-500/10"
                     : item.tone === "warning"
-                      ? "bg-amber-500/10"
-                      : "bg-brand/10"
+                      ? "bg-yellow-500/10"
+                      : "bg-white dark:bg-white/10"
                 }`}
               >
                 <Ionicons
                   name={item.icon as any}
-                  size={20}
+                  size={21}
                   color={
                     item.tone === "danger"
                       ? "#EF4444"
                       : item.tone === "warning"
-                        ? "#F59E0B"
-                        : "#2563EB"
+                        ? "#D97706"
+                        : isDark
+                          ? "white"
+                          : "#111827"
                   }
                 />
               </View>
               <View className="ml-3 flex-1">
-                <Text
-                  className={`font-bold ${
-                    item.tone === "danger"
-                      ? "text-red-500"
-                      : "text-gray-950 dark:text-white"
-                  }`}
-                >
+                <Text className="font-bold text-gray-950 dark:text-white">
                   {item.title}
                 </Text>
-                <Text className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                <Text className="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">
                   {item.description}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
             </Pressable>
           ))}
         </View>

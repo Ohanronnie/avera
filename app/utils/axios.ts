@@ -3,7 +3,9 @@ import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
 // Use environment variable or fallback
- export const BASE_URL = "http://172.20.10.2:3000";
+export const BASE_URL = __DEV__
+  ? "http://172.20.10.2:3000"
+  : "https://fox-delta-arrow.tunnel.rxnnie.tech";
 // || !__DEV__
 //   ? Platform.OS === "ios"
 //     ? "http://localhost:3000/"
@@ -57,7 +59,7 @@ const loadTokensFromStore = async () => {
 
 export const getAccessToken = () => accessToken;
 
-const saveTokens = async (newAccess: string, newRefresh: string) => {
+export const saveTokens = async (newAccess: string, newRefresh: string) => {
   accessToken = newAccess;
   refreshToken = newRefresh;
   await setSecureItem("accessToken", newAccess);

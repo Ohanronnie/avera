@@ -1,6 +1,8 @@
 import { Text } from "@/components/themed/theme";
-import { router } from "expo-router";
+import { axiosInstance } from "@/utils/axios";
+import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useCallback, useMemo, useState } from "react";
 import {
   ScrollView,
   View,
@@ -20,38 +22,61 @@ export default function AccountScreen() {
   const insets = useSafeAreaInsets();
   const { isDark, toggleTheme } = useTheme();
   const { logout } = useAuth();
+  const [unreadMessages, setUnreadMessages] = useState(0);
+
+  useFocusEffect(
+    useCallback(() => {
+      let isMounted = true;
+
+      axiosInstance
+        .get("/chat/conversations/unread-count")
+        .then(({ data }) => {
+          if (isMounted) setUnreadMessages(Number(data.count || 0));
+        })
+        .catch(() => {
+          if (isMounted) setUnreadMessages(0);
+        });
+
+      return () => {
+        isMounted = false;
+      };
+    }, []),
+  );
 
   const handleLogout = async () => {
     await logout();
     router.replace("/(auth)/login");
   };
 
-  const sections = [
-    {
-      title: "Selling",
-      items: [
-        { icon: "shirt-outline", label: "My Inventory", count: 12 },
-        { icon: "wallet-outline", label: "Payments & Payouts" },
-      ],
-    },
-    {
-      title: "Account",
-      items: [
-        {
-          icon: "chatbubbles-outline",
-          label: "Messages",
-          count: 2,
-          route: "/messages",
-        },
-        { icon: "heart-outline", label: "Saved Items", count: 45 },
-        { icon: "settings-outline", label: "Settings" },
-      ],
-    },
-    {
-      title: "Support",
-      items: [{ icon: "help-circle-outline", label: "Help & Support" }],
-    },
-  ];
+  const sections = useMemo(
+    () => [
+      {
+        title: "Selling",
+        items: [
+          { icon: "shirt-outline", label: "My Inventory", count: 12 },
+          { icon: "wallet-outline", label: "Payments & Payouts" },
+        ],
+      },
+      {
+        title: "Account",
+        items: [
+          {
+            icon: "chatbubbles-outline",
+            label: "Messages",
+            count: unreadMessages,
+            route: "/messages",
+          },
+          { icon: "heart-outline", label: "Saved Items", count: 45 },
+          { icon: "settings-outline", label: "Settings" },
+        ],
+      },
+      {
+        title: "Support",
+        items: [{ icon: "help-circle-outline", label: "Help & Support" }],
+      },
+    ],
+    [unreadMessages],
+  );
 
   return (
     <View className="flex-1 bg-white dark:bg-[#0A0A0A]">

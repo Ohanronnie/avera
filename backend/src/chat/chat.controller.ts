@@ -32,6 +32,12 @@ export class ChatController {
     return this.chatService.listConversations(req.user.userId);
   }
 
+  @Get('conversations/unread-count')
+  async getUnreadCount(@Req() req: any) {
+    const count = await this.chatService.getUnreadCount(req.user.userId);
+    return { count };
+  }
+
   @Get('conversations/:conversationId/messages')
   listMessages(
     @Req() req: any,
@@ -69,5 +75,23 @@ export class ChatController {
       readerId: req.user.userId,
     });
     return readState;
+  }
+
+  @Post('conversations/:conversationId/offers/:offerMessageId/respond')
+  async respondToOffer(
+    @Req() req: any,
+    @Param('conversationId', ParseIntPipe) conversationId: number,
+    @Param('offerMessageId', ParseIntPipe) offerMessageId: number,
+    @Body() body: { accepted?: boolean },
+  ) {
+    const result = await this.chatService.respondToOffer(
+      conversationId,
+      req.user.userId,
+      offerMessageId,
+      Boolean(body.accepted),
+    );
+    this.chatGateway.emitOfferUpdated(conversationId, result.offer);
+    await this.chatGateway.emitNewMessage(conversationId, result.message);
+    return result;
   }
 }

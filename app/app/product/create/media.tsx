@@ -30,7 +30,7 @@ export default function MediaScreen() {
 
   const handlePickImages = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       allowsMultipleSelection: true,
       quality: 0.8,
       selectionLimit: Math.max(0, 7 - form.images.length),

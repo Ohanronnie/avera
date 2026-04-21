@@ -69,8 +69,10 @@ export class ChatService {
       senderId: message.senderId,
       senderName: this.getDisplayName(message.sender),
       content: message.content,
+      imageUrl: message.imageUrl,
       offerAmount: message.offerAmount ? Number(message.offerAmount) : null,
       offerQuantity: message.offerQuantity || null,
+      offerStatus: message.offerStatus || null,
       readAt: message.readAt,
       createdAt: message.createdAt,
       deliveredAt: message.createdAt,
@@ -83,6 +85,12 @@ export class ChatService {
         ? conversation.seller
         : conversation.buyer;
     const lastMessage = conversation.messages?.[0];
+    const unreadCount =
+      conversation._count?.messages ??
+      conversation.messages?.filter(
+        (message) => message.senderId !== userId && !message.readAt,
+      ).length ??
+      0;
 
     return {
       id: conversation.id,
@@ -102,6 +110,7 @@ export class ChatService {
         avatarUrl: counterpart.avatarUrl,
       },
       lastMessage: lastMessage ? this.mapMessage(lastMessage) : null,
+      unreadCount,
       lastMessageAt: conversation.lastMessageAt,
       createdAt: conversation.createdAt,
       updatedAt: conversation.updatedAt,
@@ -142,7 +151,19 @@ export class ChatService {
         productId: product.id,
       },
       update: {},
-      include: this.conversationInclude,
+      include: {
+        ...this.conversationInclude,
+        _count: {
+          select: {
+            messages: {
+              where: {
+                senderId: { not: userId },
+                readAt: null,
+              },
+            },
+          },
+        },
+      },
     });
 
     return this.mapConversation(conversation, userId);
@@ -154,12 +175,36 @@ export class ChatService {
         OR: [{ buyerId: userId }, { sellerId: userId }],
       },
       orderBy: [{ lastMessageAt: 'desc' }, { updatedAt: 'desc' }],
-      include: this.conversationInclude,
+      include: {
+        ...this.conversationInclude,
+        _count: {
+          select: {
+            messages: {
+              where: {
+                senderId: { not: userId },
+                readAt: null,
+              },
+            },
+          },
+        },
+      },
     });
 
     return conversations.map((conversation) =>
       this.mapConversation(conversation, userId),
     );
+  }
+
+  async getUnreadCount(userId: number) {
+    return this.prisma.message.count({
+      where: {
+        senderId: { not: userId },
+        readAt: null,
+        conversation: {
+          OR: [{ buyerId: userId }, { sellerId: userId }],
+        },
+      },
+    });
   }
 
   async getConversationForUser(conversationId: number, userId: number) {
@@ -243,8 +288,11 @@ export class ChatService {
   ) {
     await this.ensureParticipant(conversationId, senderId);
 
-    const content = sendMessageDto.content.trim();
-    if (!content) throw new BadRequestException('Message cannot be empty');
+    const content = sendMessageDto.content?.trim() || '';
+    const imageUrl = sendMessageDto.imageUrl?.trim() || null;
+    if (!content && !imageUrl) {
+      throw new BadRequestException('Message cannot be empty');
+    }
 
     if (sendMessageDto.offerAmount) {
       const conversation = await this.prisma.conversation.findUnique({
@@ -286,10 +334,12 @@ export class ChatService {
           conversationId,
           senderId,
           content,
+          imageUrl,
           offerAmount: sendMessageDto.offerAmount,
           offerQuantity: sendMessageDto.offerAmount
             ? sendMessageDto.offerQuantity || 1
             : undefined,
+          offerStatus: sendMessageDto.offerAmount ? 'PENDING' : undefined,
         },
         include: this.messageInclude,
       });
@@ -303,5 +353,74 @@ export class ChatService {
     });
 
     return this.mapMessage(message);
+  }
+
+  async respondToOffer(
+    conversationId: number,
+    userId: number,
+    offerMessageId: number,
+    accepted: boolean,
+  ) {
+    const conversation = await this.getConversationForUser(
+      conversationId,
+      userId,
+    );
+    if (conversation.sellerId !== userId) {
+      throw new ForbiddenException('Only the seller can respond to offers');
+    }
+
+    const offerMessage = await this.prisma.message.findFirst({
+      where: {
+        id: offerMessageId,
+        conversationId,
+        offerAmount: { not: null },
+      },
+      include: this.messageInclude,
+    });
+
+    if (!offerMessage) throw new NotFoundException('Offer not found');
+    if (offerMessage.senderId === userId) {
+      throw new BadRequestException('You cannot respond to your own offer');
+    }
+    if (offerMessage.offerStatus && offerMessage.offerStatus !== 'PENDING') {
+      throw new BadRequestException('This offer has already been handled');
+    }
+
+    const amount = Number(offerMessage.offerAmount);
+    const quantity = Number(offerMessage.offerQuantity || 1);
+    const total = amount * quantity;
+    const status = accepted ? 'ACCEPTED' : 'REJECTED';
+    const content = accepted
+      ? `Offer accepted: ₦${amount.toLocaleString()} x ${quantity} = ₦${total.toLocaleString()}.`
+      : `Offer rejected: ₦${amount.toLocaleString()} x ${quantity}.`;
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const updatedOffer = await tx.message.update({
+        where: { id: offerMessageId },
+        data: { offerStatus: status },
+        include: this.messageInclude,
+      });
+
+      const responseMessage = await tx.message.create({
+        data: {
+          conversationId,
+          senderId: userId,
+          content,
+        },
+        include: this.messageInclude,
+      });
+
+      await tx.conversation.update({
+        where: { id: conversationId },
+        data: { lastMessageAt: responseMessage.createdAt },
+      });
+
+      return { updatedOffer, responseMessage };
+    });
+
+    return {
+      offer: this.mapMessage(result.updatedOffer),
+      message: this.mapMessage(result.responseMessage),
+    };
   }
 }

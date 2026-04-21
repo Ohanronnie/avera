@@ -150,8 +150,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() socket: AuthenticatedSocket,
     @MessageBody()
     body: {
+      clientRequestId?: string;
       conversationId?: number;
       content?: string;
+      imageUrl?: string;
       offerAmount?: number;
       offerQuantity?: number;
     },
@@ -159,22 +161,90 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       const userId = socket.data.userId;
       const conversationId = Number(body?.conversationId);
-      if (!userId || !conversationId || !body?.content) return;
+      if (!userId || !conversationId || (!body?.content && !body?.imageUrl)) {
+        socket.emit('message:sent', {
+          clientRequestId: body?.clientRequestId,
+          ok: false,
+          message: 'Message content is required',
+        });
+        return;
+      }
 
       const message = await this.chatService.sendMessage(
         conversationId,
         userId,
         {
           content: body.content,
+          imageUrl: body.imageUrl,
           offerAmount: body.offerAmount,
           offerQuantity: body.offerQuantity,
         },
       );
 
       await this.emitNewMessage(conversationId, message);
+      socket.emit('message:sent', {
+        clientRequestId: body?.clientRequestId,
+        ok: true,
+        message,
+      });
     } catch (error: any) {
+      socket.emit('message:sent', {
+        clientRequestId: body?.clientRequestId,
+        ok: false,
+        message: error?.message || 'Message not sent',
+      });
       socket.emit('chat:error', {
         message: error?.message || 'Message not sent',
+      });
+    }
+  }
+
+  @SubscribeMessage('offer:respond')
+  async respondToOffer(
+    @ConnectedSocket() socket: AuthenticatedSocket,
+    @MessageBody()
+    body: {
+      clientRequestId?: string;
+      conversationId?: number;
+      offerMessageId?: number;
+      accepted?: boolean;
+    },
+  ) {
+    try {
+      const userId = socket.data.userId;
+      const conversationId = Number(body?.conversationId);
+      const offerMessageId = Number(body?.offerMessageId);
+      if (!userId || !conversationId || !offerMessageId) {
+        socket.emit('offer:responded', {
+          clientRequestId: body?.clientRequestId,
+          ok: false,
+          message: 'Offer unavailable',
+        });
+        return;
+      }
+
+      const result = await this.chatService.respondToOffer(
+        conversationId,
+        userId,
+        offerMessageId,
+        Boolean(body.accepted),
+      );
+
+      this.emitOfferUpdated(conversationId, result.offer);
+      await this.emitNewMessage(conversationId, result.message);
+      socket.emit('offer:responded', {
+        clientRequestId: body?.clientRequestId,
+        ok: true,
+        ...result,
+      });
+    } catch (error: any) {
+      socket.emit('offer:responded', {
+        clientRequestId: body?.clientRequestId,
+        ok: false,
+        message: error?.message || 'Offer response not sent',
+      });
+      socket.emit('chat:error', {
+        message: error?.message || 'Offer response not sent',
       });
     }
   }
@@ -194,5 +264,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.server
       .to(`conversation:${conversationId}`)
       .emit('conversation:read', readState);
+  }
+
+  emitOfferUpdated(conversationId: number, offer: any) {
+    this.server.to(`conversation:${conversationId}`).emit('offer:updated', {
+      conversationId,
+      offer,
+    });
   }
 }

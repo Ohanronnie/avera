@@ -34,8 +34,10 @@ type Conversation = {
   };
   lastMessage?: {
     content: string;
+    imageUrl?: string | null;
     createdAt: string;
   } | null;
+  unreadCount?: number;
   lastMessageAt?: string | null;
   updatedAt: string;
 };
@@ -181,17 +183,36 @@ export default function MessagesInboxScreen() {
                       )}
                     </Text>
                   </View>
+                  <View className="mt-1 flex-row items-center">
+                    <Text
+                      className="flex-1 text-xs font-semibold text-brand"
+                      numberOfLines={1}
+                    >
+                      {conversation.product.name}
+                    </Text>
+                    {conversation.unreadCount ? (
+                      <View className="ml-2 min-w-5 items-center justify-center rounded-full bg-brand px-1.5 py-0.5">
+                        <Text
+                          variant="none"
+                          className="text-[10px] font-black text-white"
+                        >
+                          {conversation.unreadCount > 9
+                            ? "9+"
+                            : conversation.unreadCount}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
                   <Text
-                    className="mt-1 text-xs font-semibold text-brand"
-                    numberOfLines={1}
-                  >
-                    {conversation.product.name}
-                  </Text>
-                  <Text
-                    className="mt-1 text-sm text-gray-500 dark:text-gray-400"
+                    className={`mt-1 text-sm ${
+                      conversation.unreadCount
+                        ? "font-bold text-gray-900 dark:text-white"
+                        : "text-gray-500 dark:text-gray-400"
+                    }`}
                     numberOfLines={1}
                   >
                     {conversation.lastMessage?.content ||
+                      (conversation.lastMessage?.imageUrl ? "Photo" : null) ||
                       "No messages yet. Start the conversation."}
                   </Text>
                 </View>
