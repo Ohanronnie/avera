@@ -14,11 +14,11 @@ export function WithdrawPanel({
   onCancel: () => void;
 }) {
   return (
-    <View className="mt-4 rounded-3xl border border-white/5 bg-[#121214] p-4">
-      <Text className="text-base font-semibold text-white">
+    <View className="mt-4 rounded-3xl border border-gray-100 bg-gray-50 p-4 dark:border-white/5 dark:bg-[#121214]">
+      <Text className="text-base font-semibold text-gray-950 dark:text-white">
         Withdraw to Bank
       </Text>
-      <Text className="mt-1 text-sm text-gray-400">
+      <Text className="mt-1 text-sm text-gray-500 dark:text-gray-400">
         Enter how much you want to move from your wallet.
       </Text>
       <TextInput
@@ -27,7 +27,7 @@ export function WithdrawPanel({
         placeholder="Enter amount"
         placeholderTextColor="#6B7280"
         keyboardType="numeric"
-        className="mt-4 rounded-2xl border border-white/5 bg-[#1A1A1C] px-4 py-4 text-base text-white"
+        className="mt-4 rounded-2xl border border-gray-200 bg-white px-4 py-4 text-base text-gray-950 dark:border-white/5 dark:bg-[#1A1A1C] dark:text-white"
       />
       <View className="mt-4 flex-row gap-3">
         <TouchableOpacity
@@ -40,9 +40,11 @@ export function WithdrawPanel({
         <TouchableOpacity
           activeOpacity={0.82}
           onPress={onCancel}
-          className="flex-1 items-center justify-center rounded-2xl bg-[#232326] py-4"
+          className="flex-1 items-center justify-center rounded-2xl bg-gray-100 py-4 dark:bg-[#232326]"
         >
-          <Text className="font-bold text-gray-300">Cancel</Text>
+          <Text className="font-bold text-gray-700 dark:text-gray-300">
+            Cancel
+          </Text>
         </TouchableOpacity>
       </View>
     </View>

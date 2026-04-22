@@ -14,8 +14,8 @@ import { Text } from "@/components/themed/theme";
 import { axiosInstance } from "@/utils/axios";
 import { useQuery } from "@tanstack/react-query";
 
-
 const sellerBadges = ["Verified seller", "Fast replies", "Escrow ready"];
+const memberBadges = ["Verified member", "Fast replies", "Escrow ready"];
 const sellerDetails = async (userId: string) => {
   const response = await axiosInstance.get(`/users/${userId}`);
   return response.data;
@@ -56,6 +56,7 @@ export default function SellerProfileScreen() {
     productName?: string;
     productPrice?: string;
     productImage?: string;
+    profileKind?: string;
   }>();
   const {
     data: sellerData,
@@ -63,6 +64,7 @@ export default function SellerProfileScreen() {
     isLoading,
   } = useSellerDetails(params.id || "");
   const sellerName = params.sellerName || "Avera Seller";
+  const isSellerProfile = params.profileKind !== "profile";
   const openSellerListings = () => {
     router.push({
       pathname: "/seller-listings/[id]",
@@ -71,7 +73,7 @@ export default function SellerProfileScreen() {
         sellerName: sellerData
           ? `${sellerData.firstName} ${sellerData.lastName}`
           : sellerName,
-       },
+      },
     });
   };
   const stats = [
@@ -80,7 +82,7 @@ export default function SellerProfileScreen() {
     { label: "Rating", value: sellerData?.averageRating.toFixed(1) || "0.0" },
   ];
 
-console.log("Seller data:", sellerData?.location);
+  console.log("Seller data:", sellerData?.location);
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-[#0A0A0A]" edges={["top"]}>
       <View className="flex-row items-center justify-between border-b border-gray-100 bg-white px-5 py-4 dark:border-white/5 dark:bg-[#0A0A0A]">
@@ -95,7 +97,7 @@ console.log("Seller data:", sellerData?.location);
           />
         </Pressable>
         <Text className="text-lg font-bold text-gray-950 dark:text-white">
-          Seller Profile
+          {isSellerProfile ? "Seller Profile" : "Profile"}
         </Text>
         <Pressable className="h-11 w-11 items-center justify-center rounded-full bg-gray-50 dark:bg-white/5">
           <Ionicons
@@ -122,10 +124,10 @@ console.log("Seller data:", sellerData?.location);
               <Ionicons name="search-outline" size={32} color="#9CA3AF" />
             </View>
             <Text className="text-center text-lg font-bold text-gray-900 dark:text-white">
-              Seller not found
+              {isSellerProfile ? "Seller not found" : "Profile not found"}
             </Text>
             <Text className="mt-2 text-center text-sm text-gray-500">
-              We couldn't find the seller you're looking for.
+              We couldn't find the profile you're looking for.
             </Text>
           </View>
         ) : (
@@ -170,33 +172,38 @@ console.log("Seller data:", sellerData?.location);
                   Trust badges
                 </Text>
                 <View className="flex-row flex-wrap">
-                  {sellerBadges.map((badge) => (
-                    <View
-                      key={badge}
-                      className="mb-2 mr-2 flex-row items-center rounded-full bg-brand/10 px-4 py-2"
-                    >
-                      <Ionicons
-                        name="shield-checkmark-outline"
-                        size={15}
-                        color="#2563EB"
-                      />
-                      <Text
-                        variant="none"
-                        className="ml-2 text-xs font-bold text-brand"
+                  {(isSellerProfile ? sellerBadges : memberBadges).map(
+                    (badge) => (
+                      <View
+                        key={badge}
+                        className="mb-2 mr-2 flex-row items-center rounded-full bg-brand/10 px-4 py-2"
                       >
-                        {badge}
-                      </Text>
-                    </View>
-                  ))}
+                        <Ionicons
+                          name="shield-checkmark-outline"
+                          size={15}
+                          color="#2563EB"
+                        />
+                        <Text
+                          variant="none"
+                          className="ml-2 text-xs font-bold text-brand"
+                        >
+                          {badge}
+                        </Text>
+                      </View>
+                    ),
+                  )}
                 </View>
               </View>
 
               <View className="mt-6 rounded-3xl border border-gray-100 bg-white p-5 dark:border-white/5 dark:bg-white/5">
                 <Text className="text-lg font-bold text-gray-950 dark:text-white">
-                  About seller
+                  {isSellerProfile ? "About seller" : "About"}
                 </Text>
                 <Text className="mt-2 text-sm leading-6 text-gray-500 dark:text-gray-400">
-                 {sellerData.bio || "This seller hasn't added a bio yet."}
+                  {sellerData.bio ||
+                    (isSellerProfile
+                      ? "This seller hasn't added a bio yet."
+                      : "This member hasn't added a bio yet.")}
                 </Text>
               </View>
 
@@ -239,7 +246,7 @@ console.log("Seller data:", sellerData?.location);
               )}
 
               <View className="mt-8 flex-row gap-3">
-                <Pressable  className="h-14 flex-1 items-center justify-center rounded-2xl border border-gray-100 bg-gray-50 dark:border-white/10 dark:bg-white/5">
+                <Pressable className="h-14 flex-1 items-center justify-center rounded-2xl border border-gray-100 bg-gray-50 dark:border-white/10 dark:bg-white/5">
                   <Text className="font-bold text-gray-950 dark:text-white">
                     Message
                   </Text>

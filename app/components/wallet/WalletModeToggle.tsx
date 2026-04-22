@@ -11,17 +11,17 @@ export function WalletModeToggle({
 }) {
   return (
     <View className="flex-row items-center justify-start">
-      <View className="flex-row rounded-2xl bg-[#111214] p-1">
+      <View className="flex-row rounded-2xl bg-gray-100 p-1 dark:bg-[#111214]">
         <Pressable
           onPress={() => setWalletMode("crypto")}
           className={`min-w-24 items-center rounded-xl px-4 py-2.5 ${
-            walletMode === "crypto" ? "bg-[#1B1D21]" : ""
+            walletMode === "crypto" ? "bg-white dark:bg-[#1B1D21]" : ""
           }`}
         >
           <Text
             className={`text-sm ${
               walletMode === "crypto"
-                ? "font-semibold text-white"
+                ? "font-semibold text-gray-950 dark:text-white"
                 : "text-gray-500"
             }`}
           >
@@ -31,13 +31,13 @@ export function WalletModeToggle({
         <Pressable
           onPress={() => setWalletMode("naira")}
           className={`min-w-24 items-center rounded-xl px-4 py-2.5 ${
-            walletMode === "naira" ? "bg-[#1B1D21]" : ""
+            walletMode === "naira" ? "bg-white dark:bg-[#1B1D21]" : ""
           }`}
         >
           <Text
             className={`text-sm ${
               walletMode === "naira"
-                ? "font-semibold text-white"
+                ? "font-semibold text-gray-950 dark:text-white"
                 : "text-gray-500"
             }`}
           >

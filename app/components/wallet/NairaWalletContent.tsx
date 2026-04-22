@@ -23,13 +23,13 @@ export function NairaWalletContent({
 }) {
   return (
     <>
-      <View className="mt-6 rounded-3xl border border-white/5 bg-[#121214] p-5">
+      <View className="mt-6 rounded-3xl border border-gray-100 bg-gray-50 p-5 dark:border-white/5 dark:bg-[#121214]">
         <View className="flex-row items-start justify-between">
           <View>
             <Text className="text-sm font-medium uppercase tracking-widest text-gray-500">
               Naira Balance
             </Text>
-            <Text className="mt-3 text-4xl font-extrabold tracking-tight text-white">
+            <Text className="mt-3 text-4xl font-extrabold tracking-tight text-gray-950 dark:text-white">
               ₦
               {Number(nairaBalance).toLocaleString(undefined, {
                 minimumFractionDigits: 2,
@@ -59,33 +59,33 @@ export function NairaWalletContent({
         </View>
       </View>
 
-      <View className="mt-8 rounded-3xl border border-white/5 bg-[#101113] p-5">
+      <View className="mt-8 rounded-3xl border border-gray-100 bg-gray-50 p-5 dark:border-white/5 dark:bg-[#101113]">
         <Text className="text-sm font-medium uppercase tracking-widest text-gray-500">
           Account Details
         </Text>
 
-        <View className="mt-5 flex-row items-start justify-between border-b border-white/5 pb-4">
+        <View className="mt-5 flex-row items-start justify-between border-b border-gray-100 pb-4 dark:border-white/5">
           <View>
             <Text className="text-xs uppercase tracking-widest text-gray-500">
               Account Number
             </Text>
-            <Text className="mt-2 text-lg font-semibold text-white">
+            <Text className="mt-2 text-lg font-semibold text-gray-950 dark:text-white">
               {accountNumber}
             </Text>
           </View>
           <Pressable
             onPress={onCopyAccount}
-            className="rounded-full bg-white/5 p-2"
+            className="rounded-full bg-white p-2 dark:bg-white/5"
           >
             <Ionicons name="copy-outline" size={16} color="#9CA3AF" />
           </Pressable>
         </View>
 
-        <View className="border-b border-white/5 py-4">
+        <View className="border-b border-gray-100 py-4 dark:border-white/5">
           <Text className="text-xs uppercase tracking-widest text-gray-500">
             Account Name
           </Text>
-          <Text className="mt-2 text-lg font-semibold text-white">
+          <Text className="mt-2 text-lg font-semibold text-gray-950 dark:text-white">
             {accountName}
           </Text>
         </View>
@@ -94,7 +94,7 @@ export function NairaWalletContent({
           <Text className="text-xs uppercase tracking-widest text-gray-500">
             Bank
           </Text>
-          <Text className="mt-2 text-lg font-semibold text-white">
+          <Text className="mt-2 text-lg font-semibold text-gray-950 dark:text-white">
             {bankName}
           </Text>
         </View>

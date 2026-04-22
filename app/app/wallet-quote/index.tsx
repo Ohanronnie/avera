@@ -27,20 +27,30 @@ export default function WalletQuoteScreen() {
   const cryptoEstimate = amount > 0 && asset?.value ? amount / asset.value : 0;
 
   return (
-    <SafeAreaView className="flex-1 bg-[#050505]" edges={["top"]}>
+    <SafeAreaView className="flex-1 bg-white dark:bg-[#050505]" edges={["top"]}>
       <View className="flex-row items-center justify-between px-5 py-4">
         <Pressable
           onPress={() => router.back()}
-          className="h-11 w-11 items-center justify-center rounded-full bg-white/5"
+          className="h-11 w-11 items-center justify-center rounded-full bg-gray-50 dark:bg-white/5"
         >
-          <Ionicons name="chevron-back" size={22} color={isDark ? "white" : "#111827"} />
+          <Ionicons
+            name="chevron-back"
+            size={22}
+            color={isDark ? "white" : "#111827"}
+          />
         </Pressable>
-        <Text className="text-lg font-bold text-white">Buy quote</Text>
+        <Text className="text-lg font-bold text-gray-950 dark:text-white">
+          Buy quote
+        </Text>
         <Pressable
           onPress={() => router.push("/p2p")}
-          className="h-11 w-11 items-center justify-center rounded-full bg-white/5"
+          className="h-11 w-11 items-center justify-center rounded-full bg-gray-50 dark:bg-white/5"
         >
-          <Ionicons name="people-outline" size={20} color="#F9FAFB" />
+          <Ionicons
+            name="people-outline"
+            size={20}
+            color={isDark ? "#F9FAFB" : "#111827"}
+          />
         </Pressable>
       </View>
 
@@ -49,7 +59,7 @@ export default function WalletQuoteScreen() {
         contentContainerClassName="px-5 pb-10 pt-2"
         showsVerticalScrollIndicator={false}
       >
-        <View className="items-center rounded-[32px] border border-white/5 bg-[#111214] p-6">
+        <View className="items-center rounded-[32px] border border-gray-100 bg-gray-50 p-6 dark:border-white/5 dark:bg-[#111214]">
           {asset ? (
             <Image source={asset.icon} className="h-20 w-20 rounded-full" />
           ) : (
@@ -60,7 +70,7 @@ export default function WalletQuoteScreen() {
           <Text className="mt-4 text-sm font-bold uppercase tracking-widest text-gray-500">
             You are buying
           </Text>
-          <Text className="mt-2 text-4xl font-black text-white">
+          <Text className="mt-2 text-4xl font-black text-gray-950 dark:text-white">
             ${amount.toLocaleString()}
           </Text>
           <Text className="mt-2 text-base font-semibold text-brand">
@@ -68,7 +78,7 @@ export default function WalletQuoteScreen() {
           </Text>
         </View>
 
-        <View className="mt-5 rounded-3xl border border-white/5 bg-[#111214] p-5">
+        <View className="mt-5 rounded-3xl border border-gray-100 bg-gray-50 p-5 dark:border-white/5 dark:bg-[#111214]">
           <Text className="text-sm font-bold uppercase tracking-widest text-gray-500">
             Quote breakdown
           </Text>
@@ -76,21 +86,29 @@ export default function WalletQuoteScreen() {
           <View className="mt-5 gap-4">
             <View className="flex-row items-center justify-between">
               <Text className="text-sm text-gray-400">Buy amount</Text>
-              <Text className="text-base font-bold text-white">${amount.toLocaleString()}</Text>
+              <Text className="text-base font-bold text-gray-950 dark:text-white">
+                ${amount.toLocaleString()}
+              </Text>
             </View>
             <View className="flex-row items-center justify-between">
               <Text className="text-sm text-gray-400">Service fee</Text>
-              <Text className="text-base font-bold text-white">${fee.toLocaleString()}</Text>
+              <Text className="text-base font-bold text-gray-950 dark:text-white">
+                ${fee.toLocaleString()}
+              </Text>
             </View>
             <View className="flex-row items-center justify-between">
               <Text className="text-sm text-gray-400">NGN rate</Text>
-              <Text className="text-base font-bold text-white">₦{rate.toLocaleString()} / $</Text>
+              <Text className="text-base font-bold text-gray-950 dark:text-white">
+                ₦{rate.toLocaleString()} / $
+              </Text>
             </View>
           </View>
 
-          <View className="mt-5 border-t border-white/5 pt-5">
+          <View className="mt-5 border-t border-gray-100 pt-5 dark:border-white/5">
             <View className="flex-row items-center justify-between">
-              <Text className="text-base font-bold text-white">Total to pay</Text>
+              <Text className="text-base font-bold text-gray-950 dark:text-white">
+                Total to pay
+              </Text>
               <Text className="text-2xl font-black text-brand">
                 ₦{Math.round(total * rate).toLocaleString()}
               </Text>
@@ -98,25 +116,32 @@ export default function WalletQuoteScreen() {
           </View>
         </View>
 
-        <View className="mt-5 rounded-3xl border border-white/5 bg-[#111214]">
+        <View className="mt-5 rounded-3xl border border-gray-100 bg-gray-50 dark:border-white/5 dark:bg-[#111214]">
           {quoteRows.map((row, index) => (
             <View
               key={row.label}
-              className={`px-5 py-4 ${index !== quoteRows.length - 1 ? "border-b border-white/5" : ""}`}
+              className={`px-5 py-4 ${index !== quoteRows.length - 1 ? "border-b border-gray-100 dark:border-white/5" : ""}`}
             >
               <Text className="text-xs font-bold uppercase tracking-widest text-gray-500">
                 {row.label}
               </Text>
-              <Text className="mt-2 text-base font-bold text-white">{row.value}</Text>
+              <Text className="mt-2 text-base font-bold text-gray-950 dark:text-white">
+                {row.value}
+              </Text>
             </View>
           ))}
         </View>
 
         <View className="mt-5 rounded-3xl border border-brand/20 bg-brand/10 p-4">
           <View className="flex-row items-start">
-            <Ionicons name="shield-checkmark-outline" size={20} color="#2563EB" />
-            <Text className="ml-2 flex-1 text-sm leading-5 text-gray-300">
-              Your crypto will be released after payment confirmation. This quote is UI-only until backend orders are connected.
+            <Ionicons
+              name="shield-checkmark-outline"
+              size={20}
+              color="#2563EB"
+            />
+            <Text className="ml-2 flex-1 text-sm leading-5 text-gray-600 dark:text-gray-300">
+              Your crypto will be released after payment confirmation. This
+              quote is UI-only until backend orders are connected.
             </Text>
           </View>
         </View>
@@ -124,21 +149,26 @@ export default function WalletQuoteScreen() {
         <View className="mt-8 flex-row gap-3">
           <Pressable
             onPress={() => router.push("/p2p")}
-            className="h-14 flex-1 items-center justify-center rounded-2xl bg-white/10"
+            className="h-14 flex-1 items-center justify-center rounded-2xl bg-gray-100 dark:bg-white/10"
           >
-            <Text className="font-bold text-white">P2P offers</Text>
+            <Text className="font-bold text-gray-950 dark:text-white">
+              P2P offers
+            </Text>
           </Pressable>
           <Pressable
             onPress={() =>
               toast.show({
                 title: "Order coming soon",
-                description: "Next step is creating a crypto order and payment instruction.",
+                description:
+                  "Next step is creating a crypto order and payment instruction.",
                 variant: "info",
               })
             }
             className="h-14 flex-1 items-center justify-center rounded-2xl bg-brand"
           >
-            <Text variant="none" className="font-bold text-white">Confirm quote</Text>
+            <Text variant="none" className="font-bold text-white">
+              Confirm quote
+            </Text>
           </Pressable>
         </View>
       </ScrollView>

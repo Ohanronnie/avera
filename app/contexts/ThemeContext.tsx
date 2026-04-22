@@ -6,13 +6,16 @@ import {
   useMemo,
   useState,
 } from "react";
+import { Appearance } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import { useColorScheme } from "nativewind";
 
-type ThemeMode = "light" | "dark";
+type ThemeMode = "light" | "dark" | "system";
+type ResolvedThemeMode = "light" | "dark";
 
 type ThemeContextType = {
-  colorScheme: ThemeMode;
+  colorScheme: ResolvedThemeMode;
+  themeMode: ThemeMode;
   isDark: boolean;
   setTheme: (mode: ThemeMode) => Promise<void>;
   toggleTheme: () => Promise<void>;
@@ -26,7 +29,14 @@ const ThemeContext = createContext<ThemeContextType | null>(null);
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const { colorScheme, setColorScheme } = useColorScheme();
   const [hydrated, setHydrated] = useState(false);
-  const resolvedScheme: ThemeMode = colorScheme === "light" ? "light" : "dark";
+  const [themeMode, setThemeMode] = useState<ThemeMode>("system");
+  const systemScheme = Appearance.getColorScheme();
+  const resolvedScheme: ResolvedThemeMode =
+    colorScheme === "light" || colorScheme === "dark"
+      ? colorScheme
+      : systemScheme === "dark"
+        ? "dark"
+        : "light";
 
   useEffect(() => {
     let mounted = true;
@@ -35,13 +45,21 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       try {
         const storedTheme = await SecureStore.getItemAsync(THEME_STORAGE_KEY);
         const nextTheme: ThemeMode =
-          storedTheme === "light" || storedTheme === "dark"
+          storedTheme === "light" ||
+          storedTheme === "dark" ||
+          storedTheme === "system"
             ? storedTheme
-            : "dark";
+            : "system";
 
+        if (mounted) {
+          setThemeMode(nextTheme);
+        }
         setColorScheme(nextTheme);
       } catch (error) {
-        setColorScheme("dark");
+        if (mounted) {
+          setThemeMode("system");
+        }
+        setColorScheme("system");
       } finally {
         if (mounted) {
           setHydrated(true);
@@ -57,6 +75,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [setColorScheme]);
 
   const setTheme = async (mode: ThemeMode) => {
+    setThemeMode(mode);
     setColorScheme(mode);
     await SecureStore.setItemAsync(THEME_STORAGE_KEY, mode);
   };
@@ -69,12 +88,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       colorScheme: resolvedScheme,
+      themeMode,
       isDark: resolvedScheme === "dark",
       setTheme,
       toggleTheme,
       hydrated,
     }),
-    [resolvedScheme, hydrated],
+    [resolvedScheme, themeMode, hydrated],
   );
 
   return (

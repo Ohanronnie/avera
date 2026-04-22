@@ -9,8 +9,8 @@ type ThemedTextProps = ComponentProps<typeof GSText> & {
 const variants = {
   none: "",
   default: "text-black dark:text-gray-100",
-  muted: "text-typography-white/70 dark:text-gray-400",
-  heading: "font-bold text-typography-white dark:text-white",
+  muted: "text-gray-500 dark:text-gray-400",
+  heading: "font-bold text-gray-950 dark:text-white",
 };
 
 export function Text({

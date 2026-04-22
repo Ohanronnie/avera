@@ -3,6 +3,7 @@ import * as ImagePicker from "expo-image-picker";
 import { router, useLocalSearchParams } from "expo-router";
 import { useColorScheme } from "nativewind";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Gallery from "react-native-awesome-gallery";
 import {
   ActivityIndicator,
   Image,
@@ -56,7 +57,16 @@ type ChatConversation = {
   sellerId?: number;
   productId: number;
   product?: {
+    id?: number;
+    name?: string;
+    price?: number;
     quantity?: number;
+    imageUrl?: string | null;
+  };
+  counterpart?: {
+    id: number;
+    name: string;
+    avatarUrl?: string | null;
   };
 };
 
@@ -66,6 +76,25 @@ type SendChatMessageInput = {
   offerAmount?: number;
   offerQuantity?: number;
 };
+
+const toNumericId = (value?: number | string | null) => {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) && numericValue > 0
+    ? numericValue
+    : null;
+};
+
+const isSameUserId = (
+  first?: number | string | null,
+  second?: number | string | null,
+) => {
+  const firstId = toNumericId(first);
+  const secondId = toNumericId(second);
+  return Boolean(firstId && secondId && firstId === secondId);
+};
+
+const formatPrice = (value?: number | string | null) =>
+  `₦${Number(value || 0).toLocaleString()}`;
 
 const actionItems = [
   {
@@ -106,7 +135,6 @@ export default function MessageDetailsScreen() {
   const { user } = useAuth();
   const toast = useToast();
   const scrollViewRef = useRef<ScrollView>(null);
-  const imageViewerRef = useRef<ScrollView>(null);
   const messageInputRef = useRef<TextInput>(null);
   const [message, setMessage] = useState("");
   const [actionsOpen, setActionsOpen] = useState(false);
@@ -125,40 +153,34 @@ export default function MessageDetailsScreen() {
   const [pendingImageUris, setPendingImageUris] = useState<string[]>([]);
   const [viewingImageUrls, setViewingImageUrls] = useState<string[]>([]);
   const [viewingImageIndex, setViewingImageIndex] = useState(0);
-  const [imageViewerWidth, setImageViewerWidth] = useState(0);
   const [counterpartOnline, setCounterpartOnline] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const params = useLocalSearchParams<{
     id?: string;
-    conversationId?: string;
-    counterpartId?: string;
-    sellerId?: string;
-    sellerName?: string;
-    productName?: string;
-    productPrice?: string;
-    productId?: string;
-    productQuantity?: string;
-    isOwner?: string;
-    productImage?: string;
   }>();
 
-  const sellerName = params.sellerName || "Avera Seller";
-  const productName = params.productName || "Product listing";
-  const productPrice = params.productPrice || "Price available";
-  const sellerInitial = sellerName.slice(0, 1).toUpperCase();
-  const isOwnProduct = params.isOwner === "true";
-  const currentUserId = user?.id ? Number(user.id) : null;
-  const counterpartId = Number(params.counterpartId || params.id || 0);
-  const routeSellerId = Number(params.sellerId || 0);
+  const counterpartName = conversation?.counterpart?.name || "Avera user";
+  const sellerName = counterpartName;
+  const productName = conversation?.product?.name || "Product listing";
+  const productPrice = conversation?.product
+    ? formatPrice(conversation.product.price)
+    : "Price available";
+  const productImage = conversation?.product?.imageUrl || null;
+  const productId = conversation?.productId;
+  const counterpartInitial = counterpartName.slice(0, 1).toUpperCase();
+  const currentUserId = toNumericId(user?.id);
+  const conversationId = toNumericId(params.id);
+  const counterpartId = toNumericId(conversation?.counterpart?.id);
+  const sellerId = toNumericId(conversation?.sellerId);
   const isSeller =
     Boolean(currentUserId) &&
-    (conversation?.sellerId === currentUserId ||
-      routeSellerId === currentUserId);
+    isSameUserId(conversation?.sellerId, currentUserId);
+  const isOwnProduct = isSeller;
   const productNumericPrice =
     Number(String(productPrice).replace(/[^0-9.]/g, "")) || 0;
   const availableQuantity = Math.max(
     1,
-    Number(conversation?.product?.quantity || params.productQuantity || 1),
+    Number(conversation?.product?.quantity || 1),
   );
   const hasPendingImages = pendingImageUris.length > 0;
   const numericOfferAmount = Number(offerAmount.replace(/[^0-9.]/g, "")) || 0;
@@ -206,7 +228,7 @@ export default function MessageDetailsScreen() {
       .find(
         (item) =>
           Boolean(item.offerAmount) &&
-          item.senderId !== currentUserId &&
+          !isSameUserId(item.senderId, currentUserId) &&
           (item.offerStatus || "PENDING") === "PENDING",
       );
   }, [currentUserId, messages]);
@@ -295,35 +317,10 @@ export default function MessageDetailsScreen() {
   useEffect(() => {
     let isMounted = true;
     let activeConversationId: number | null = null;
-    const productId = Number(params.productId || 0);
-    const routeConversationId = Number(params.conversationId || params.id || 0);
 
     const setupConversation = async () => {
-      if (isOwnProduct && !routeConversationId) {
-        setLoadingConversation(false);
-        return;
-      }
-
       try {
         setLoadingConversation(true);
-
-        let conversationId = routeConversationId;
-
-        if (!conversationId && productId) {
-          const { data } = await axiosInstance.post("/chat/conversations", {
-            productId,
-          });
-
-          if (!isMounted) return;
-          setConversation(data);
-          conversationId = data.id;
-        } else if (conversationId) {
-          setConversation({
-            id: conversationId,
-            sellerId: routeSellerId || undefined,
-            productId: Number(params.productId || 0),
-          });
-        }
 
         if (!conversationId) {
           throw new Error("Conversation not available");
@@ -331,17 +328,25 @@ export default function MessageDetailsScreen() {
 
         activeConversationId = conversationId;
 
+        const { data: loadedConversation } = await axiosInstance.get(
+          `/chat/conversations/${conversationId}`,
+        );
+        const loadedCounterpartId = toNumericId(
+          loadedConversation?.counterpart?.id,
+        );
+
         const { data: loadedMessages } = await axiosInstance.get(
           `/chat/conversations/${conversationId}/messages`,
         );
 
         if (!isMounted) return;
+        setConversation(loadedConversation);
         setMessages(loadedMessages);
 
         const socket = connectSocket();
         const handleNewMessage = (nextMessage: ChatMessage) => {
           if (nextMessage.conversationId !== activeConversationId) return;
-          if (nextMessage.senderId === currentUserId) return;
+          if (isSameUserId(nextMessage.senderId, currentUserId)) return;
           appendMessage(nextMessage);
 
           socket.emit("conversation:read", { conversationId });
@@ -351,9 +356,9 @@ export default function MessageDetailsScreen() {
         }) => {
           setCounterpartOnline(
             Boolean(
-              counterpartId &&
-              payload.onlineUserIds?.some(
-                (userId) => Number(userId) === counterpartId,
+              loadedCounterpartId &&
+              payload.onlineUserIds?.some((userId) =>
+                isSameUserId(userId, loadedCounterpartId),
               ),
             ),
           );
@@ -362,7 +367,7 @@ export default function MessageDetailsScreen() {
           userId?: number;
           online?: boolean;
         }) => {
-          if (Number(payload.userId) === counterpartId) {
+          if (isSameUserId(payload.userId, loadedCounterpartId)) {
             setCounterpartOnline(Boolean(payload.online));
           }
         };
@@ -375,7 +380,7 @@ export default function MessageDetailsScreen() {
           const readAt = payload.readAt || new Date().toISOString();
           setMessages((current) =>
             current.map((item) =>
-              item.senderId !== payload.readerId && !item.readAt
+              !isSameUserId(item.senderId, payload.readerId) && !item.readAt
                 ? { ...item, readAt }
                 : item,
             ),
@@ -427,28 +432,21 @@ export default function MessageDetailsScreen() {
       isMounted = false;
       cleanupSocket?.();
     };
-  }, [
-    appendMessage,
-    isOwnProduct,
-    counterpartId,
-    currentUserId,
-    params.conversationId,
-    params.id,
-    params.productId,
-    routeSellerId,
-    toast,
-    updateMessage,
-  ]);
+  }, [appendMessage, conversationId, currentUserId, toast, updateMessage]);
 
-  const openSellerProfile = () => {
+  const openCounterpartProfile = () => {
+    const profileId = isSeller ? counterpartId : sellerId;
+    if (!profileId) return;
+
     router.push({
       pathname: "/seller/[id]",
       params: {
-        id: params.id || "seller",
-        sellerName,
+        id: String(profileId),
+        sellerName: counterpartName,
         productName,
         productPrice,
-        ...(params.productImage ? { productImage: params.productImage } : {}),
+        profileKind: isSeller ? "profile" : "seller",
+        ...(productImage ? { productImage } : {}),
       },
     });
   };
@@ -614,6 +612,48 @@ export default function MessageDetailsScreen() {
     );
   };
 
+  const getMessageSenderName = (item: ChatMessage) => {
+    if (isSameUserId(item.senderId, currentUserId)) return "You";
+    if (item.senderName) return item.senderName;
+    if (isSameUserId(item.senderId, counterpartId)) return counterpartName;
+    if (isSameUserId(item.senderId, sellerId)) return sellerName;
+    return "Avera user";
+  };
+
+  const openCheckoutReview = ({
+    quantity,
+    source,
+    unitPrice,
+    offerMessageId,
+  }: {
+    quantity: number;
+    source: "buy_now" | "offer";
+    unitPrice: number;
+    offerMessageId?: number;
+  }) => {
+    if (!productId) return;
+
+    setBuyNowOpen(false);
+    router.push({
+      pathname: "/checkout/review",
+      params: {
+        productId: String(productId),
+        productName,
+        sellerName,
+        sellerId: String(sellerId || ""),
+        unitPrice: String(unitPrice),
+        quantity: String(quantity),
+        availableQuantity: String(availableQuantity),
+        source,
+        ...(conversation?.id
+          ? { conversationId: String(conversation.id) }
+          : {}),
+        ...(offerMessageId ? { offerMessageId: String(offerMessageId) } : {}),
+        ...(productImage ? { productImage } : {}),
+      },
+    });
+  };
+
   const sendMessage = async () => {
     const trimmed = message.trim();
     if ((!trimmed && !hasPendingImages) || !conversation?.id || sending) return;
@@ -758,25 +798,7 @@ export default function MessageDetailsScreen() {
     const safeIndex = Math.min(Math.max(index, 0), safeUrls.length - 1);
     setViewingImageUrls(safeUrls);
     setViewingImageIndex(safeIndex);
-    requestAnimationFrame(() => {
-      if (!imageViewerWidth) return;
-      imageViewerRef.current?.scrollTo({
-        x: safeIndex * imageViewerWidth,
-        animated: false,
-      });
-    });
   };
-
-  useEffect(() => {
-    if (!viewingImageUrls.length || !imageViewerWidth) return;
-
-    requestAnimationFrame(() => {
-      imageViewerRef.current?.scrollTo({
-        x: viewingImageIndex * imageViewerWidth,
-        animated: false,
-      });
-    });
-  }, [imageViewerWidth, viewingImageIndex, viewingImageUrls.length]);
 
   const formatOfferInput = (value: string) => {
     const numericValue = value.replace(/[^0-9]/g, "");
@@ -892,7 +914,7 @@ export default function MessageDetailsScreen() {
             </Pressable>
 
             <Pressable
-              onPress={openSellerProfile}
+              onPress={openCounterpartProfile}
               className="ml-3 flex-1 flex-row items-center"
             >
               <View className="relative h-12 w-12 items-center justify-center rounded-2xl bg-brand/10">
@@ -900,7 +922,7 @@ export default function MessageDetailsScreen() {
                   variant="none"
                   className="text-base font-black text-brand"
                 >
-                  {sellerInitial}
+                  {counterpartInitial}
                 </Text>
                 <View
                   className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white dark:border-[#0A0A0A] ${
@@ -910,7 +932,7 @@ export default function MessageDetailsScreen() {
               </View>
               <View className="ml-3 flex-1">
                 <Text className="text-base font-bold text-gray-950 dark:text-white">
-                  {sellerName}
+                  {counterpartName}
                 </Text>
                 <Text className="mt-0.5 text-xs font-medium text-gray-500 dark:text-gray-400">
                   {counterpartOnline ? "Online" : "Offline"} • usually replies
@@ -919,13 +941,13 @@ export default function MessageDetailsScreen() {
               </View>
             </Pressable>
 
-            <Pressable className="mr-2 h-11 w-11 items-center justify-center rounded-full bg-gray-50 dark:bg-white/5">
+            {/* <Pressable className="mr-2 h-11 w-11 items-center justify-center rounded-full bg-gray-50 dark:bg-white/5">
               <Ionicons
                 name="call-outline"
                 size={20}
                 color={isDark ? "white" : "#111827"}
               />
-            </Pressable>
+            </Pressable> */}
 
             <Pressable
               onPress={() => setActionsOpen(true)}
@@ -952,9 +974,9 @@ export default function MessageDetailsScreen() {
           showsVerticalScrollIndicator={false}
         >
           <Pressable className="mb-3 flex-row rounded-[28px] border border-gray-100 bg-gray-50 p-3 dark:border-white/5 dark:bg-white/5">
-            {params.productImage ? (
+            {productImage ? (
               <Image
-                source={{ uri: params.productImage }}
+                source={{ uri: productImage }}
                 className="h-20 w-20 rounded-2xl bg-gray-200 dark:bg-white/10"
               />
             ) : (
@@ -1037,11 +1059,11 @@ export default function MessageDetailsScreen() {
 
           {messages.map((item, index) => {
             const previous = messages[index - 1];
-            const itemFromMe = item.senderId === currentUserId;
+            const itemFromMe = isSameUserId(item.senderId, currentUserId);
             const isImageOnly = Boolean(item.imageUrl) && !item.content;
             const isImageBatchContinuation =
               isImageOnly &&
-              previous?.senderId === item.senderId &&
+              isSameUserId(previous?.senderId, item.senderId) &&
               Boolean(previous.imageUrl) &&
               !previous.content;
 
@@ -1056,7 +1078,7 @@ export default function MessageDetailsScreen() {
               ) {
                 const batchItem = messages[batchIndex];
                 if (
-                  batchItem.senderId !== item.senderId ||
+                  !isSameUserId(batchItem.senderId, item.senderId) ||
                   !batchItem.imageUrl ||
                   batchItem.content
                 ) {
@@ -1072,8 +1094,9 @@ export default function MessageDetailsScreen() {
             );
             const next = messages[index + imageBatch.length];
             const groupedBefore =
-              previous && previous.senderId === item.senderId;
-            const groupedAfter = next && next.senderId === item.senderId;
+              previous && isSameUserId(previous.senderId, item.senderId);
+            const groupedAfter =
+              next && isSameUserId(next.senderId, item.senderId);
             const hasImage = Boolean(item.imageUrl);
             const hasText = Boolean(item.content);
             const isImageBatch = imageBatch.length > 1 && !hasText;
@@ -1125,7 +1148,7 @@ export default function MessageDetailsScreen() {
               >
                 {!itemFromMe && !groupedBefore && (
                   <Text className="mb-1 ml-1 text-xs font-semibold text-gray-400">
-                    {item.senderName || sellerName}
+                    {getMessageSenderName(item)}
                   </Text>
                 )}
                 <View
@@ -1222,35 +1245,64 @@ export default function MessageDetailsScreen() {
                     </Text>
                   ) : null}
                   {item.offerAmount ? (
-                    <View
-                      className={`mx-3 mt-2 self-start rounded-full px-2.5 py-1 ${
-                        item.offerStatus === "ACCEPTED"
-                          ? "bg-emerald-500/15"
-                          : item.offerStatus === "REJECTED"
-                            ? "bg-red-500/15"
-                            : itemFromMe
-                              ? "bg-white/15"
-                              : "bg-brand/10"
-                      }`}
-                    >
-                      <Text
-                        variant="none"
-                        className={`text-[10px] font-black uppercase ${
+                    <View className="mx-3 mt-2">
+                      <View
+                        className={`self-start rounded-full px-2.5 py-1 ${
                           item.offerStatus === "ACCEPTED"
-                            ? "text-emerald-500"
+                            ? "bg-emerald-500/15"
                             : item.offerStatus === "REJECTED"
-                              ? "text-red-500"
+                              ? "bg-red-500/15"
                               : itemFromMe
-                                ? "text-white"
-                                : "text-brand"
+                                ? "bg-white/15"
+                                : "bg-brand/10"
                         }`}
                       >
-                        {item.offerStatus === "ACCEPTED"
-                          ? "Accepted"
-                          : item.offerStatus === "REJECTED"
-                            ? "Rejected"
-                            : "Pending offer"}
-                      </Text>
+                        <Text
+                          variant="none"
+                          className={`text-[10px] font-black uppercase ${
+                            item.offerStatus === "ACCEPTED"
+                              ? "text-emerald-500"
+                              : item.offerStatus === "REJECTED"
+                                ? "text-red-500"
+                                : itemFromMe
+                                  ? "text-white"
+                                  : "text-brand"
+                          }`}
+                        >
+                          {item.offerStatus === "ACCEPTED"
+                            ? "Accepted"
+                            : item.offerStatus === "REJECTED"
+                              ? "Rejected"
+                              : "Pending offer"}
+                        </Text>
+                      </View>
+                      {!isSeller &&
+                      itemFromMe &&
+                      item.offerStatus === "ACCEPTED" ? (
+                        <Pressable
+                          onPress={() =>
+                            openCheckoutReview({
+                              source: "offer",
+                              unitPrice: Number(item.offerAmount || 0),
+                              quantity: Number(item.offerQuantity || 1),
+                              offerMessageId: item.id,
+                            })
+                          }
+                          className="mt-2 flex-row items-center self-start rounded-full bg-emerald-500 px-3 py-1.5"
+                        >
+                          <Ionicons
+                            name="card-outline"
+                            size={13}
+                            color="white"
+                          />
+                          <Text
+                            variant="none"
+                            className="ml-1.5 text-xs font-black text-white"
+                          >
+                            Checkout
+                          </Text>
+                        </Pressable>
+                      ) : null}
                     </View>
                   ) : null}
                 </View>
@@ -1563,48 +1615,18 @@ export default function MessageDetailsScreen() {
               </Text>
               <View className="h-11 min-w-20" />
             </View>
-            <View
-              onLayout={(event) =>
-                setImageViewerWidth(event.nativeEvent.layout.width)
-              }
-              className="flex-1 items-center justify-center px-4 pb-10"
-            >
+            <View className="flex-1 pb-10">
               {viewingImageUrls.length ? (
-                <View className="h-full max-h-[86%] w-full items-center justify-center">
-                  <ScrollView
-                    ref={imageViewerRef}
-                    horizontal
-                    pagingEnabled
-                    showsHorizontalScrollIndicator={false}
-                    scrollEventThrottle={16}
-                    onMomentumScrollEnd={(event) => {
-                      if (!imageViewerWidth) return;
-                      const nextIndex = Math.round(
-                        event.nativeEvent.contentOffset.x / imageViewerWidth,
-                      );
-                      setViewingImageIndex(
-                        Math.min(
-                          Math.max(nextIndex, 0),
-                          viewingImageUrls.length - 1,
-                        ),
-                      );
-                    }}
-                  >
-                    {viewingImageUrls.map((url, index) => (
-                      <View
-                        key={`${url}-${index}`}
-                        className="h-full items-center justify-center"
-                        style={{ width: imageViewerWidth || 1 }}
-                      >
-                        <Image
-                          source={{ uri: url }}
-                          className="h-full w-full"
-                          resizeMode="contain"
-                        />
-                      </View>
-                    ))}
-                  </ScrollView>
-                </View>
+                <Gallery
+                  key={viewingImageUrls.join("|")}
+                  data={viewingImageUrls}
+                  initialIndex={viewingImageIndex}
+                  onIndexChange={setViewingImageIndex}
+                  onSwipeToClose={closeImageViewer}
+                  onTap={closeImageViewer}
+                  disableSwipeUp
+                  style={{ flex: 1, backgroundColor: "black" }}
+                />
               ) : null}
             </View>
           </SafeAreaView>
@@ -1615,7 +1637,7 @@ export default function MessageDetailsScreen() {
         visible={actionsOpen}
         coverTabs
         title="Conversation actions"
-        subtitle={`Manage your chat with ${sellerName}.`}
+        subtitle={`Manage your chat with ${counterpartName}.`}
         onClose={() => setActionsOpen(false)}
       >
         <View className="gap-3">
@@ -1624,7 +1646,7 @@ export default function MessageDetailsScreen() {
               key={item.title}
               onPress={() => {
                 setActionsOpen(false);
-                item.action?.(String(params.productId || params.id || ""));
+                item.action?.(String(productId || ""));
               }}
               className={`flex-row items-center rounded-3xl border p-4 ${
                 item.tone === "danger"
@@ -1669,7 +1691,6 @@ export default function MessageDetailsScreen() {
           ))}
         </View>
       </BottomSheet>
-
       <BottomSheet
         visible={offerOpen}
         coverTabs
@@ -1852,9 +1873,9 @@ export default function MessageDetailsScreen() {
       >
         <View>
           <View className="flex-row border-b border-gray-100 pb-4 dark:border-white/10">
-            {params.productImage ? (
+            {productImage ? (
               <Image
-                source={{ uri: params.productImage }}
+                source={{ uri: productImage }}
                 className="h-16 w-16 rounded-2xl bg-gray-200 dark:bg-white/10"
               />
             ) : (
@@ -1957,13 +1978,11 @@ export default function MessageDetailsScreen() {
             </Pressable>
             <Pressable
               onPress={() => {
-                setBuyNowOpen(false);
-                if (params.productId) {
-                  router.push({
-                    pathname: "/product-details/[id]",
-                    params: { id: params.productId },
-                  });
-                }
+                openCheckoutReview({
+                  source: "buy_now",
+                  unitPrice: productNumericPrice,
+                  quantity: buyQuantity,
+                });
               }}
               className="h-14 flex-1 items-center justify-center rounded-2xl bg-brand"
             >

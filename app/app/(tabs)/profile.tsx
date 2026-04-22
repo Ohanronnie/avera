@@ -3,24 +3,14 @@ import { axiosInstance } from "@/utils/axios";
 import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useMemo, useState } from "react";
-import {
-  ScrollView,
-  View,
-  TouchableOpacity,
-  Image,
-  Switch,
-} from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
-import { Navbar } from "@/components/navbar";
+import { ScrollView, View, TouchableOpacity, Image } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 
 export default function AccountScreen() {
   const insets = useSafeAreaInsets();
-  const { isDark, toggleTheme } = useTheme();
+  const { isDark, themeMode, setTheme } = useTheme();
   const { logout } = useAuth();
   const [unreadMessages, setUnreadMessages] = useState(0);
 
@@ -77,6 +67,11 @@ export default function AccountScreen() {
     ],
     [unreadMessages],
   );
+  const themeOptions = [
+    { label: "Auto", value: "system", icon: "phone-portrait-outline" },
+    { label: "Light", value: "light", icon: "sunny-outline" },
+    { label: "Dark", value: "dark", icon: "moon-outline" },
+  ] as const;
 
   return (
     <View className="flex-1 bg-white dark:bg-[#0A0A0A]">
@@ -119,7 +114,7 @@ export default function AccountScreen() {
 
         {/* Menu Sections */}
         <View className="px-4 pt-10 pb-6">
-          {sections.map((section, sectionIdx) => (
+          {sections.map((section) => (
             <View key={section.title} className="mb-10">
               <Text className="ml-4 mb-3 text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
                 {section.title}
@@ -148,7 +143,7 @@ export default function AccountScreen() {
                     <Text className="ml-4 flex-1 text-base font-semibold text-gray-800 dark:text-gray-200 tracking-tight">
                       {item.label}
                     </Text>
-                    {item.count && (
+                    {Boolean(item.count) && (
                       <View className="bg-brand/10 px-2.5 py-1 rounded-xl mr-2">
                         <Text className="text-brand text-xs font-black">
                           {item.count}
@@ -172,23 +167,66 @@ export default function AccountScreen() {
               Preferences
             </Text>
             <View className="bg-gray-50/50 dark:bg-white/5 rounded-3xl border border-gray-100 dark:border-white/5 overflow-hidden">
-              <View className="flex-row items-center py-4 px-4">
-                <View className="w-11 h-11 bg-white dark:bg-white/5 rounded-2xl items-center justify-center border border-gray-100 dark:border-white/10">
-                  <Ionicons
-                    name={isDark ? "moon" : "sunny-outline"}
-                    size={20}
-                    color={isDark ? "#A78BFA" : "#111"}
-                  />
+              <View className="py-4 px-4">
+                <View className="flex-row items-center">
+                  <View className="w-11 h-11 bg-white dark:bg-white/5 rounded-2xl items-center justify-center border border-gray-100 dark:border-white/10">
+                    <Ionicons
+                      name={
+                        themeMode === "system"
+                          ? "phone-portrait-outline"
+                          : isDark
+                            ? "moon"
+                            : "sunny-outline"
+                      }
+                      size={20}
+                      color={isDark ? "#A78BFA" : "#111"}
+                    />
+                  </View>
+                  <View className="ml-4 flex-1">
+                    <Text className="text-base font-semibold text-gray-800 dark:text-gray-200 tracking-tight">
+                      Appearance
+                    </Text>
+                    <Text className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                      {themeMode === "system"
+                        ? "Using your phone theme"
+                        : `${themeMode === "dark" ? "Dark" : "Light"} mode`}
+                    </Text>
+                  </View>
                 </View>
-                <Text className="ml-4 flex-1 text-base font-semibold text-gray-800 dark:text-gray-200 tracking-tight">
-                  Dark Mode
-                </Text>
-                <Switch
-                  value={isDark}
-                  onValueChange={toggleTheme}
-                  trackColor={{ false: "#E5E7EB", true: "#2563EB" }}
-                  thumbColor={"#FFF"}
-                />
+
+                <View className="mt-4 flex-row rounded-2xl bg-white p-1 dark:bg-[#0A0A0A]">
+                  {themeOptions.map((option) => {
+                    const active = themeMode === option.value;
+                    return (
+                      <TouchableOpacity
+                        key={option.value}
+                        activeOpacity={0.75}
+                        onPress={() => setTheme(option.value)}
+                        className={`h-11 flex-1 flex-row items-center justify-center rounded-xl ${
+                          active ? "bg-brand" : ""
+                        }`}
+                      >
+                        <Ionicons
+                          name={option.icon as any}
+                          size={16}
+                          color={
+                            active ? "#FFFFFF" : isDark ? "#9CA3AF" : "#6B7280"
+                          }
+                        />
+                        <Text
+                          variant="none"
+                          className={`ml-1.5 text-xs font-bold ${
+                            active
+                              ? "text-white"
+                              : "text-gray-600 dark:text-gray-400"
+                          }`}
+                        >
+                          {option.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
               </View>
             </View>
           </View>

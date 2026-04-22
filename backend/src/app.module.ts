@@ -16,6 +16,8 @@ import { UploadsModule } from './uploads/uploads.module';
 import { MediaModule } from './media/media.module';
 import { WishlistModule } from './wishlist/wishlist.module';
 import { ChatModule } from './chat/chat.module';
+import { WalletModule } from './wallet/wallet.module';
+import { OrdersModule } from './orders/orders.module';
 @Module({
   imports: [
     LoggerModule,
@@ -37,6 +39,8 @@ import { ChatModule } from './chat/chat.module';
     MediaModule,
     WishlistModule,
     ChatModule,
+    WalletModule,
+    OrdersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

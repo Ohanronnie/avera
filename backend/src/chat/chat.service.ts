@@ -220,6 +220,31 @@ export class ChatService {
     return conversation;
   }
 
+  async getConversationDetails(conversationId: number, userId: number) {
+    const conversation = await this.prisma.conversation.findFirst({
+      where: {
+        id: conversationId,
+        OR: [{ buyerId: userId }, { sellerId: userId }],
+      },
+      include: {
+        ...this.conversationInclude,
+        _count: {
+          select: {
+            messages: {
+              where: {
+                senderId: { not: userId },
+                readAt: null,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!conversation) throw new NotFoundException('Conversation not found');
+    return this.mapConversation(conversation, userId);
+  }
+
   async ensureParticipant(conversationId: number, userId: number) {
     const conversation = await this.prisma.conversation.findFirst({
       where: {

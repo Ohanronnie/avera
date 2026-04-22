@@ -4,7 +4,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { useColorScheme } from "nativewind";
 import { ComponentProps, useCallback, useMemo, useState } from "react";
-import { Image, Pressable, ScrollView, View } from "react-native";
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  ScrollView,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
@@ -12,23 +18,29 @@ type OrderMode = "buying" | "selling";
 type OrderStatus = "active" | "completed" | "cancelled";
 
 type Order = {
-  id: string;
+  id: number;
+  code: string;
+  mode: OrderMode;
   productId: number;
-  productName: string;
-  counterparty: string;
-  counterpartyRole: string;
-  price: number;
-  quantity: number;
-  status: OrderStatus;
+  conversationId?: number | null;
+  status: string;
+  statusText: string;
   step: string;
   escrowState: string;
+  unitPrice: number;
+  quantity: number;
+  totalAmount: number;
   updatedAt: string;
-  imageUrl?: string;
-  mode: OrderMode;
-  timeline: Array<{
-    label: string;
-    done: boolean;
-  }>;
+  product: {
+    id: number;
+    name: string;
+    imageUrl?: string | null;
+  };
+  counterparty: {
+    id: number;
+    name: string;
+    role: string;
+  };
 };
 
 const statusFilters: Array<{ label: string; value: OrderStatus }> = [
@@ -37,94 +49,27 @@ const statusFilters: Array<{ label: string; value: OrderStatus }> = [
   { label: "Cancelled", value: "cancelled" },
 ];
 
-const orders: Order[] = [
-  {
-    id: "AV-2034",
-    productId: 7,
-    productName: "iPhone 15 Pro Max 256GB",
-    counterparty: "Daniel Okoro",
-    counterpartyRole: "Seller",
-    price: 1320000,
-    quantity: 1,
-    status: "active",
-    step: "Awaiting seller handoff",
-    escrowState: "Payment held in escrow",
-    updatedAt: "Today, 10:42",
-    imageUrl:
-      "https://images.unsplash.com/photo-1695048133142-1a20484d2569?q=80&w=600&auto=format&fit=crop",
-    mode: "buying",
-    timeline: [
-      { label: "Paid", done: true },
-      { label: "Handoff", done: false },
-      { label: "Confirm", done: false },
-    ],
-  },
-  {
-    id: "AV-2028",
-    productId: 12,
-    productName: "Sony WH-1000XM5 Headphones",
-    counterparty: "Mira Ade",
-    counterpartyRole: "Buyer",
-    price: 385000,
-    quantity: 1,
-    status: "active",
-    step: "Buyer requested delivery details",
-    escrowState: "Waiting for buyer payment",
-    updatedAt: "Yesterday, 18:08",
-    imageUrl:
-      "https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?q=80&w=600&auto=format&fit=crop",
-    mode: "selling",
-    timeline: [
-      { label: "Accepted", done: true },
-      { label: "Payment", done: false },
-      { label: "Ship", done: false },
-    ],
-  },
-  {
-    id: "AV-1982",
-    productId: 4,
-    productName: "Nike Air Max Pulse",
-    counterparty: "Tomi Balogun",
-    counterpartyRole: "Seller",
-    price: 92000,
-    quantity: 1,
-    status: "completed",
-    step: "Order completed",
-    escrowState: "Funds released",
-    updatedAt: "Apr 18, 2026",
-    imageUrl:
-      "https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=600&auto=format&fit=crop",
-    mode: "buying",
-    timeline: [
-      { label: "Paid", done: true },
-      { label: "Received", done: true },
-      { label: "Released", done: true },
-    ],
-  },
-  {
-    id: "AV-1905",
-    productId: 21,
-    productName: "Logitech MX Master 3S",
-    counterparty: "Chinedu N.",
-    counterpartyRole: "Buyer",
-    price: 76000,
-    quantity: 2,
-    status: "cancelled",
-    step: "Cancelled before payment",
-    escrowState: "No funds captured",
-    updatedAt: "Apr 12, 2026",
-    imageUrl:
-      "https://images.unsplash.com/photo-1615663245857-ac93bb7c39e7?q=80&w=600&auto=format&fit=crop",
-    mode: "selling",
-    timeline: [
-      { label: "Offer", done: true },
-      { label: "Payment", done: false },
-      { label: "Closed", done: true },
-    ],
-  },
-];
-
 const formatPrice = (value: number) => `₦${value.toLocaleString()}`;
+const formatUpdatedAt = (value: string) =>
+  new Date(value).toLocaleDateString([], { month: "short", day: "numeric" });
+
+const getStatusGroup = (status: string): OrderStatus => {
+  if (status === "COMPLETED") return "completed";
+  if (status === "CANCELLED") return "cancelled";
+  return "active";
+};
+
+const getTimeline = (status: string) => {
+  const paid = status !== "PENDING_TRANSFER" && status !== "CANCELLED";
+  const shipped = ["SHIPPED", "DELIVERED", "COMPLETED"].includes(status);
+  const completed = status === "COMPLETED";
+
+  return [
+    { label: "Paid", done: paid },
+    { label: "Ship", done: shipped },
+    { label: "Done", done: completed },
+  ];
+};
 
 const getStatusTone = (status: OrderStatus) => {
   if (status === "completed") {
@@ -157,6 +102,8 @@ export default function OrdersScreen() {
   const [activeMode, setActiveMode] = useState<OrderMode>("buying");
   const [activeStatus, setActiveStatus] = useState<OrderStatus>("active");
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(true);
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
 
@@ -173,6 +120,19 @@ export default function OrdersScreen() {
           if (isMounted) setUnreadMessages(0);
         });
 
+      setLoadingOrders(true);
+      axiosInstance
+        .get("/orders")
+        .then(({ data }) => {
+          if (isMounted) setOrders(data);
+        })
+        .catch(() => {
+          if (isMounted) setOrders([]);
+        })
+        .finally(() => {
+          if (isMounted) setLoadingOrders(false);
+        });
+
       return () => {
         isMounted = false;
       };
@@ -182,14 +142,12 @@ export default function OrdersScreen() {
   const filteredOrders = useMemo(
     () =>
       orders.filter(
-        (order) => order.mode === activeMode && order.status === activeStatus,
+        (order) =>
+          order.mode === activeMode &&
+          getStatusGroup(order.status) === activeStatus,
       ),
     [activeMode, activeStatus],
   );
-
-  const activeOrdersCount = orders.filter(
-    (order) => order.status === "active",
-  ).length;
 
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-[#0A0A0A]" edges={["top"]}>
@@ -226,42 +184,7 @@ export default function OrdersScreen() {
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         <View className="px-5 pb-28 pt-5">
-          <View className="rounded-3xl bg-gray-50 p-4 dark:bg-white/5">
-            <View className="flex-row items-center justify-between">
-              <View>
-                <Text className="text-xs font-bold uppercase tracking-widest text-gray-400">
-                  Active Escrow
-                </Text>
-                <Text className="mt-2 text-3xl font-black text-gray-950 dark:text-white">
-                  {activeOrdersCount}
-                </Text>
-              </View>
-              <View className="h-12 w-12 items-center justify-center rounded-2xl bg-brand/10">
-                <Ionicons name="shield-checkmark" size={24} color="#2563EB" />
-              </View>
-            </View>
-            <View className="mt-4 flex-row border-t border-gray-200 pt-4 dark:border-white/10">
-              <View className="flex-1">
-                <Text className="text-xs text-gray-500 dark:text-gray-400">
-                  Buying
-                </Text>
-                <Text className="mt-1 text-lg font-black text-gray-950 dark:text-white">
-                  {orders.filter((order) => order.mode === "buying").length}
-                </Text>
-              </View>
-              <View className="mx-4 w-px bg-gray-200 dark:bg-white/10" />
-              <View className="flex-1">
-                <Text className="text-xs text-gray-500 dark:text-gray-400">
-                  Selling
-                </Text>
-                <Text className="mt-1 text-lg font-black text-gray-950 dark:text-white">
-                  {orders.filter((order) => order.mode === "selling").length}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          <View className="mt-5 flex-row rounded-full bg-gray-100 p-1 dark:bg-white/5">
+          <View className="flex-row rounded-xl bg-gray-100 p-1 dark:bg-white/5">
             {[
               { label: "Buying", value: "buying" as const },
               { label: "Selling", value: "selling" as const },
@@ -269,7 +192,7 @@ export default function OrdersScreen() {
               <Pressable
                 key={mode.value}
                 onPress={() => setActiveMode(mode.value)}
-                className={`h-11 flex-1 items-center justify-center rounded-full ${
+                className={`h-11 flex-1 items-center justify-center rounded-xl ${
                   activeMode === mode.value ? "bg-white dark:bg-white/10" : ""
                 }`}
               >
@@ -317,10 +240,19 @@ export default function OrdersScreen() {
             </View>
           </ScrollView>
 
-          {filteredOrders.length ? (
+          {loadingOrders ? (
+            <View className="items-center justify-center py-24">
+              <ActivityIndicator color="#2563EB" />
+              <Text className="mt-3 text-sm text-gray-500 dark:text-gray-400">
+                Loading orders...
+              </Text>
+            </View>
+          ) : filteredOrders.length ? (
             <View className="mt-5">
               {filteredOrders.map((order) => {
-                const tone = getStatusTone(order.status);
+                const statusGroup = getStatusGroup(order.status);
+                const tone = getStatusTone(statusGroup);
+                const timeline = getTimeline(order.status);
 
                 return (
                   <Pressable
@@ -330,8 +262,8 @@ export default function OrdersScreen() {
                     <View className="flex-row">
                       <Image
                         source={
-                          order.imageUrl
-                            ? { uri: order.imageUrl }
+                          order.product.imageUrl
+                            ? { uri: order.product.imageUrl }
                             : require("@/assets/images/shoe.jpg")
                         }
                         className="h-20 w-20 rounded-2xl bg-gray-100 dark:bg-white/5"
@@ -339,7 +271,7 @@ export default function OrdersScreen() {
                       <View className="ml-3 flex-1">
                         <View className="flex-row items-center justify-between">
                           <Text className="text-xs font-bold uppercase tracking-widest text-gray-400">
-                            {order.id}
+                            {order.code}
                           </Text>
                           <View
                             className={`flex-row items-center rounded-full px-2.5 py-1 ${tone.bg}`}
@@ -351,7 +283,7 @@ export default function OrdersScreen() {
                               variant="none"
                               className={`text-[10px] font-black uppercase ${tone.text}`}
                             >
-                              {order.status}
+                              {order.statusText}
                             </Text>
                           </View>
                         </View>
@@ -359,10 +291,10 @@ export default function OrdersScreen() {
                           className="mt-1 text-base font-bold text-gray-950 dark:text-white"
                           numberOfLines={2}
                         >
-                          {order.productName}
+                          {order.product.name}
                         </Text>
                         <Text className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                          {order.counterpartyRole}: {order.counterparty}
+                          {order.counterparty.role}: {order.counterparty.name}
                         </Text>
                       </View>
                     </View>
@@ -373,7 +305,7 @@ export default function OrdersScreen() {
                           Total
                         </Text>
                         <Text className="mt-1 text-lg font-black text-gray-950 dark:text-white">
-                          {formatPrice(order.price * order.quantity)}
+                          {formatPrice(order.totalAmount)}
                         </Text>
                       </View>
                       <View className="items-end">
@@ -381,7 +313,7 @@ export default function OrdersScreen() {
                           Updated
                         </Text>
                         <Text className="mt-1 text-sm font-bold text-gray-950 dark:text-white">
-                          {order.updatedAt}
+                          {formatUpdatedAt(order.updatedAt)}
                         </Text>
                       </View>
                     </View>
@@ -392,9 +324,9 @@ export default function OrdersScreen() {
                           name={tone.icon}
                           size={17}
                           color={
-                            order.status === "active"
+                            statusGroup === "active"
                               ? "#2563EB"
-                              : order.status === "completed"
+                              : statusGroup === "completed"
                                 ? "#10B981"
                                 : "#EF4444"
                           }
@@ -409,7 +341,7 @@ export default function OrdersScreen() {
                     </View>
 
                     <View className="mt-4 flex-row items-center">
-                      {order.timeline.map((item, index) => (
+                      {timeline.map((item, index) => (
                         <View
                           key={item.label}
                           className="flex-1 flex-row items-center"
@@ -433,7 +365,7 @@ export default function OrdersScreen() {
                               }
                             />
                           </View>
-                          {index < order.timeline.length - 1 && (
+                          {index < timeline.length - 1 && (
                             <View
                               className={`mx-2 h-0.5 flex-1 rounded-full ${
                                 item.done
@@ -446,7 +378,7 @@ export default function OrdersScreen() {
                       ))}
                     </View>
                     <View className="mt-2 flex-row justify-between">
-                      {order.timeline.map((item) => (
+                      {timeline.map((item) => (
                         <Text
                           key={item.label}
                           className="text-[10px] font-bold uppercase text-gray-400"
@@ -461,7 +393,7 @@ export default function OrdersScreen() {
                         onPress={() =>
                           router.push({
                             pathname: "/product-details/[id]",
-                            params: { id: String(order.productId) },
+                            params: { id: String(order.product.id) },
                           })
                         }
                         className="h-12 flex-1 items-center justify-center rounded-2xl border border-gray-100 bg-gray-50 dark:border-white/5 dark:bg-white/5"
@@ -472,16 +404,12 @@ export default function OrdersScreen() {
                       </Pressable>
                       <Pressable
                         onPress={() =>
-                          router.push({
-                            pathname: "/messages/[id]",
-                            params: {
-                              id: order.id,
-                              sellerName: order.counterparty,
-                              productName: order.productName,
-                              productPrice: formatPrice(order.price),
-                              productId: String(order.productId),
-                            },
-                          })
+                          order.conversationId
+                            ? router.push({
+                                pathname: "/messages/[id]",
+                                params: { id: String(order.conversationId) },
+                              })
+                            : router.push("/messages")
                         }
                         className="h-12 flex-1 items-center justify-center rounded-2xl bg-brand"
                       >

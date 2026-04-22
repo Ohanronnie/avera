@@ -38,6 +38,17 @@ export class ChatController {
     return { count };
   }
 
+  @Get('conversations/:conversationId')
+  getConversation(
+    @Req() req: any,
+    @Param('conversationId', ParseIntPipe) conversationId: number,
+  ) {
+    return this.chatService.getConversationDetails(
+      conversationId,
+      req.user.userId,
+    );
+  }
+
   @Get('conversations/:conversationId/messages')
   listMessages(
     @Req() req: any,

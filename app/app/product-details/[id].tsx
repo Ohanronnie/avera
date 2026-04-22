@@ -112,6 +112,7 @@ export default function ProductDetailsPage() {
   const [expanded, setExpanded] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [openingChat, setOpeningChat] = useState(false);
   const [buyerQuantity, setBuyerQuantity] = useState(1);
   const [detailWishlistState, setDetailWishlistState] = useState<
     boolean | null
@@ -173,6 +174,25 @@ export default function ProductDetailsPage() {
       product?.seller?.id &&
       Number(product.seller.id) === currentUserId,
     );
+  const openCheckoutReview = () => {
+    if (!product) return;
+
+    setCheckoutOpen(false);
+    router.push({
+      pathname: "/checkout/review",
+      params: {
+        productId: String(product.id),
+        productName: product.name,
+        sellerName,
+        sellerId: String(product.seller?.id || ""),
+        unitPrice: String(price),
+        quantity: String(buyerQuantity),
+        availableQuantity: String(availableQuantity),
+        source: "buy_now",
+        ...(productImageUrl ? { productImage: productImageUrl } : {}),
+      },
+    });
+  };
 
   useEffect(() => {
     setBuyerQuantity((current) =>
@@ -460,37 +480,47 @@ export default function ProductDetailsPage() {
 
       <View className="absolute bottom-0 left-0 right-0 flex-row gap-x-4 border-t border-gray-100 bg-white/95 px-6 py-6 dark:border-white/5 dark:bg-[#0A0A0A]/95">
         <TouchableOpacity
-          onPress={() => {
+          onPress={async () => {
             if (isOwnProduct) return;
 
-            router.push({
-              pathname: "/messages/[id]",
-              params: {
-                id: String(product.seller?.id || product.id),
-                sellerId: String(product.seller?.id || ""),
-                counterpartId: String(product.seller?.id || ""),
-                sellerName,
-                productName: product.name,
-                productPrice: formatPrice(product.price),
-                productId: String(product.id),
-                productQuantity: String(availableQuantity),
-                isOwner: isOwnProduct ? "true" : "false",
-                ...(productImageUrl ? { productImage: productImageUrl } : {}),
-              },
-            });
+            try {
+              setOpeningChat(true);
+              const { data } = await axiosInstance.post("/chat/conversations", {
+                productId,
+              });
+
+              router.push({
+                pathname: "/messages/[id]",
+                params: { id: String(data.id) },
+              });
+            } catch (error: any) {
+              toast.show({
+                title: "Chat unavailable",
+                description:
+                  error?.response?.data?.message ||
+                  "We couldn't open this conversation right now.",
+                variant: "error",
+              });
+            } finally {
+              setOpeningChat(false);
+            }
           }}
-          disabled={isOwnProduct}
+          disabled={isOwnProduct || openingChat}
           className={`h-16 w-16 items-center justify-center rounded-2xl border ${
             isOwnProduct
               ? "border-gray-100 bg-gray-100 opacity-50 dark:border-white/5 dark:bg-white/5"
               : "border-gray-200 bg-gray-100 dark:border-white/10 dark:bg-white/5"
           }`}
         >
-          <Ionicons
-            name="chatbubble-ellipses-outline"
-            size={24}
-            color={isDark ? "white" : "#111"}
-          />
+          {openingChat ? (
+            <ActivityIndicator color={isDark ? "white" : "#111"} />
+          ) : (
+            <Ionicons
+              name="chatbubble-ellipses-outline"
+              size={24}
+              color={isDark ? "white" : "#111"}
+            />
+          )}
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -653,15 +683,7 @@ export default function ProductDetailsPage() {
               </Text>
             </Pressable>
             <Pressable
-              onPress={() => {
-                setCheckoutOpen(false);
-                toast.show({
-                  title: "Checkout coming soon",
-                  description:
-                    "Next step is creating the order and escrow payment.",
-                  variant: "info",
-                });
-              }}
+              onPress={openCheckoutReview}
               className="h-14 flex-1 items-center justify-center rounded-2xl bg-brand"
             >
               <Text variant="none" className="font-bold text-white">

@@ -138,23 +138,10 @@ export default function MessagesInboxScreen() {
                     pathname: "/messages/[id]",
                     params: {
                       id: String(conversation.id),
-                      conversationId: String(conversation.id),
-                      counterpartId: String(conversation.counterpart.id),
-                      sellerId: String(conversation.sellerId),
-                      sellerName: conversation.counterpart.name,
-                      productName: conversation.product.name,
-                      productPrice: formatPrice(conversation.product.price),
-                      productId: String(conversation.productId),
-                      productQuantity: String(
-                        conversation.product.quantity || 1,
-                      ),
-                      ...(conversation.product.imageUrl
-                        ? { productImage: conversation.product.imageUrl }
-                        : {}),
                     },
                   })
                 }
-                className="mb-3 flex-row rounded-3xl border border-gray-100 bg-gray-50 p-3 dark:border-white/5 dark:bg-white/5"
+                className="mb-3 flex-row rounded-xl border border-gray-100 bg-gray-50 p-3 dark:border-white/5 dark:bg-white/5"
               >
                 {conversation.product.imageUrl ? (
                   <Image

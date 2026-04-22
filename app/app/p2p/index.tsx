@@ -66,23 +66,36 @@ export default function P2PScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-[#050505]" edges={["top"]}>
+    <SafeAreaView className="flex-1 bg-white dark:bg-[#050505]" edges={["top"]}>
       <View className="flex-row items-center justify-between px-5 py-4">
         <Pressable
           onPress={() => router.back()}
-          className="h-11 w-11 items-center justify-center rounded-full bg-white/5"
+          className="h-11 w-11 items-center justify-center rounded-full bg-gray-50 dark:bg-white/5"
         >
-          <Ionicons name="chevron-back" size={22} color={isDark ? "white" : "#111827"} />
+          <Ionicons
+            name="chevron-back"
+            size={22}
+            color={isDark ? "white" : "#111827"}
+          />
         </Pressable>
-        <Text className="text-lg font-bold text-white">P2P Market</Text>
+        <Text className="text-lg font-bold text-gray-950 dark:text-white">
+          P2P Market
+        </Text>
         <Pressable
           onPress={() => setFilterOpen(true)}
-          className="relative h-11 w-11 items-center justify-center rounded-full bg-white/5"
+          className="relative h-11 w-11 items-center justify-center rounded-full bg-gray-50 dark:bg-white/5"
         >
-          <Ionicons name="filter-outline" size={20} color="#F9FAFB" />
+          <Ionicons
+            name="filter-outline"
+            size={20}
+            color={isDark ? "#F9FAFB" : "#111827"}
+          />
           {activeFilterCount > 0 && (
             <View className="absolute -right-1 -top-1 h-5 w-5 items-center justify-center rounded-full bg-brand">
-              <Text variant="none" className="text-[10px] font-black text-white">
+              <Text
+                variant="none"
+                className="text-[10px] font-black text-white"
+              >
                 {activeFilterCount}
               </Text>
             </View>
@@ -96,20 +109,27 @@ export default function P2PScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View className="flex-row items-center px-1">
-          <Ionicons name="information-circle-outline" size={16} color="#9CA3AF" />
+          <Ionicons
+            name="information-circle-outline"
+            size={16}
+            color="#9CA3AF"
+          />
           <Text className="ml-2 flex-1 text-xs leading-5 text-gray-500">
-            Compare rates, limits, speed, and seller completion before opening a trade.
+            Compare rates, limits, speed, and seller completion before opening a
+            trade.
           </Text>
         </View>
 
-        <View className="mt-5 flex-row rounded-2xl bg-[#111214] p-1">
+        <View className="mt-5 flex-row rounded-2xl bg-gray-100 p-1 dark:bg-[#111214]">
           {(["buy", "sell"] as const).map((item) => (
             <Pressable
               key={item}
               onPress={() => setSide(item)}
-              className={`flex-1 items-center rounded-xl py-3 ${side === item ? "bg-[#1B1D21]" : ""}`}
+              className={`flex-1 items-center rounded-xl py-3 ${side === item ? "bg-white dark:bg-[#1B1D21]" : ""}`}
             >
-              <Text className={`text-base font-bold ${side === item ? "text-white" : "text-gray-500"}`}>
+              <Text
+                className={`text-base font-bold ${side === item ? "text-gray-950 dark:text-white" : "text-gray-500"}`}
+              >
                 {item === "buy" ? "Buy" : "Sell"}
               </Text>
             </Pressable>
@@ -118,17 +138,15 @@ export default function P2PScreen() {
 
         <Pressable
           onPress={() => setFilterOpen(true)}
-          className="mt-5 flex-row items-center justify-between rounded-2xl border border-white/5 bg-white/5 px-4 py-3"
+          className="mt-5 flex-row items-center justify-between rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 dark:border-white/5 dark:bg-white/5"
         >
           <View className="flex-row items-center">
             <Ionicons name="options-outline" size={16} color="#9CA3AF" />
-            <Text className="ml-2 text-sm font-bold text-white">
+            <Text className="ml-2 text-sm font-bold text-gray-950 dark:text-white">
               {selectedAsset} • {selectedMethod}
             </Text>
           </View>
-          <Text className="text-xs font-bold text-brand">
-            Filters
-          </Text>
+          <Text className="text-xs font-bold text-brand">Filters</Text>
         </Pressable>
 
         <View className="mt-5 flex-row items-center justify-between">
@@ -143,19 +161,32 @@ export default function P2PScreen() {
         <View className="mt-3 gap-3">
           {listings.length ? (
             listings.map((listing) => (
-              <View key={listing.id} className="rounded-3xl border border-white/5 bg-[#111214] p-4">
+              <View
+                key={listing.id}
+                className="rounded-3xl border border-gray-100 bg-gray-50 p-4 dark:border-white/5 dark:bg-[#111214]"
+              >
                 <View className="flex-row items-center justify-between">
                   <View className="flex-1 flex-row items-center pr-3">
                     <View className="h-10 w-10 items-center justify-center rounded-2xl bg-brand/10">
-                      <Text variant="none" className="text-sm font-black text-brand">
+                      <Text
+                        variant="none"
+                        className="text-sm font-black text-brand"
+                      >
                         {listing.seller.slice(0, 1)}
                       </Text>
                     </View>
                     <View className="ml-3 flex-1">
                       <View className="flex-row items-center">
-                        <Text className="text-sm font-bold text-white">{listing.seller}</Text>
+                        <Text className="text-sm font-bold text-gray-950 dark:text-white">
+                          {listing.seller}
+                        </Text>
                         {listing.verified && (
-                          <Ionicons name="shield-checkmark" size={13} color="#2563EB" style={{ marginLeft: 5 }} />
+                          <Ionicons
+                            name="shield-checkmark"
+                            size={13}
+                            color="#2563EB"
+                            style={{ marginLeft: 5 }}
+                          />
                         )}
                       </View>
                       <Text className="mt-1 text-xs text-gray-400">
@@ -164,7 +195,7 @@ export default function P2PScreen() {
                     </View>
                   </View>
                   <View className="items-end">
-                    <Text className="text-xl font-black text-white">
+                    <Text className="text-xl font-black text-gray-950 dark:text-white">
                       ₦{listing.rate.toLocaleString()}
                     </Text>
                     <Text className="mt-1 text-xs font-bold text-brand">
@@ -194,7 +225,10 @@ export default function P2PScreen() {
                     }
                     className="h-10 items-center justify-center rounded-xl bg-brand px-5"
                   >
-                    <Text variant="none" className="text-sm font-bold text-white">
+                    <Text
+                      variant="none"
+                      className="text-sm font-bold text-white"
+                    >
                       {side === "buy" ? "Buy" : "Sell"}
                     </Text>
                   </Pressable>
@@ -202,9 +236,11 @@ export default function P2PScreen() {
               </View>
             ))
           ) : (
-            <View className="items-center rounded-3xl border border-white/5 bg-white/5 p-8">
+            <View className="items-center rounded-3xl border border-gray-100 bg-gray-50 p-8 dark:border-white/5 dark:bg-white/5">
               <Ionicons name="search-outline" size={30} color="#6B7280" />
-              <Text className="mt-4 text-lg font-bold text-white">No offers found</Text>
+              <Text className="mt-4 text-lg font-bold text-gray-950 dark:text-white">
+                No offers found
+              </Text>
               <Text className="mt-2 text-center text-sm text-gray-400">
                 Try another asset, trade limits, or payment method.
               </Text>
@@ -220,9 +256,14 @@ export default function P2PScreen() {
         subtitle="Choose the asset, payment method, trade limits, and seller quality."
         onClose={() => setFilterOpen(false)}
       >
-        <ScrollView showsVerticalScrollIndicator={false} className="max-h-[560px]">
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          className="max-h-[560px]"
+        >
           <View>
-            <Text className="text-base font-bold text-white">Asset</Text>
+            <Text className="text-base font-bold text-gray-950 dark:text-white">
+              Asset
+            </Text>
             <View className="mt-3 flex-row flex-wrap">
               {p2pAssets.map((asset) => (
                 <Pressable
@@ -231,12 +272,12 @@ export default function P2PScreen() {
                   className={`mb-2 mr-2 rounded-full border px-4 py-2.5 ${
                     selectedAsset === asset
                       ? "border-brand bg-brand"
-                      : "border-white/10 bg-white/5"
+                      : "border-gray-200 bg-gray-50 dark:border-white/10 dark:bg-white/5"
                   }`}
                 >
                   <Text
                     variant="none"
-                    className={`text-sm font-bold ${selectedAsset === asset ? "text-white" : "text-gray-300"}`}
+                    className={`text-sm font-bold ${selectedAsset === asset ? "text-white" : "text-gray-600 dark:text-gray-300"}`}
                   >
                     {asset}
                   </Text>
@@ -245,7 +286,9 @@ export default function P2PScreen() {
             </View>
 
             <View className="mt-5">
-              <Text className="text-base font-bold text-white">Payment method</Text>
+              <Text className="text-base font-bold text-gray-950 dark:text-white">
+                Payment method
+              </Text>
               <View className="mt-3 flex-row flex-wrap">
                 {p2pPaymentMethods.map((method) => (
                   <Pressable
@@ -254,13 +297,15 @@ export default function P2PScreen() {
                     className={`mb-2 mr-2 rounded-full border px-4 py-2.5 ${
                       selectedMethod === method
                         ? "border-brand bg-brand"
-                        : "border-white/10 bg-white/5"
+                        : "border-gray-200 bg-gray-50 dark:border-white/10 dark:bg-white/5"
                     }`}
                   >
                     <Text
                       variant="none"
                       className={`text-sm font-bold ${
-                        selectedMethod === method ? "text-white" : "text-gray-300"
+                        selectedMethod === method
+                          ? "text-white"
+                          : "text-gray-600 dark:text-gray-300"
                       }`}
                     >
                       {method}
@@ -271,7 +316,7 @@ export default function P2PScreen() {
             </View>
 
             <View className="mt-5">
-              <Text className="text-base font-bold text-white">
+              <Text className="text-base font-bold text-gray-950 dark:text-white">
                 Trade limits
               </Text>
               <Text className="mt-1 text-xs text-gray-400">
@@ -285,7 +330,7 @@ export default function P2PScreen() {
                   keyboardType="numeric"
                   placeholder="Seller min"
                   placeholderTextColor="#6B7280"
-                  className="h-14 flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 text-base text-white"
+                  className="h-14 flex-1 rounded-2xl border border-gray-200 bg-gray-50 px-4 text-base text-gray-950 dark:border-white/10 dark:bg-white/5 dark:text-white"
                 />
                 <TextInput
                   value={maxTradeAmount}
@@ -293,7 +338,7 @@ export default function P2PScreen() {
                   keyboardType="numeric"
                   placeholder="Seller max"
                   placeholderTextColor="#6B7280"
-                  className="h-14 flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 text-base text-white"
+                  className="h-14 flex-1 rounded-2xl border border-gray-200 bg-gray-50 px-4 text-base text-gray-950 dark:border-white/10 dark:bg-white/5 dark:text-white"
                 />
               </View>
             </View>
@@ -308,7 +353,8 @@ export default function P2PScreen() {
                 },
                 {
                   title: "Fast traders",
-                  description: "Show sellers with estimated release under 3 minutes.",
+                  description:
+                    "Show sellers with estimated release under 3 minutes.",
                   value: fastOnly,
                   onPress: () => setFastOnly((current) => !current),
                 },
@@ -316,14 +362,22 @@ export default function P2PScreen() {
                 <Pressable
                   key={item.title}
                   onPress={item.onPress}
-                  className="flex-row items-center justify-between rounded-2xl border border-white/5 bg-white/5 p-4"
+                  className="flex-row items-center justify-between rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-white/5 dark:bg-white/5"
                 >
                   <View className="flex-1 pr-3">
-                    <Text className="font-bold text-white">{item.title}</Text>
-                    <Text className="mt-1 text-xs text-gray-400">{item.description}</Text>
+                    <Text className="font-bold text-gray-950 dark:text-white">
+                      {item.title}
+                    </Text>
+                    <Text className="mt-1 text-xs text-gray-400">
+                      {item.description}
+                    </Text>
                   </View>
-                  <View className={`h-7 w-12 rounded-full p-1 ${item.value ? "bg-brand" : "bg-white/10"}`}>
-                    <View className={`h-5 w-5 rounded-full bg-white ${item.value ? "ml-5" : "ml-0"}`} />
+                  <View
+                    className={`h-7 w-12 rounded-full p-1 ${item.value ? "bg-brand" : "bg-gray-200 dark:bg-white/10"}`}
+                  >
+                    <View
+                      className={`h-5 w-5 rounded-full bg-white ${item.value ? "ml-5" : "ml-0"}`}
+                    />
                   </View>
                 </Pressable>
               ))}
@@ -332,15 +386,19 @@ export default function P2PScreen() {
             <View className="mt-6 flex-row gap-3">
               <Pressable
                 onPress={resetFilters}
-                className="h-14 flex-1 items-center justify-center rounded-2xl bg-white/10"
+                className="h-14 flex-1 items-center justify-center rounded-2xl bg-gray-100 dark:bg-white/10"
               >
-                <Text className="font-bold text-white">Reset</Text>
+                <Text className="font-bold text-gray-950 dark:text-white">
+                  Reset
+                </Text>
               </Pressable>
               <Pressable
                 onPress={() => setFilterOpen(false)}
                 className="h-14 flex-1 items-center justify-center rounded-2xl bg-brand"
               >
-                <Text variant="none" className="font-bold text-white">Apply</Text>
+                <Text variant="none" className="font-bold text-white">
+                  Apply
+                </Text>
               </Pressable>
             </View>
           </View>

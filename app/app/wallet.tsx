@@ -21,7 +21,9 @@ export default function WalletScreen() {
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [walletMode, setWalletMode] = useState<"crypto" | "naira">("naira");
   const [cryptoTab, setCryptoTab] = useState<"crypto" | "activity">("crypto");
-  const [walletSheet, setWalletSheet] = useState<"naira-send" | "naira-receive" | null>(null);
+  const [walletSheet, setWalletSheet] = useState<
+    "naira-send" | "naira-receive" | null
+  >(null);
   const [transferAmount, setTransferAmount] = useState("");
   const [recipientBank, setRecipientBank] = useState("");
   const [recipientAccount, setRecipientAccount] = useState("");
@@ -74,10 +76,11 @@ export default function WalletScreen() {
   const portfolioChange = totalBalance > 0 ? totalBalance * 0.1204 : 817.01;
   const maskedWalletId = wallet?.address || "0x675****7d2b";
   const activityFeed = transactions.length ? transactions : fallbackActivity;
-  const nairaBalance = wallet?.nairaBalance ?? 1280000;
+  const nairaBalance = wallet?.nairaBalance ?? 0;
+  const lockedBalance = wallet?.lockedBalance ?? 0;
   const accountName = wallet?.accountName || "Avera Technologies Ltd";
-  const accountNumber = wallet?.accountNumber || "1029384756";
-  const bankName = wallet?.bankName || "Providus Bank";
+  const accountNumber = wallet?.accountNumber || "Generating";
+  const bankName = wallet?.bankName || "Avera Test Bank";
 
   const handleReceiveCrypto = () => {
     toast.show({
@@ -96,7 +99,11 @@ export default function WalletScreen() {
   };
 
   const handleSubmitNairaTransfer = () => {
-    if (!transferAmount.trim() || !recipientBank.trim() || !recipientAccount.trim()) {
+    if (
+      !transferAmount.trim() ||
+      !recipientBank.trim() ||
+      !recipientAccount.trim()
+    ) {
       toast.show({
         title: "Complete transfer details",
         description: "Amount, bank, and account number are required.",
@@ -112,15 +119,16 @@ export default function WalletScreen() {
     setTransferNote("");
     toast.show({
       title: "Transfer preview ready",
-      description: "Next step is adding bank verification and transfer confirmation.",
+      description:
+        "Next step is adding bank verification and transfer confirmation.",
       variant: "info",
     });
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-[#050505]" edges={["top"]}>
+    <SafeAreaView className="flex-1 bg-white dark:bg-[#050505]" edges={["top"]}>
       <ScrollView
-        className="flex-1 bg-[#050505]"
+        className="flex-1 bg-white dark:bg-[#050505]"
         contentContainerStyle={{ paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
       >
@@ -141,15 +149,44 @@ export default function WalletScreen() {
               activityFeed={activityFeed}
             />
           ) : (
-            <NairaWalletContent
-              nairaBalance={nairaBalance}
-              accountName={accountName}
-              accountNumber={accountNumber}
-              bankName={bankName}
-              onShowWithdraw={() => setWalletSheet("naira-send")}
-              onReceive={() => setWalletSheet("naira-receive")}
-              onCopyAccount={handleCopyAccount}
-            />
+            <>
+              <NairaWalletContent
+                nairaBalance={nairaBalance}
+                accountName={accountName}
+                accountNumber={accountNumber}
+                bankName={bankName}
+                onShowWithdraw={() => setWalletSheet("naira-send")}
+                onReceive={() => setWalletSheet("naira-receive")}
+                onCopyAccount={handleCopyAccount}
+              />
+              <View className="mt-5 rounded-3xl border border-gray-100 bg-gray-50 p-5 dark:border-white/5 dark:bg-[#101113]">
+                <View className="flex-row items-center justify-between">
+                  <View>
+                    <Text className="text-xs font-bold uppercase tracking-widest text-gray-500">
+                      Locked escrow
+                    </Text>
+                    <Text className="mt-2 text-2xl font-black text-gray-950 dark:text-white">
+                      ₦
+                      {Number(lockedBalance).toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </Text>
+                  </View>
+                  <View className="h-12 w-12 items-center justify-center rounded-2xl bg-brand/10">
+                    <Ionicons
+                      name="lock-closed-outline"
+                      size={22}
+                      color="#2563EB"
+                    />
+                  </View>
+                </View>
+                <Text className="mt-3 text-sm leading-5 text-gray-500 dark:text-gray-400">
+                  Mock transfer payments land here until buyer confirmation and
+                  release flows are added.
+                </Text>
+              </View>
+            </>
           )}
 
           {walletMode === "crypto" && showWithdraw && (
@@ -171,11 +208,11 @@ export default function WalletScreen() {
         onClose={() => setWalletSheet(null)}
       >
         <View>
-          <View className="rounded-3xl border border-white/5 bg-white/5 p-4">
+          <View className="rounded-3xl border border-gray-100 bg-gray-50 p-4 dark:border-white/5 dark:bg-white/5">
             <Text className="text-xs font-bold uppercase tracking-widest text-gray-500">
               Available balance
             </Text>
-            <Text className="mt-2 text-3xl font-black text-white">
+            <Text className="mt-2 text-3xl font-black text-gray-950 dark:text-white">
               ₦
               {Number(nairaBalance).toLocaleString(undefined, {
                 minimumFractionDigits: 2,
@@ -185,8 +222,10 @@ export default function WalletScreen() {
           </View>
 
           <View className="mt-5">
-            <Text className="mb-2 text-sm font-bold text-white">Amount</Text>
-            <View className="flex-row items-center rounded-2xl border border-white/10 bg-white/5 px-4">
+            <Text className="mb-2 text-sm font-bold text-gray-950 dark:text-white">
+              Amount
+            </Text>
+            <View className="flex-row items-center rounded-2xl border border-gray-200 bg-gray-50 px-4 dark:border-white/10 dark:bg-white/5">
               <Text variant="none" className="text-xl font-black text-brand">
                 ₦
               </Text>
@@ -196,50 +235,61 @@ export default function WalletScreen() {
                 keyboardType="numeric"
                 placeholder="0.00"
                 placeholderTextColor="#6B7280"
-                className="h-14 flex-1 px-3 text-lg font-bold text-white"
+                className="h-14 flex-1 px-3 text-lg font-bold text-gray-950 dark:text-white"
               />
             </View>
           </View>
 
           <View className="mt-4">
-            <Text className="mb-2 text-sm font-bold text-white">Bank</Text>
+            <Text className="mb-2 text-sm font-bold text-gray-950 dark:text-white">
+              Bank
+            </Text>
             <TextInput
               value={recipientBank}
               onChangeText={setRecipientBank}
               placeholder="Enter bank name"
               placeholderTextColor="#6B7280"
-              className="h-14 rounded-2xl border border-white/10 bg-white/5 px-4 text-base text-white"
+              className="h-14 rounded-2xl border border-gray-200 bg-gray-50 px-4 text-base text-gray-950 dark:border-white/10 dark:bg-white/5 dark:text-white"
             />
           </View>
 
           <View className="mt-4">
-            <Text className="mb-2 text-sm font-bold text-white">Account number</Text>
+            <Text className="mb-2 text-sm font-bold text-gray-950 dark:text-white">
+              Account number
+            </Text>
             <TextInput
               value={recipientAccount}
               onChangeText={setRecipientAccount}
               keyboardType="numeric"
               placeholder="Enter account number"
               placeholderTextColor="#6B7280"
-              className="h-14 rounded-2xl border border-white/10 bg-white/5 px-4 text-base text-white"
+              className="h-14 rounded-2xl border border-gray-200 bg-gray-50 px-4 text-base text-gray-950 dark:border-white/10 dark:bg-white/5 dark:text-white"
             />
           </View>
 
           <View className="mt-4">
-            <Text className="mb-2 text-sm font-bold text-white">Narration</Text>
+            <Text className="mb-2 text-sm font-bold text-gray-950 dark:text-white">
+              Narration
+            </Text>
             <TextInput
               value={transferNote}
               onChangeText={setTransferNote}
               placeholder="Optional note"
               placeholderTextColor="#6B7280"
-              className="h-14 rounded-2xl border border-white/10 bg-white/5 px-4 text-base text-white"
+              className="h-14 rounded-2xl border border-gray-200 bg-gray-50 px-4 text-base text-gray-950 dark:border-white/10 dark:bg-white/5 dark:text-white"
             />
           </View>
 
           <View className="mt-5 rounded-3xl border border-brand/20 bg-brand/10 p-4">
             <View className="flex-row items-start">
-              <Ionicons name="shield-checkmark-outline" size={20} color="#2563EB" />
-              <Text className="ml-2 flex-1 text-sm leading-5 text-gray-300">
-                Transfers will require confirmation before money leaves your wallet.
+              <Ionicons
+                name="shield-checkmark-outline"
+                size={20}
+                color="#2563EB"
+              />
+              <Text className="ml-2 flex-1 text-sm leading-5 text-gray-600 dark:text-gray-300">
+                Transfers will require confirmation before money leaves your
+                wallet.
               </Text>
             </View>
           </View>
@@ -247,9 +297,11 @@ export default function WalletScreen() {
           <View className="mt-6 flex-row gap-3">
             <Pressable
               onPress={() => setWalletSheet(null)}
-              className="h-14 flex-1 items-center justify-center rounded-2xl bg-white/10"
+              className="h-14 flex-1 items-center justify-center rounded-2xl bg-gray-100 dark:bg-white/10"
             >
-              <Text className="font-bold text-white">Cancel</Text>
+              <Text className="font-bold text-gray-950 dark:text-white">
+                Cancel
+              </Text>
             </Pressable>
             <Pressable
               onPress={handleSubmitNairaTransfer}
@@ -271,14 +323,14 @@ export default function WalletScreen() {
         onClose={() => setWalletSheet(null)}
       >
         <View>
-          <View className="items-center rounded-3xl border border-white/5 bg-white/5 p-5">
+          <View className="items-center rounded-3xl border border-gray-100 bg-gray-50 p-5 dark:border-white/5 dark:bg-white/5">
             <View className="h-16 w-16 items-center justify-center rounded-3xl bg-brand/10">
               <Ionicons name="business-outline" size={28} color="#2563EB" />
             </View>
             <Text className="mt-4 text-sm font-bold uppercase tracking-widest text-gray-500">
               Wallet account
             </Text>
-            <Text className="mt-2 text-3xl font-black text-white">
+            <Text className="mt-2 text-3xl font-black text-gray-950 dark:text-white">
               {accountNumber}
             </Text>
             <Pressable
@@ -286,13 +338,16 @@ export default function WalletScreen() {
               className="mt-4 flex-row items-center rounded-full bg-brand px-4 py-2"
             >
               <Ionicons name="copy-outline" size={16} color="#FFFFFF" />
-              <Text variant="none" className="ml-2 text-sm font-bold text-white">
+              <Text
+                variant="none"
+                className="ml-2 text-sm font-bold text-white"
+              >
                 Copy account number
               </Text>
             </Pressable>
           </View>
 
-          <View className="mt-5 rounded-3xl border border-white/5 bg-white/5">
+          <View className="mt-5 rounded-3xl border border-gray-100 bg-gray-50 dark:border-white/5 dark:bg-white/5">
             {[
               { label: "Bank", value: bankName },
               { label: "Account name", value: accountName },
@@ -300,12 +355,16 @@ export default function WalletScreen() {
             ].map((item, index) => (
               <View
                 key={item.label}
-                className={`px-5 py-4 ${index !== 2 ? "border-b border-white/5" : ""}`}
+                className={`px-5 py-4 ${
+                  index !== 2
+                    ? "border-b border-gray-100 dark:border-white/5"
+                    : ""
+                }`}
               >
                 <Text className="text-xs font-bold uppercase tracking-widest text-gray-500">
                   {item.label}
                 </Text>
-                <Text className="mt-2 text-base font-bold text-white">
+                <Text className="mt-2 text-base font-bold text-gray-950 dark:text-white">
                   {item.value}
                 </Text>
               </View>
@@ -315,8 +374,9 @@ export default function WalletScreen() {
           <View className="mt-5 rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-4">
             <View className="flex-row items-start">
               <Ionicons name="time-outline" size={20} color="#34D399" />
-              <Text className="ml-2 flex-1 text-sm leading-5 text-gray-300">
-                Transfers to this account should reflect in your wallet after confirmation.
+              <Text className="ml-2 flex-1 text-sm leading-5 text-gray-600 dark:text-gray-300">
+                Transfers to this account should reflect in your wallet after
+                confirmation.
               </Text>
             </View>
           </View>

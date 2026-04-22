@@ -10,6 +10,7 @@ import {
 } from "react";
 import { Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useColorScheme } from "nativewind";
 
 import { Text } from "@/components/ui/text";
 
@@ -40,7 +41,6 @@ function getToastTheme(variant: ToastVariant) {
       icon: "checkmark-circle",
       iconColor: "#4ADE80",
       iconBg: "bg-emerald-500/15",
-      border: "border-emerald-500/30",
     } as const;
   }
 
@@ -49,7 +49,6 @@ function getToastTheme(variant: ToastVariant) {
       icon: "alert-circle",
       iconColor: "#F87171",
       iconBg: "bg-red-500/15",
-      border: "border-red-500/30",
     } as const;
   }
 
@@ -57,12 +56,13 @@ function getToastTheme(variant: ToastVariant) {
     icon: "information-circle",
     iconColor: "#60A5FA",
     iconBg: "bg-brand/15",
-    border: "border-brand/40",
   } as const;
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const insets = useSafeAreaInsets();
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === "dark";
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const timeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
@@ -127,7 +127,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           return (
             <View
               key={toast.id}
-              className={`mb-3 rounded-3xl border bg-[#111214] px-4 py-4 shadow-lg ${theme.border}`}
+              className="mb-3 rounded-3xl border border-gray-100 bg-white px-4 py-4 shadow-lg shadow-black/10 dark:border-white/10 dark:bg-[#111214]"
             >
               <View className="flex-row items-start">
                 <View
@@ -141,11 +141,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 </View>
 
                 <View className="flex-1">
-                  <Text className="text-sm font-semibold text-white">
+                  <Text className="text-sm font-semibold text-gray-950 dark:text-white">
                     {toast.title}
                   </Text>
                   {toast.description ? (
-                    <Text className="mt-1 text-sm text-gray-400">
+                    <Text className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                       {toast.description}
                     </Text>
                   ) : null}
@@ -153,9 +153,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
                 <Pressable
                   onPress={() => hide(toast.id)}
-                  className="ml-3 h-8 w-8 items-center justify-center rounded-full bg-black/5 dark:bg-white/5"
+                  className="ml-3 h-8 w-8 items-center justify-center rounded-full bg-gray-100 dark:bg-white/5"
                 >
-                  <Ionicons name="close" size={16} color="#9CA3AF" />
+                  <Ionicons
+                    name="close"
+                    size={16}
+                    color={isDark ? "#9CA3AF" : "#4B5563"}
+                  />
                 </Pressable>
               </View>
             </View>
