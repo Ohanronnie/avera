@@ -4,23 +4,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { OrderSource, OrderStatus } from '@prisma/client';
+import { OrderSource, OrderStatus } from 'src/generated/prisma/enums';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { WalletService } from 'src/wallet/wallet.service';
-
-type CreateOrderInput = {
-  productId?: number;
-  conversationId?: number;
-  offerMessageId?: number;
-  quantity?: number;
-  source?: 'buy_now' | 'offer' | OrderSource;
-  deliveryName?: string;
-  deliveryPhone?: string;
-  deliveryAddress?: string;
-  deliveryCity?: string;
-  deliveryState?: string;
-  deliveryCountry?: string;
-};
+import { CreateOrderDto } from './dto/create-order.dto';
 
 @Injectable()
 export class OrdersService {
@@ -99,6 +86,17 @@ export class OrdersService {
     return 'Payment held in escrow';
   }
 
+  private getReusableOrderStatuses(): OrderStatus[] {
+    return [
+      'PENDING_TRANSFER',
+      'PAID_IN_ESCROW',
+      'SELLER_PREPARING',
+      'SHIPPED',
+      'DELIVERED',
+      'DISPUTED',
+    ];
+  }
+
   private mapOrder(order: any, userId: number) {
     const isBuyer = order.buyerId === userId;
     const counterparty = isBuyer ? order.seller : order.buyer;
@@ -152,11 +150,18 @@ export class OrdersService {
     };
   }
 
-  async createOrder(userId: number, input: CreateOrderInput) {
+  async createOrder(userId: number, input: CreateOrderDto) {
     const productId = Number(input.productId);
     const quantity = Math.max(1, Number(input.quantity || 1));
+    const deliveryAddress = input.deliveryAddress?.trim();
 
     if (!productId) throw new BadRequestException('Product is required');
+    if (!deliveryAddress) {
+      throw new BadRequestException({
+        code: 'DELIVERY_ADDRESS_REQUIRED',
+        message: 'Delivery address is required',
+      });
+    }
 
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
@@ -238,6 +243,42 @@ export class OrdersService {
     const subtotal = unitPrice * orderQuantity;
     const escrowFee = Math.round(subtotal * 0.015);
     const totalAmount = subtotal + escrowFee;
+    const reusableOrder = await this.findReusableCheckout({
+      buyerId: userId,
+      sellerId: product.sellerId,
+      productId: product.id,
+      conversationId,
+      offerMessageId,
+      source,
+    });
+
+    if (reusableOrder) {
+      const order = await this.prisma.order.update({
+        where: { id: reusableOrder.id },
+        data: {
+          deliveryName:
+            input.deliveryName?.trim() || reusableOrder.deliveryName,
+          deliveryPhone:
+            input.deliveryPhone?.trim() || reusableOrder.deliveryPhone,
+          deliveryAddress,
+          deliveryCity:
+            input.deliveryCity?.trim() || reusableOrder.deliveryCity,
+          deliveryState:
+            input.deliveryState?.trim() || reusableOrder.deliveryState,
+          deliveryCountry:
+            input.deliveryCountry?.trim() || reusableOrder.deliveryCountry,
+        },
+        include: this.orderInclude,
+      });
+
+      return {
+        order: this.mapOrder(order, userId),
+        paymentAccount: await this.walletService.getPublicAccountForUser(
+          product.sellerId,
+        ),
+        existing: true,
+      };
+    }
 
     const order = await this.prisma.order.create({
       data: {
@@ -255,13 +296,119 @@ export class OrdersService {
         totalAmount,
         deliveryName: input.deliveryName?.trim() || null,
         deliveryPhone: input.deliveryPhone?.trim() || null,
-        deliveryAddress: input.deliveryAddress?.trim() || null,
+        deliveryAddress,
         deliveryCity: input.deliveryCity?.trim() || null,
         deliveryState: input.deliveryState?.trim() || null,
         deliveryCountry: input.deliveryCountry?.trim() || null,
       },
       include: this.orderInclude,
     });
+
+    return {
+      order: this.mapOrder(order, userId),
+      paymentAccount: await this.walletService.getPublicAccountForUser(
+        product.sellerId,
+      ),
+      existing: false,
+    };
+  }
+
+  private async findReusableCheckout(input: {
+    buyerId: number;
+    sellerId: number;
+    productId: number;
+    conversationId: number | null;
+    offerMessageId: number | null;
+    source: OrderSource;
+  }) {
+    const sourceFilter =
+      input.conversationId === null
+        ? {
+            source: input.source,
+            offerMessageId: input.offerMessageId,
+          }
+        : {};
+
+    return this.prisma.order.findFirst({
+      where: {
+        buyerId: input.buyerId,
+        sellerId: input.sellerId,
+        productId: input.productId,
+        conversationId: input.conversationId,
+        ...sourceFilter,
+        status: { in: this.getReusableOrderStatuses() },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async getCurrentCheckout(
+    userId: number,
+    input: {
+      productId?: number;
+      conversationId?: number;
+      offerMessageId?: number;
+      source?: string;
+    },
+  ) {
+    const productId = Number(input.productId);
+    if (!productId) throw new BadRequestException('Product is required');
+
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+      select: { id: true, sellerId: true },
+    });
+    if (!product) throw new NotFoundException('Product not found');
+
+    let buyerId = userId;
+    const conversationId = input.conversationId || null;
+    if (conversationId) {
+      const conversation = await this.prisma.conversation.findFirst({
+        where: {
+          id: conversationId,
+          productId,
+          OR: [{ buyerId: userId }, { sellerId: userId }],
+        },
+        select: {
+          buyerId: true,
+          sellerId: true,
+        },
+      });
+
+      if (!conversation) {
+        throw new ForbiddenException('Conversation unavailable for this order');
+      }
+
+      buyerId = conversation.buyerId;
+    }
+
+    const source: OrderSource =
+      input.source === 'offer' || input.source === 'OFFER'
+        ? 'OFFER'
+        : 'BUY_NOW';
+
+    const sourceFilter =
+      conversationId === null
+        ? {
+            source,
+            offerMessageId: input.offerMessageId || null,
+          }
+        : {};
+
+    const order = await this.prisma.order.findFirst({
+      where: {
+        buyerId,
+        sellerId: product.sellerId,
+        productId,
+        conversationId,
+        ...sourceFilter,
+        status: { in: this.getReusableOrderStatuses() },
+      },
+      orderBy: { createdAt: 'desc' },
+      include: this.orderInclude,
+    });
+
+    if (!order) return { order: null, paymentAccount: null };
 
     return {
       order: this.mapOrder(order, userId),
@@ -306,6 +453,61 @@ export class OrdersService {
 
     if (!order) throw new NotFoundException('Order not found');
     return this.mapOrder(order, userId);
+  }
+
+  async updateOrderStatus(orderId: number, userId: number, action?: string) {
+    const order = await this.prisma.order.findFirst({
+      where: {
+        id: orderId,
+        OR: [{ buyerId: userId }, { sellerId: userId }],
+      },
+      include: this.orderInclude,
+    });
+
+    if (!order) throw new NotFoundException('Order not found');
+
+    const normalizedAction = action?.trim().toLowerCase();
+    const isSeller = order.sellerId === userId;
+    const isBuyer = order.buyerId === userId;
+    let nextStatus: OrderStatus | null = null;
+
+    if (isSeller) {
+      const sellerTransitions: Record<string, OrderStatus> = {
+        prepare: 'SELLER_PREPARING',
+        ship: 'SHIPPED',
+        deliver: 'DELIVERED',
+      };
+      nextStatus = normalizedAction
+        ? sellerTransitions[normalizedAction] || null
+        : null;
+
+      const allowedFrom: Record<string, OrderStatus> = {
+        SELLER_PREPARING: 'PAID_IN_ESCROW',
+        SHIPPED: 'SELLER_PREPARING',
+        DELIVERED: 'SHIPPED',
+      };
+
+      if (!nextStatus || allowedFrom[nextStatus] !== order.status) {
+        throw new BadRequestException('This seller action is not available');
+      }
+    } else if (isBuyer) {
+      if (normalizedAction !== 'received' || order.status !== 'DELIVERED') {
+        throw new BadRequestException('This buyer action is not available');
+      }
+      nextStatus = 'COMPLETED';
+    }
+
+    if (!nextStatus) {
+      throw new ForbiddenException('Order action unavailable');
+    }
+
+    const updatedOrder = await this.prisma.order.update({
+      where: { id: order.id },
+      data: { status: nextStatus },
+      include: this.orderInclude,
+    });
+
+    return this.mapOrder(updatedOrder, userId);
   }
 
   async confirmMockTransferForSeller(sellerId: number, amount: number) {

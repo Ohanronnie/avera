@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useColorScheme } from "nativewind";
@@ -42,16 +42,23 @@ export default function CheckoutReviewScreen() {
     bankName: string;
   } | null>(null);
   const [creatingOrder, setCreatingOrder] = useState(false);
+  const [payingOrder, setPayingOrder] = useState(false);
+  const [autofillingDelivery, setAutofillingDelivery] = useState(false);
   const [createdOrder, setCreatedOrder] = useState<{
     id: number;
     code: string;
     statusText: string;
     totalAmount: number;
   } | null>(null);
+  const [deliveryName, setDeliveryName] = useState("");
   const [deliveryPhone, setDeliveryPhone] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [deliveryCity, setDeliveryCity] = useState("");
   const [deliveryState, setDeliveryState] = useState("");
+  const [deliveryAddressError, setDeliveryAddressError] = useState<
+    string | null
+  >(null);
+  const reviewStatusSentRef = useRef(false);
   const params = useLocalSearchParams<{
     productId?: string;
     sellerId?: string;
@@ -75,47 +82,184 @@ export default function CheckoutReviewScreen() {
   const escrowFee = Math.round(subtotal * 0.015);
   const total = subtotal + escrowFee;
   const isOfferCheckout = params.source === "offer";
-  const transferUrl = sellerAccount
-    ? `${BASE_URL}/send-money/${sellerAccount.accountNumber}/${total}`
-    : null;
+  const isOrderPaid = createdOrder?.statusText === "Paid in escrow";
+  const paymentReference = createdOrder?.code || null;
+  const paymentAmount = createdOrder?.totalAmount || total;
+  const transferUrl =
+    sellerAccount && paymentReference
+      ? `${BASE_URL}/send-money/${sellerAccount.accountNumber}/${paymentAmount}?reference=${encodeURIComponent(paymentReference)}`
+      : sellerAccount
+        ? `${BASE_URL}/send-money/${sellerAccount.accountNumber}/${paymentAmount}`
+        : null;
 
-  useEffect(() => {
-    let isMounted = true;
+  const getStatusText = (status?: string | null) => {
+    if (status === "PAID_IN_ESCROW") return "Paid in escrow";
+    if (status === "PENDING_TRANSFER") return "Pending transfer";
+    return createdOrder?.statusText || "Order updated";
+  };
 
-    const loadSellerAccount = async () => {
-      if (!params.sellerId) return;
+  const notifySeller = async (content: string) => {
+    if (!params.conversationId) return;
 
-      try {
-        const { data } = await axiosInstance.get(
-          `/wallet/users/${params.sellerId}/account`,
-        );
-        if (isMounted) setSellerAccount(data);
-      } catch {
-        if (isMounted) setSellerAccount(null);
-      }
-    };
+    try {
+      await axiosInstance.post(
+        `/chat/conversations/${params.conversationId}/messages`,
+        { content },
+      );
+    } catch {
+      // This is a status hint for the seller; checkout should continue if it fails.
+    }
+  };
 
-    loadSellerAccount();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [params.sellerId]);
-
-  const createOrder = async () => {
-    if (createdOrder) {
+  const fillDeliveryFromProfile = async () => {
+    try {
+      setAutofillingDelivery(true);
+      const { data } = await axiosInstance.get("/users/me");
+      const fullName =
+        data.fullName ||
+        [data.firstName, data.lastName].filter(Boolean).join(" ");
+      setDeliveryName(fullName || "");
+      setDeliveryPhone(data.phoneNumber || "");
+      setDeliveryAddress(data.location?.address || "");
+      setDeliveryCity(data.location?.city || "");
+      setDeliveryState(data.location?.state || "");
       toast.show({
-        title: "Mock payment route",
-        description: transferUrl || "Seller virtual account is still loading.",
+        title: fullName ? `Filled for ${fullName}` : "Delivery filled",
+        description: "Review the address before creating the order.",
+        variant: "success",
+      });
+    } catch {
+      toast.show({
+        title: "Couldn't autofill",
+        description:
+          "Complete your profile details or enter delivery manually.",
+        variant: "error",
+      });
+    } finally {
+      setAutofillingDelivery(false);
+    }
+  };
+
+  const payCreatedOrder = async () => {
+    if (!sellerAccount || !createdOrder) {
+      toast.show({
+        title: "Create order first",
+        description: "The payment reference is created with the order.",
         variant: "info",
       });
       return;
     }
 
+    try {
+      setPayingOrder(true);
+      const { data } = await axiosInstance.get(
+        `/send-money/${sellerAccount.accountNumber}/${createdOrder.totalAmount}`,
+        {
+          params: { reference: createdOrder.code },
+        },
+      );
+
+      setCreatedOrder((current) =>
+        current
+          ? {
+              ...current,
+              statusText: getStatusText(data.orderStatus),
+            }
+          : current,
+      );
+      toast.show({
+        title: "Payment confirmed",
+        description: `${createdOrder.code} is now tracked as paid in escrow.`,
+        variant: "success",
+      });
+      notifySeller(
+        `Checkout status: Payment confirmed for ${createdOrder.code}.`,
+      );
+    } catch (error: any) {
+      toast.show({
+        title: "Payment failed",
+        description:
+          error?.response?.data?.message ||
+          "The dev transfer route could not confirm this order.",
+        variant: "error",
+      });
+    } finally {
+      setPayingOrder(false);
+    }
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadCurrentCheckout = async () => {
+      if (!params.productId) return;
+
+      try {
+        const { data } = await axiosInstance.get("/orders/checkout/current", {
+          params: {
+            productId: Number(params.productId),
+            conversationId: params.conversationId
+              ? Number(params.conversationId)
+              : undefined,
+            offerMessageId: params.offerMessageId
+              ? Number(params.offerMessageId)
+              : undefined,
+            source: isOfferCheckout ? "offer" : "buy_now",
+          },
+        });
+        if (!isMounted || !data.order) return;
+
+        setCreatedOrder(data.order);
+        setSellerAccount(data.paymentAccount);
+        setDeliveryName(data.order.delivery?.name || "");
+        setDeliveryPhone(data.order.delivery?.phone || "");
+        setDeliveryAddress(data.order.delivery?.address || "");
+        setDeliveryCity(data.order.delivery?.city || "");
+        setDeliveryState(data.order.delivery?.state || "");
+      } catch {
+        if (isMounted) {
+          setCreatedOrder(null);
+          setSellerAccount(null);
+        }
+      }
+    };
+
+    loadCurrentCheckout();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    isOfferCheckout,
+    params.conversationId,
+    params.offerMessageId,
+    params.productId,
+  ]);
+
+  useEffect(() => {
+    if (reviewStatusSentRef.current || !params.conversationId) return;
+
+    reviewStatusSentRef.current = true;
+    notifySeller("Checkout status: Buyer is reviewing the order.");
+  }, [params.conversationId]);
+
+  const createOrder = async () => {
+    if (createdOrder) return payCreatedOrder();
+
     if (!params.productId) return;
+    if (!deliveryAddress.trim()) {
+      setDeliveryAddressError("Delivery address is required");
+      toast.show({
+        title: "Delivery address required",
+        description: "Add where the seller should send the order.",
+        variant: "error",
+      });
+      return;
+    }
 
     try {
       setCreatingOrder(true);
+      setDeliveryAddressError(null);
       const { data } = await axiosInstance.post("/orders", {
         productId: Number(params.productId),
         conversationId: params.conversationId
@@ -126,6 +270,7 @@ export default function CheckoutReviewScreen() {
           : undefined,
         quantity,
         source: isOfferCheckout ? "offer" : "buy_now",
+        deliveryName: deliveryName.trim() || undefined,
         deliveryPhone: deliveryPhone.trim() || undefined,
         deliveryAddress: deliveryAddress.trim() || undefined,
         deliveryCity: deliveryCity.trim() || undefined,
@@ -136,10 +281,11 @@ export default function CheckoutReviewScreen() {
       setCreatedOrder(data.order);
       setSellerAccount(data.paymentAccount);
       toast.show({
-        title: "Order created",
+        title: data.existing ? "Checkout resumed" : "Order ready",
         description: "Transfer the exact total to lock payment in escrow.",
         variant: "success",
       });
+      notifySeller(`Checkout status: Buyer is paying for ${data.order.code}.`);
     } catch (error: any) {
       toast.show({
         title: "Order unavailable",
@@ -151,14 +297,6 @@ export default function CheckoutReviewScreen() {
     } finally {
       setCreatingOrder(false);
     }
-  };
-
-  const showTransferRoute = () => {
-    toast.show({
-      title: "Mock payment route",
-      description: transferUrl || "Seller virtual account is still loading.",
-      variant: "info",
-    });
   };
 
   return (
@@ -272,55 +410,69 @@ export default function CheckoutReviewScreen() {
                   Transfer to seller escrow account
                 </Text>
                 <Text className="mt-1 text-sm leading-5 text-gray-500 dark:text-gray-400">
-                  For now this is a mock transfer. Opening the test route will
-                  simulate a webhook and lock the money for this seller.
+                  {createdOrder
+                    ? "For now this is a mock transfer. Opening the test route will simulate a webhook and lock the money for this seller."
+                    : "Bank details unlock after you confirm the delivery address and start payment."}
                 </Text>
               </View>
             </View>
 
-            <View className="mt-4 rounded-2xl bg-gray-50 dark:bg-white/5">
-              {[
-                { label: "Bank", value: sellerAccount?.bankName || "Loading" },
-                {
-                  label: "Account name",
-                  value: sellerAccount?.accountName || sellerName,
-                },
-                {
-                  label: "Account number",
-                  value: sellerAccount?.accountNumber || "Generating",
-                },
-                { label: "Amount", value: formatPrice(total) },
-              ].map((item, index) => (
-                <View
-                  key={item.label}
-                  className={`px-4 py-3 ${
-                    index !== 3
-                      ? "border-b border-gray-100 dark:border-white/5"
-                      : ""
-                  }`}
-                >
-                  <Text className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                    {item.label}
-                  </Text>
-                  <Text className="mt-1 text-sm font-bold text-gray-950 dark:text-white">
-                    {item.value}
-                  </Text>
-                </View>
-              ))}
-            </View>
+            {createdOrder ? (
+              <View className="mt-4 rounded-2xl bg-gray-50 dark:bg-white/5">
+                {[
+                  {
+                    label: "Bank",
+                    value: sellerAccount?.bankName || "Loading",
+                  },
+                  {
+                    label: "Account name",
+                    value: sellerAccount?.accountName || sellerName,
+                  },
+                  {
+                    label: "Account number",
+                    value: sellerAccount?.accountNumber || "Generating",
+                  },
+                  { label: "Reference", value: createdOrder.code },
+                  {
+                    label: "Amount",
+                    value: formatPrice(createdOrder.totalAmount),
+                  },
+                ].map((item, index, items) => (
+                  <View
+                    key={item.label}
+                    className={`px-4 py-3 ${
+                      index !== items.length - 1
+                        ? "border-b border-gray-100 dark:border-white/5"
+                        : ""
+                    }`}
+                  >
+                    <Text className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                      {item.label}
+                    </Text>
+                    <Text className="mt-1 text-sm font-bold text-gray-950 dark:text-white">
+                      {item.value}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
 
-            {transferUrl ? (
-              <View className="mt-4 rounded-2xl border border-dashed border-brand/30 bg-brand/5 p-3">
+            {transferUrl && createdOrder ? (
+              <Pressable
+                onPress={payCreatedOrder}
+                disabled={payingOrder || isOrderPaid}
+                className="mt-4 rounded-2xl border border-dashed border-brand/30 bg-brand/5 p-3"
+              >
                 <Text
                   variant="none"
                   className="text-[10px] font-black uppercase tracking-widest text-brand"
                 >
-                  Dev transfer route
+                  Dev transfer route with reference
                 </Text>
                 <Text className="mt-2 text-xs font-semibold leading-5 text-gray-600 dark:text-gray-300">
                   {transferUrl}
                 </Text>
-              </View>
+              </Pressable>
             ) : null}
           </View>
 
@@ -338,13 +490,53 @@ export default function CheckoutReviewScreen() {
                 </Text>
               </View>
             </View>
+            <Pressable
+              onPress={fillDeliveryFromProfile}
+              disabled={autofillingDelivery}
+              className="mb-3 h-11 flex-row items-center justify-center rounded-2xl border border-gray-100 bg-gray-50 dark:border-white/10 dark:bg-white/5"
+            >
+              {autofillingDelivery ? (
+                <ActivityIndicator color="#2563EB" size="small" />
+              ) : (
+                <>
+                  <Ionicons name="sparkles-outline" size={16} color="#2563EB" />
+                  <Text
+                    variant="none"
+                    className="ml-2 text-sm font-bold text-brand"
+                  >
+                    Autofill from profile
+                  </Text>
+                </>
+              )}
+            </Pressable>
             <TextInput
-              value={deliveryAddress}
-              onChangeText={setDeliveryAddress}
-              placeholder="Delivery address"
+              value={deliveryName}
+              onChangeText={setDeliveryName}
+              placeholder="Recipient name"
               placeholderTextColor="#9CA3AF"
               className="mb-3 h-14 rounded-2xl border border-gray-100 bg-gray-50 px-4 text-base text-gray-950 dark:border-white/10 dark:bg-white/5 dark:text-white"
             />
+            <TextInput
+              value={deliveryAddress}
+              onChangeText={(value) => {
+                setDeliveryAddress(value);
+                if (value.trim()) setDeliveryAddressError(null);
+              }}
+              placeholder="Delivery address"
+              placeholderTextColor="#9CA3AF"
+              className={`h-14 rounded-2xl border bg-gray-50 px-4 text-base text-gray-950 dark:bg-white/5 dark:text-white ${
+                deliveryAddressError
+                  ? "border-red-500"
+                  : "border-gray-100 dark:border-white/10"
+              }`}
+            />
+            {deliveryAddressError ? (
+              <Text className="mb-3 mt-1 text-sm font-semibold text-red-500">
+                {deliveryAddressError}
+              </Text>
+            ) : (
+              <View className="mb-3" />
+            )}
             <View className="mb-3 flex-row gap-3">
               <TextInput
                 value={deliveryCity}
@@ -383,8 +575,9 @@ export default function CheckoutReviewScreen() {
                 {createdOrder.code}
               </Text>
               <Text className="mt-1 text-sm font-semibold text-gray-600 dark:text-gray-300">
-                {createdOrder.statusText}. Transfer the exact total to simulate
-                payment confirmation.
+                {isOrderPaid
+                  ? "Payment is confirmed and held in escrow."
+                  : `${createdOrder.statusText}. Transfer the exact total to simulate payment confirmation.`}
               </Text>
             </View>
           ) : null}
@@ -411,7 +604,10 @@ export default function CheckoutReviewScreen() {
               { label: "Quantity", value: `x${quantity}` },
               { label: "Subtotal", value: formatPrice(subtotal) },
               { label: "Escrow fee", value: formatPrice(escrowFee) },
-              { label: "Delivery", value: "Choose later" },
+              {
+                label: "Delivery",
+                value: deliveryAddress.trim() ? "Address added" : "Required",
+              },
             ].map((item) => (
               <View
                 key={item.label}
@@ -441,15 +637,21 @@ export default function CheckoutReviewScreen() {
 
       <View className="border-t border-gray-100 bg-white px-5 pb-6 pt-4 dark:border-white/5 dark:bg-[#0A0A0A]">
         <Pressable
-          onPress={createdOrder ? showTransferRoute : createOrder}
-          disabled={creatingOrder}
-          className="h-14 items-center justify-center rounded-2xl bg-brand"
+          onPress={createdOrder ? payCreatedOrder : createOrder}
+          disabled={creatingOrder || payingOrder || isOrderPaid}
+          className={`h-14 items-center justify-center rounded-2xl ${
+            isOrderPaid ? "bg-emerald-500" : "bg-brand"
+          }`}
         >
-          {creatingOrder ? (
+          {creatingOrder || payingOrder ? (
             <ActivityIndicator color="white" />
           ) : (
             <Text variant="none" className="text-base font-bold text-white">
-              {createdOrder ? "Show mock transfer route" : "Create order"}
+              {isOrderPaid
+                ? "Payment confirmed"
+                : createdOrder
+                  ? "Pay with dev transfer"
+                  : "Pay now"}
             </Text>
           )}
         </Pressable>

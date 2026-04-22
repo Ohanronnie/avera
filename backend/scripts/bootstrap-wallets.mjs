@@ -1,6 +1,22 @@
-import { PrismaClient } from '@prisma/client';
+import { config as loadEnv } from 'dotenv';
+import { createRequire } from 'node:module';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { PrismaPg } from '@prisma/adapter-pg';
 
-const prisma = new PrismaClient();
+const __dirname = dirname(fileURLToPath(import.meta.url));
+loadEnv({ path: resolve(__dirname, '../.env'), quiet: true });
+
+const require = createRequire(import.meta.url);
+const { PrismaClient } = require('../dist/src/generated/prisma/client.js');
+const schema = new URL(process.env.DATABASE_URL).searchParams.get('schema');
+const adapter = new PrismaPg(
+  {
+    connectionString: process.env.DATABASE_URL,
+  },
+  schema ? { schema } : undefined,
+);
+const prisma = new PrismaClient({ adapter });
 const BANK_NAME = 'Avera Test Bank';
 
 const displayNameFor = (user) => {

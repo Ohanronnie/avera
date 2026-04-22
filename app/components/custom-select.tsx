@@ -127,13 +127,13 @@ export function CustomSelect({
             style={{ zIndex: 999, elevation: 5, maxHeight: dropdownMaxHeight }}
           >
             {searchable && (
-              <View className="px-4 py-2 border-b border-gray-50 dark:border-white/5">
+              <View className="border-b border-gray-50 px-2 py-2 dark:border-white/5">
                 <TextInput
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                   placeholder={searchPlaceholder}
                   placeholderTextColor="#6B7280"
-                  className="h-10 text-sm text-black dark:text-white"
+                  className="h-10 rounded-xl border border-gray-100 bg-gray-50 px-3 text-sm text-black dark:border-white/10 dark:bg-white/5 dark:text-white"
                 />
               </View>
             )}

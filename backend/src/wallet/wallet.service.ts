@@ -15,10 +15,22 @@ export class WalletService {
     username?: string | null;
     firstName?: string | null;
     lastName?: string | null;
-    email?: string | null;
   }) {
     const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ');
-    return fullName || user.username || user.email || 'Avera User';
+    return fullName || user.username || 'Avera User';
+  }
+
+  private assertCanCreateWalletAccount(user: {
+    firstName?: string | null;
+    lastName?: string | null;
+    username?: string | null;
+  }) {
+    if (!user.firstName || !user.lastName || !user.username) {
+      throw new BadRequestException({
+        code: 'PROFILE_INFO_REQUIRED',
+        message: 'Complete your profile before creating a wallet bank account.',
+      });
+    }
   }
 
   private mapWallet(wallet: any) {
@@ -66,11 +78,6 @@ export class WalletService {
   }
 
   async ensureWalletForUser(userId: number) {
-    const existingWallet = await this.prisma.wallet.findUnique({
-      where: { userId },
-    });
-    if (existingWallet) return existingWallet;
-
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -83,15 +90,38 @@ export class WalletService {
     });
 
     if (!user) throw new NotFoundException('User not found');
+    this.assertCanCreateWalletAccount(user);
 
-    return this.prisma.wallet.create({
-      data: {
-        userId: user.id,
-        accountName: this.getDisplayName(user),
-        accountNumber: await this.generateAccountNumber(),
-        bankName: BANK_NAME,
-      },
-    });
+    const accountName = this.getDisplayName(user);
+
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      try {
+        return await this.prisma.wallet.upsert({
+          where: { userId },
+          update: {
+            accountName,
+            bankName: BANK_NAME,
+          },
+          create: {
+            userId: user.id,
+            accountName,
+            accountNumber: await this.generateAccountNumber(),
+            bankName: BANK_NAME,
+          },
+        });
+      } catch (error: any) {
+        if (error?.code !== 'P2002') {
+          throw error;
+        }
+
+        const wallet = await this.prisma.wallet.findUnique({
+          where: { userId },
+        });
+        if (wallet) return wallet;
+      }
+    }
+
+    throw new BadRequestException('Unable to create wallet');
   }
 
   async getWalletForUser(userId: number) {
@@ -155,7 +185,11 @@ export class WalletService {
     };
   }
 
-  async sendMoneyToAccount(accountNumber: string, amount: number) {
+  async sendMoneyToAccount(
+    accountNumber: string,
+    amount: number,
+    reference?: string,
+  ) {
     if (!/^\d{10}$/.test(accountNumber)) {
       throw new BadRequestException('Account number must be 10 digits');
     }
@@ -168,7 +202,29 @@ export class WalletService {
     });
     if (!wallet) throw new NotFoundException('Wallet account not found');
 
-    const reference = `mock-transfer-${Date.now()}-${Math.round(
+    const matchedOrder = await this.findMockTransferOrder(
+      wallet.userId,
+      amount,
+      reference,
+    );
+    if (matchedOrder && matchedOrder.status !== 'PENDING_TRANSFER') {
+      return {
+        success: true,
+        message: 'Referenced order is already paid',
+        accountNumber,
+        accountName: wallet.accountName,
+        bankName: wallet.bankName,
+        amount,
+        balance: Number(wallet.balance),
+        lockedBalance: Number(wallet.lockedBalance),
+        reference: null,
+        paymentReference: reference || null,
+        orderId: matchedOrder.id,
+        orderStatus: matchedOrder.status,
+      };
+    }
+
+    const transactionReference = `mock-transfer-${reference || Date.now()}-${Math.round(
       Math.random() * 100000,
     )}`;
 
@@ -184,24 +240,30 @@ export class WalletService {
           type: 'CREDIT',
           amount,
           description: 'Mock escrow transfer received',
-          reference,
+          reference: transactionReference,
           counterparty: 'Mock transfer route',
           simulated: true,
         },
       });
 
-      return { updatedWallet, transaction };
-    });
+      const paidOrder =
+        matchedOrder?.status === 'PENDING_TRANSFER'
+          ? await tx.order.update({
+              where: { id: matchedOrder.id },
+              data: {
+                status: 'PAID_IN_ESCROW',
+                paidAt: new Date(),
+              },
+            })
+          : matchedOrder;
 
-    const matchedOrder = await this.confirmMockTransferForSeller(
-      wallet.userId,
-      amount,
-    );
+      return { updatedWallet, transaction, paidOrder };
+    });
 
     return {
       success: true,
-      message: matchedOrder
-        ? 'Mock transfer received and matching order marked paid'
+      message: result.paidOrder
+        ? 'Mock transfer received and order marked paid'
         : 'Mock transfer received',
       accountNumber,
       accountName: result.updatedWallet.accountName,
@@ -210,29 +272,55 @@ export class WalletService {
       balance: Number(result.updatedWallet.balance),
       lockedBalance: Number(result.updatedWallet.lockedBalance),
       reference: result.transaction.reference,
-      orderId: matchedOrder?.id || null,
-      orderStatus: matchedOrder?.status || null,
+      paymentReference: reference || null,
+      orderId: result.paidOrder?.id || null,
+      orderStatus: result.paidOrder?.status || null,
     };
   }
 
-  private async confirmMockTransferForSeller(sellerId: number, amount: number) {
-    const order = await this.prisma.order.findFirst({
+  private getOrderIdFromPaymentReference(reference?: string) {
+    if (!reference) return null;
+
+    const match = reference.trim().match(/^AV-0*(\d+)$/i);
+    if (!match) {
+      throw new BadRequestException('Invalid payment reference');
+    }
+
+    return Number(match[1]);
+  }
+
+  private async findMockTransferOrder(
+    sellerId: number,
+    amount: number,
+    reference?: string,
+  ) {
+    const orderId = this.getOrderIdFromPaymentReference(reference);
+
+    if (orderId) {
+      const order = await this.prisma.order.findFirst({
+        where: {
+          id: orderId,
+          sellerId,
+        },
+      });
+
+      if (!order) throw new NotFoundException('Referenced order not found');
+      if (Number(order.totalAmount) !== amount) {
+        throw new BadRequestException(
+          'Transfer amount does not match referenced order',
+        );
+      }
+
+      return order;
+    }
+
+    return this.prisma.order.findFirst({
       where: {
         sellerId,
         status: 'PENDING_TRANSFER',
         totalAmount: amount,
       },
       orderBy: { createdAt: 'asc' },
-    });
-
-    if (!order) return null;
-
-    return this.prisma.order.update({
-      where: { id: order.id },
-      data: {
-        status: 'PAID_IN_ESCROW',
-        paidAt: new Date(),
-      },
     });
   }
 }

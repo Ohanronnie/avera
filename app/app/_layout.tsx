@@ -22,6 +22,8 @@ function RootNavigator() {
       <Stack.Screen name="product-details" />
       <Stack.Screen name="wallet-asset/[symbol]" />
       <Stack.Screen name="messages" />
+      <Stack.Screen name="order" />
+      <Stack.Screen name="profile" />
       <Stack.Screen name="seller" />
       <Stack.Screen name="seller-listings" />
       <Stack.Screen name="wallet-quote" />

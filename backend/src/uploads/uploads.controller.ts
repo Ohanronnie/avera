@@ -7,16 +7,14 @@ import {
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { fileTypeFromBuffer } from 'file-type';
-import * as fs from 'fs/promises';
 import { memoryStorage } from 'multer';
 import * as path from 'path';
-import { UploadsService } from './uploads.service';
+import { R2StorageService } from 'src/storage/r2-storage.service';
 
 @Controller('uploads')
 export class UploadsController {
-  constructor(private readonly uploadsService: UploadsService) {}
+  constructor(private readonly r2StorageService: R2StorageService) {}
 
-  private readonly uploadsDir = path.resolve(process.cwd(), 'uploads');
   private readonly maxImageSize = 5 * 1024 * 1024;
 
   @Post('images')
@@ -32,8 +30,6 @@ export class UploadsController {
     if (!files?.length) {
       throw new BadRequestException('No files uploaded');
     }
-
-    await fs.mkdir(this.uploadsDir, { recursive: true });
 
     const savedFiles = await Promise.all(
       files.map(async (file) => {
@@ -60,9 +56,15 @@ export class UploadsController {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
         const filename = `${uniqueSuffix}-${safeBaseName}.${detectedType.ext}`;
 
-        await fs.writeFile(path.join(this.uploadsDir, filename), file.buffer);
+        const imageUrl = await this.r2StorageService.uploadImage({
+          key: filename,
+          buffer: file.buffer,
+          contentType: detectedType.mime,
+        });
 
-        return { path: filename };
+        return {
+          path: imageUrl,
+        };
       }),
     );
 

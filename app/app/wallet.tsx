@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Pressable, ScrollView, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { Text } from "@/components/themed/theme";
@@ -16,6 +17,7 @@ import { axiosInstance } from "@/utils/axios";
 
 export default function WalletScreen() {
   const [wallet, setWallet] = useState<any>(null);
+  const [walletErrorCode, setWalletErrorCode] = useState<string | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState("");
@@ -36,13 +38,18 @@ export default function WalletScreen() {
 
   const load = async () => {
     try {
+      setWalletErrorCode(null);
       const [w, t] = await Promise.all([
         axiosInstance.get("/wallet"),
         axiosInstance.get("/wallet/transactions"),
       ]);
       setWallet(w.data);
       setTransactions(t.data);
-    } catch {}
+    } catch (error: any) {
+      setWallet(null);
+      setTransactions([]);
+      setWalletErrorCode(error?.response?.data?.code || "WALLET_UNAVAILABLE");
+    }
   };
 
   const handleWithdraw = async () => {
@@ -78,9 +85,10 @@ export default function WalletScreen() {
   const activityFeed = transactions.length ? transactions : fallbackActivity;
   const nairaBalance = wallet?.nairaBalance ?? 0;
   const lockedBalance = wallet?.lockedBalance ?? 0;
-  const accountName = wallet?.accountName || "Avera Technologies Ltd";
-  const accountNumber = wallet?.accountNumber || "Generating";
-  const bankName = wallet?.bankName || "Avera Test Bank";
+  const accountName = wallet?.accountName || "";
+  const accountNumber = wallet?.accountNumber || "";
+  const bankName = wallet?.bankName || "";
+  const needsProfileInfo = walletErrorCode === "PROFILE_INFO_REQUIRED";
 
   const handleReceiveCrypto = () => {
     toast.show({
@@ -91,6 +99,8 @@ export default function WalletScreen() {
   };
 
   const handleCopyAccount = () => {
+    if (!accountNumber) return;
+
     toast.show({
       title: "Copied",
       description: accountNumber,
@@ -150,42 +160,72 @@ export default function WalletScreen() {
             />
           ) : (
             <>
-              <NairaWalletContent
-                nairaBalance={nairaBalance}
-                accountName={accountName}
-                accountNumber={accountNumber}
-                bankName={bankName}
-                onShowWithdraw={() => setWalletSheet("naira-send")}
-                onReceive={() => setWalletSheet("naira-receive")}
-                onCopyAccount={handleCopyAccount}
-              />
-              <View className="mt-5 rounded-3xl border border-gray-100 bg-gray-50 p-5 dark:border-white/5 dark:bg-[#101113]">
-                <View className="flex-row items-center justify-between">
-                  <View>
-                    <Text className="text-xs font-bold uppercase tracking-widest text-gray-500">
-                      Locked escrow
-                    </Text>
-                    <Text className="mt-2 text-2xl font-black text-gray-950 dark:text-white">
-                      ₦
-                      {Number(lockedBalance).toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                    </Text>
-                  </View>
-                  <View className="h-12 w-12 items-center justify-center rounded-2xl bg-brand/10">
+              {needsProfileInfo ? (
+                <View className="mt-6 rounded-3xl border border-gray-100 bg-gray-50 p-5 dark:border-white/5 dark:bg-[#121214]">
+                  <View className="h-14 w-14 items-center justify-center rounded-2xl bg-brand/10">
                     <Ionicons
-                      name="lock-closed-outline"
-                      size={22}
+                      name="person-circle-outline"
+                      size={28}
                       color="#2563EB"
                     />
                   </View>
+                  <Text className="mt-5 text-2xl font-black text-gray-950 dark:text-white">
+                    Complete your profile
+                  </Text>
+                  <Text className="mt-2 text-sm leading-5 text-gray-500 dark:text-gray-400">
+                    Your Naira bank wallet will be created after your name and
+                    username are set, so the account name is correct.
+                  </Text>
+                  <Pressable
+                    onPress={() => router.push("/profile/edit")}
+                    className="mt-6 h-14 flex-row items-center justify-center rounded-full bg-brand"
+                  >
+                    <Ionicons name="create-outline" size={18} color="#FFFFFF" />
+                    <Text variant="none" className="ml-2 font-bold text-white">
+                      Edit Profile
+                    </Text>
+                  </Pressable>
                 </View>
-                <Text className="mt-3 text-sm leading-5 text-gray-500 dark:text-gray-400">
-                  Mock transfer payments land here until buyer confirmation and
-                  release flows are added.
-                </Text>
-              </View>
+              ) : (
+                <>
+                  <NairaWalletContent
+                    nairaBalance={nairaBalance}
+                    accountName={accountName}
+                    accountNumber={accountNumber || "Generating"}
+                    bankName={bankName || "Avera Test Bank"}
+                    onShowWithdraw={() => setWalletSheet("naira-send")}
+                    onReceive={() => setWalletSheet("naira-receive")}
+                    onCopyAccount={handleCopyAccount}
+                  />
+                  <View className="mt-5 rounded-3xl border border-gray-100 bg-gray-50 p-5 dark:border-white/5 dark:bg-[#101113]">
+                    <View className="flex-row items-center justify-between">
+                      <View>
+                        <Text className="text-xs font-bold uppercase tracking-widest text-gray-500">
+                          Locked escrow
+                        </Text>
+                        <Text className="mt-2 text-2xl font-black text-gray-950 dark:text-white">
+                          ₦
+                          {Number(lockedBalance).toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </Text>
+                      </View>
+                      <View className="h-12 w-12 items-center justify-center rounded-2xl bg-brand/10">
+                        <Ionicons
+                          name="lock-closed-outline"
+                          size={22}
+                          color="#2563EB"
+                        />
+                      </View>
+                    </View>
+                    <Text className="mt-3 text-sm leading-5 text-gray-500 dark:text-gray-400">
+                      Mock transfer payments land here until buyer confirmation
+                      and release flows are added.
+                    </Text>
+                  </View>
+                </>
+              )}
             </>
           )}
 

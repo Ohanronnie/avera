@@ -1,15 +1,15 @@
 import { Controller, Get, Param, Res, NotFoundException } from '@nestjs/common';
 import type { Response } from 'express';
-import { MediaService } from './media.service';
 import * as fs from 'fs';
 import * as path from 'path';
 import { lookup } from 'mime-types';
+import { MediaService } from './media.service';
 
 @Controller('media')
 export class MediaController {
   constructor(private readonly mediaService: MediaService) {}
 
-  // Directory containing uploaded files (root-relative)
+  // Directory containing legacy local uploaded files (root-relative).
   private readonly uploadsDir = path.resolve(process.cwd(), 'uploads');
 
   // Allow only safe filenames: letters, numbers, dot, dash, underscore.
@@ -30,15 +30,13 @@ export class MediaController {
       throw new NotFoundException();
     }
 
-    const filePath = path.join(this.uploadsDir, filename);
-
     try {
+      const filePath = path.join(this.uploadsDir, filename);
       const stats = await fs.promises.stat(filePath);
       if (!stats.isFile()) throw new NotFoundException();
 
       const mimeType = lookup(filePath) || 'application/octet-stream';
 
-      // Strong caching for static uploaded assets. Long max-age + immutable.
       res.setHeader('Content-Type', mimeType as string);
       res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
 

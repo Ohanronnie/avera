@@ -106,7 +106,9 @@ export class AuthController {
       if (!username || typeof username !== 'string') {
         throw new BadRequestException('Username is required');
       }
+     //! await new Promise((resolve) => setTimeout(resolve, 5000));
       const available = await this.authService.isUsernameAvailable(username);
+      // throw new BadRequestException('Username is already taken')
       return available;
     } catch (error) {
       this.handleError(error);

@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useColorScheme } from "nativewind";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Gallery from "react-native-awesome-gallery";
@@ -155,6 +155,12 @@ export default function MessageDetailsScreen() {
   const [viewingImageIndex, setViewingImageIndex] = useState(0);
   const [counterpartOnline, setCounterpartOnline] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [checkoutOrder, setCheckoutOrder] = useState<{
+    id?: number;
+    code?: string;
+    status?: string;
+    statusText?: string;
+  } | null>(null);
   const params = useLocalSearchParams<{
     id?: string;
   }>();
@@ -232,6 +238,73 @@ export default function MessageDetailsScreen() {
           (item.offerStatus || "PENDING") === "PENDING",
       );
   }, [currentUserId, messages]);
+  const acceptedOfferForCheckout = useMemo(() => {
+    if (isSeller) return null;
+
+    return (
+      messages
+        .slice()
+        .reverse()
+        .find(
+          (item) =>
+            Boolean(item.offerAmount) &&
+            isSameUserId(item.senderId, currentUserId) &&
+            item.offerStatus === "ACCEPTED",
+        ) || null
+    );
+  }, [currentUserId, isSeller, messages]);
+  const acceptedOfferQuantity = Number(
+    acceptedOfferForCheckout?.offerQuantity || 1,
+  );
+  const acceptedOfferUnitPrice = Number(
+    acceptedOfferForCheckout?.offerAmount || 0,
+  );
+  const acceptedOfferTotal = acceptedOfferUnitPrice * acceptedOfferQuantity;
+  const latestCheckoutStatus = useMemo(() => {
+    const statusMessage = messages
+      .slice()
+      .reverse()
+      .find((item) => item.content.startsWith("Checkout status:"));
+
+    return (
+      statusMessage?.content.replace("Checkout status:", "").trim() || null
+    );
+  }, [messages]);
+  const liveCheckoutStatus = useMemo(() => {
+    const code = checkoutOrder?.code || "this order";
+
+    if (checkoutOrder?.status === "PENDING_TRANSFER") {
+      return `Buyer is paying for ${code}.`;
+    }
+    if (checkoutOrder?.status === "PAID_IN_ESCROW") {
+      return `Payment confirmed for ${code}.`;
+    }
+    if (checkoutOrder?.status === "SELLER_PREPARING") {
+      return `${code} is being prepared.`;
+    }
+    if (checkoutOrder?.status === "SHIPPED") {
+      return `${code} has shipped.`;
+    }
+    if (checkoutOrder?.status === "DELIVERED") {
+      return `${code} is waiting for buyer confirmation.`;
+    }
+    if (checkoutOrder?.status === "COMPLETED") {
+      return `${code} is complete.`;
+    }
+
+    return latestCheckoutStatus;
+  }, [checkoutOrder?.code, checkoutOrder?.status, latestCheckoutStatus]);
+  const acceptedOfferPaid =
+    Boolean(acceptedOfferForCheckout) &&
+    (/payment confirmed/i.test(liveCheckoutStatus || "") ||
+      [
+        "PAID_IN_ESCROW",
+        "SELLER_PREPARING",
+        "SHIPPED",
+        "DELIVERED",
+        "COMPLETED",
+      ].includes(checkoutOrder?.status || "") ||
+      checkoutOrder?.statusText === "Paid in escrow");
 
   const appendMessage = useCallback((nextMessage: ChatMessage) => {
     setMessages((current) => {
@@ -433,6 +506,33 @@ export default function MessageDetailsScreen() {
       cleanupSocket?.();
     };
   }, [appendMessage, conversationId, currentUserId, toast, updateMessage]);
+
+  const refreshConversationCheckout = useCallback(async () => {
+    if (!conversationId || !productId) {
+      setCheckoutOrder(null);
+      return;
+    }
+
+    try {
+      const { data } = await axiosInstance.get("/orders/checkout/current", {
+        params: {
+          productId,
+          conversationId,
+          offerMessageId: acceptedOfferForCheckout?.id,
+          source: "offer",
+        },
+      });
+      setCheckoutOrder(data.order || null);
+    } catch {
+      setCheckoutOrder(null);
+    }
+  }, [acceptedOfferForCheckout?.id, conversationId, productId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshConversationCheckout();
+    }, [refreshConversationCheckout]),
+  );
 
   const openCounterpartProfile = () => {
     const profileId = isSeller ? counterpartId : sellerId;
@@ -1060,6 +1160,8 @@ export default function MessageDetailsScreen() {
           {messages.map((item, index) => {
             const previous = messages[index - 1];
             const itemFromMe = isSameUserId(item.senderId, currentUserId);
+            const isCheckoutStatusMessage =
+              item.content.startsWith("Checkout status:");
             const isImageOnly = Boolean(item.imageUrl) && !item.content;
             const isImageBatchContinuation =
               isImageOnly &&
@@ -1067,6 +1169,7 @@ export default function MessageDetailsScreen() {
               Boolean(previous.imageUrl) &&
               !previous.content;
 
+            if (isCheckoutStatusMessage) return null;
             if (isImageBatchContinuation) return null;
 
             const imageBatch: ChatMessage[] = [];
@@ -1276,33 +1379,6 @@ export default function MessageDetailsScreen() {
                               : "Pending offer"}
                         </Text>
                       </View>
-                      {!isSeller &&
-                      itemFromMe &&
-                      item.offerStatus === "ACCEPTED" ? (
-                        <Pressable
-                          onPress={() =>
-                            openCheckoutReview({
-                              source: "offer",
-                              unitPrice: Number(item.offerAmount || 0),
-                              quantity: Number(item.offerQuantity || 1),
-                              offerMessageId: item.id,
-                            })
-                          }
-                          className="mt-2 flex-row items-center self-start rounded-full bg-emerald-500 px-3 py-1.5"
-                        >
-                          <Ionicons
-                            name="card-outline"
-                            size={13}
-                            color="white"
-                          />
-                          <Text
-                            variant="none"
-                            className="ml-1.5 text-xs font-black text-white"
-                          >
-                            Checkout
-                          </Text>
-                        </Pressable>
-                      ) : null}
                     </View>
                   ) : null}
                 </View>
@@ -1363,7 +1439,112 @@ export default function MessageDetailsScreen() {
         </ScrollView>
 
         <View className="border-t border-gray-100 bg-white px-4 pb-4 pt-3 dark:border-white/5 dark:bg-[#0A0A0A]">
-          {isSeller ? (
+          {isSeller && liveCheckoutStatus ? (
+            <View className="mb-3 rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+              <View className="flex-row items-center">
+                <View className="h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/15">
+                  <Ionicons name="receipt-outline" size={20} color="#10B981" />
+                </View>
+                <View className="ml-3 flex-1">
+                  <Text
+                    variant="none"
+                    className="text-xs font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400"
+                  >
+                    Checkout status
+                  </Text>
+                  <Text className="mt-1 text-sm font-bold text-gray-950 dark:text-white">
+                    {liveCheckoutStatus}
+                  </Text>
+                </View>
+              </View>
+              {checkoutOrder?.id ? (
+                <Pressable
+                  onPress={() =>
+                    router.push({
+                      pathname: "/order/[id]",
+                      params: { id: String(checkoutOrder.id) },
+                    })
+                  }
+                  className="mt-4 h-10 flex-row items-center justify-center rounded-2xl bg-emerald-500"
+                >
+                  <Ionicons name="receipt-outline" size={16} color="white" />
+                  <Text
+                    variant="none"
+                    className="ml-2 text-sm font-black text-white"
+                  >
+                    View order
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+          {acceptedOfferForCheckout ? (
+            <View className="mb-3 rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+              <View className="flex-row items-start">
+                <View className="h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/15">
+                  <Ionicons
+                    name={
+                      acceptedOfferPaid
+                        ? "shield-checkmark-outline"
+                        : "card-outline"
+                    }
+                    size={20}
+                    color="#10B981"
+                  />
+                </View>
+                <View className="ml-3 flex-1">
+                  <Text
+                    variant="none"
+                    className="text-xs font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400"
+                  >
+                    {acceptedOfferPaid ? "Payment secured" : "Offer accepted"}
+                  </Text>
+                  <Text className="mt-1 text-2xl font-black text-gray-950 dark:text-white">
+                    ₦{acceptedOfferTotal.toLocaleString()}
+                  </Text>
+                  <Text className="mt-1 text-sm font-bold text-gray-700 dark:text-gray-200">
+                    {acceptedOfferPaid
+                      ? `${checkoutOrder?.code || "Order"} is held in escrow`
+                      : `Qty ${acceptedOfferQuantity} • ₦${acceptedOfferUnitPrice.toLocaleString()} each`}
+                  </Text>
+                </View>
+              </View>
+              <Pressable
+                onPress={() =>
+                  acceptedOfferPaid
+                    ? checkoutOrder?.id
+                      ? router.push({
+                          pathname: "/order/[id]",
+                          params: { id: String(checkoutOrder.id) },
+                        })
+                      : router.push("/(tabs)/orders")
+                    : openCheckoutReview({
+                        source: "offer",
+                        unitPrice: acceptedOfferUnitPrice,
+                        quantity: acceptedOfferQuantity,
+                        offerMessageId: acceptedOfferForCheckout.id,
+                      })
+                }
+                className="mt-4 h-11 flex-row items-center justify-center rounded-2xl bg-emerald-500"
+              >
+                <Ionicons
+                  name={
+                    acceptedOfferPaid
+                      ? "receipt-outline"
+                      : "lock-closed-outline"
+                  }
+                  size={16}
+                  color="white"
+                />
+                <Text
+                  variant="none"
+                  className="ml-2 text-sm font-black text-white"
+                >
+                  {acceptedOfferPaid ? "View order" : "Checkout accepted offer"}
+                </Text>
+              </Pressable>
+            </View>
+          ) : isSeller ? (
             latestIncomingOffer?.offerAmount ? (
               <View className="mb-3 rounded-3xl border border-brand/20 bg-brand/10 p-4">
                 <View className="flex-row items-start">
@@ -1393,7 +1574,7 @@ export default function MessageDetailsScreen() {
                       ).toLocaleString()}
                     </Text>
                     <Text className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      Accept or reject this offer. Order creation comes later.
+                      Accepting unlocks checkout for the buyer.
                     </Text>
                   </View>
                 </View>

@@ -16,7 +16,13 @@ export type UpdateProfile = {
   username?: string;
   bio?: string;
   avatarUrl?: string;
+  coverPhotoUrl?: string;
   phoneNumber?: string;
+  country?: string;
+  state?: string;
+  city?: string;
+  address?: string;
+  zipCode?: string;
 };
 export class UpdateProfileDto implements UpdateProfile {
   @IsOptional()
@@ -45,6 +51,11 @@ export class UpdateProfileDto implements UpdateProfile {
   @IsUrl({}, { message: 'Avatar must be a valid URL' })
   @Type(() => String)
   avatarUrl?: string;
+
+  @IsOptional()
+  @IsUrl({}, { message: 'Cover photo must be a valid URL' })
+  @Type(() => String)
+  coverPhotoUrl?: string;
 
   @IsOptional()
   @IsString({ message: 'Phone number must be a string' })

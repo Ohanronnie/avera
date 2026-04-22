@@ -1,14 +1,11 @@
 import {
   IsNotEmpty,
   IsString,
-  IsEmail,
   MinLength,
   MaxLength,
   Matches,
   ValidateIf,
-  Max,
   IsOptional,
-  Min,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { parsePhoneNumber, isValidPhoneNumber } from 'libphonenumber-js';
@@ -31,17 +28,17 @@ export class CreateUserInfoDto {
 
   @IsString({ message: 'Username must be a string' })
   @IsNotEmpty({ message: 'Username cannot be empty' })
-  @MinLength(3, { message: 'Username must be at least 3 characters long' })
-  @MaxLength(30, { message: 'Username cannot be longer than 30 characters' })
-  @Matches(/^[A-Za-z][A-Za-z0-9_]{3,14}$/, {
+  @MinLength(4, { message: 'Username must be at least 4 characters long' })
+  @MaxLength(15, { message: 'Username cannot be longer than 15 characters' })
+  @Matches(/^[A-Za-z](?!.*_$)[A-Za-z0-9_]{3,14}$/, {
     message:
-      'Username must start with a letter and can contain only letters, numbers, and underscores. Length: 4-15 characters.',
+      'Username must start with a letter, can contain only letters, numbers, and underscores, and cannot end with an underscore. Length: 4-15 characters.',
   })
   username: string;
 
   @IsOptional()
   @IsString({ message: 'Bio must be a string' })
-  @Max(255, { message: 'Bio cannot be than 255 characters' })
+  @MaxLength(255, { message: 'Bio cannot be than 255 characters' })
   bio?: string;
 
   @IsString({ message: 'Phone number must be a string' })

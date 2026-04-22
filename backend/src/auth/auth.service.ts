@@ -348,7 +348,7 @@ export class AuthService {
    */
   validateUsername(username: string): boolean {
     // Twitter-like: starts with letter, 4-15 chars, only letters, numbers, underscores
-    return /^[A-Za-z][A-Za-z0-9_]{3,14}$/.test(username);
+    return /^[A-Za-z](?!.*_$)[A-Za-z0-9_]{3,14}$/.test(username);
   }
 
   // ---------------- OTP Validation ----------------

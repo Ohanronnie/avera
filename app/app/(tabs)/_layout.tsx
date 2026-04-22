@@ -1,5 +1,11 @@
 import { Tabs } from "expo-router/tabs";
-import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
+import { useFocusEffect } from "expo-router";
+import {
+  Badge,
+  Icon,
+  Label,
+  NativeTabs,
+} from "expo-router/unstable-native-tabs";
 import {
   Ionicons,
   Feather,
@@ -9,6 +15,10 @@ import {
 } from "@expo/vector-icons";
 import { Platform } from "react-native";
 import { useColorScheme } from "nativewind";
+import { useCallback, useEffect, useState } from "react";
+
+import { axiosInstance } from "@/utils/axios";
+import { connectSocket } from "@/utils/socket";
 
 /**
  * ICON EXPLORER SETTINGS
@@ -127,6 +137,39 @@ const IOS_TABS = [
 export default function TabsLayout() {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
+  const [unreadMessages, setUnreadMessages] = useState(0);
+  const unreadBadge = unreadMessages > 9 ? "9+" : String(unreadMessages);
+
+  const refreshUnreadMessages = useCallback(async () => {
+    try {
+      const { data } = await axiosInstance.get(
+        "/chat/conversations/unread-count",
+      );
+      setUnreadMessages(Number(data.count || 0));
+    } catch {
+      setUnreadMessages(0);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshUnreadMessages();
+    }, [refreshUnreadMessages]),
+  );
+
+  useEffect(() => {
+    refreshUnreadMessages();
+
+    const socket = connectSocket();
+
+    socket.on("message:new", refreshUnreadMessages);
+    socket.on("conversation:read", refreshUnreadMessages);
+
+    return () => {
+      socket.off("message:new", refreshUnreadMessages);
+      socket.off("conversation:read", refreshUnreadMessages);
+    };
+  }, [refreshUnreadMessages]);
 
   if (Platform.OS === "ios") {
     return (
@@ -159,6 +202,9 @@ export default function TabsLayout() {
           <NativeTabs.Trigger key={tab.name} name={tab.name}>
             <Icon sf={tab.sf} />
             <Label>{tab.label}</Label>
+            {tab.name === "orders" && unreadMessages > 0 ? (
+              <Badge>{unreadBadge}</Badge>
+            ) : null}
           </NativeTabs.Trigger>
         ))}
       </NativeTabs>
@@ -223,6 +269,15 @@ export default function TabsLayout() {
         name="orders"
         options={{
           tabBarLabel: "Orders",
+          tabBarBadge: unreadMessages > 0 ? unreadBadge : undefined,
+          tabBarBadgeStyle: {
+            backgroundColor: "#2563EB",
+            color: "#FFFFFF",
+            fontSize: 10,
+            fontWeight: "800",
+            minWidth: 18,
+            height: 18,
+          },
           tabBarIcon: ({ color, focused }) => (
             <TabIcon type="orders" color={color} focused={focused} />
           ),

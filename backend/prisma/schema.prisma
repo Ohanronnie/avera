@@ -5,12 +5,13 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client-js"
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -21,6 +22,7 @@ model User {
   lastName        String?
   phoneNumber     String?
   avatarUrl       String?
+  coverPhotoUrl   String?
   bio             String?
   trustScore      Decimal   @default(0.0) @db.Decimal(5, 2)
   googleId        String?   @unique

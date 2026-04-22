@@ -5,6 +5,7 @@ import {
   Param,
   ParseIntPipe,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -19,8 +20,13 @@ export class WalletController {
   sendMoney(
     @Param('accountNumber') accountNumber: string,
     @Param('amount') amount: string,
+    @Query('reference') reference?: string,
   ) {
-    return this.walletService.sendMoneyToAccount(accountNumber, Number(amount));
+    return this.walletService.sendMoneyToAccount(
+      accountNumber,
+      Number(amount),
+      reference,
+    );
   }
 
   @Get('wallet')

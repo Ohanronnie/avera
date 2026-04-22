@@ -45,14 +45,36 @@ export class UsersService {
     userInfo: CreateUserInfo,
     userId: number,
   ): Promise<true> {
-    const { firstName, lastName, phoneNumber, username, bio } = userInfo;
+    const {
+      firstName,
+      lastName,
+      phoneNumber,
+      username,
+      bio,
+      address,
+      city,
+      state,
+      country,
+      zipCode,
+    } = userInfo;
 
     await this.ensureUsernameIsAvailable(username, userId);
 
     try {
       await this.prisma.user.update({
         where: { id: userId },
-        data: { firstName, lastName, phoneNumber, username, bio },
+        data: {
+          firstName,
+          lastName,
+          phoneNumber,
+          username,
+          bio,
+          address,
+          city,
+          state,
+          country: country || 'Nigeria',
+          zipCode,
+        },
       });
     } catch (error: any) {
       if (this.isUsernameUniqueError(error)) {
@@ -84,6 +106,7 @@ export class UsersService {
       email: user.email,
       bio: user.bio,
       avatarUrl: user.avatarUrl,
+      coverPhotoUrl: user.coverPhotoUrl,
       phoneNumber: user.phoneNumber,
       location: {
         address: user.address,
@@ -108,7 +131,13 @@ export class UsersService {
         username: data.username,
         bio: data.bio,
         avatarUrl: data.avatarUrl,
+        coverPhotoUrl: data.coverPhotoUrl,
         phoneNumber: data.phoneNumber,
+        address: data.address,
+        city: data.city,
+        state: data.state,
+        country: data.country,
+        zipCode: data.zipCode,
       };
       const updated = await this.prisma.user.update({
         where: { id: userId },
@@ -123,6 +152,7 @@ export class UsersService {
         email: user.email,
         bio: user.bio,
         avatarUrl: user.avatarUrl,
+        coverPhotoUrl: user.coverPhotoUrl,
         phoneNumber: user.phoneNumber,
         location: {
           address: user.address,
@@ -194,6 +224,7 @@ export class UsersService {
       email: user.email,
       bio: user.bio,
       avatarUrl: user.avatarUrl,
+      coverPhotoUrl: user.coverPhotoUrl,
       location: {
         address: user.address,
         city: user.city,

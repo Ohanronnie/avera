@@ -392,14 +392,14 @@ export default function OrdersScreen() {
                       <Pressable
                         onPress={() =>
                           router.push({
-                            pathname: "/product-details/[id]",
-                            params: { id: String(order.product.id) },
+                            pathname: "/order/[id]",
+                            params: { id: String(order.id) },
                           })
                         }
                         className="h-12 flex-1 items-center justify-center rounded-2xl border border-gray-100 bg-gray-50 dark:border-white/5 dark:bg-white/5"
                       >
                         <Text className="font-bold text-gray-950 dark:text-white">
-                          View Item
+                          View Order
                         </Text>
                       </Pressable>
                       <Pressable

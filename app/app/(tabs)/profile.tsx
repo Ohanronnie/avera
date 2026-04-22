@@ -3,20 +3,58 @@ import { axiosInstance } from "@/utils/axios";
 import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useMemo, useState } from "react";
-import { ScrollView, View, TouchableOpacity, Image } from "react-native";
+import {
+  ScrollView,
+  View,
+  TouchableOpacity,
+  Image,
+  ImageBackground,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 
+type ProfileUser = {
+  id?: number;
+  fullName?: string;
+  firstName?: string;
+  lastName?: string;
+  username?: string;
+  email?: string;
+  bio?: string;
+  avatarUrl?: string | null;
+  coverPhotoUrl?: string | null;
+  phoneNumber?: string;
+  location?: {
+    address?: string | null;
+    city?: string | null;
+    state?: string | null;
+    country?: string | null;
+    zipCode?: string | null;
+  };
+};
+
 export default function AccountScreen() {
   const insets = useSafeAreaInsets();
   const { isDark, themeMode, setTheme } = useTheme();
-  const { logout } = useAuth();
+  const { logout, login } = useAuth();
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const [profile, setProfile] = useState<ProfileUser | null>(null);
 
   useFocusEffect(
     useCallback(() => {
       let isMounted = true;
+
+      axiosInstance
+        .get("/users/me")
+        .then(({ data }) => {
+          if (!isMounted) return;
+          setProfile(data);
+          login(data);
+        })
+        .catch(() => {
+          if (isMounted) setProfile(null);
+        });
 
       axiosInstance
         .get("/chat/conversations/unread-count")
@@ -30,7 +68,7 @@ export default function AccountScreen() {
       return () => {
         isMounted = false;
       };
-    }, []),
+    }, [login]),
   );
 
   const handleLogout = async () => {
@@ -38,13 +76,51 @@ export default function AccountScreen() {
     router.replace("/(auth)/login");
   };
 
+  const displayName =
+    profile?.fullName ||
+    [profile?.firstName, profile?.lastName].filter(Boolean).join(" ") ||
+    "Avera User";
+  const email = profile?.email || "Add your email";
+  const avatarUrl = profile?.avatarUrl || null;
+  const initials = (
+    [profile?.firstName, profile?.lastName]
+      .filter(Boolean)
+      .map((name) => name?.trim().slice(0, 1))
+      .join("") ||
+    profile?.username?.trim().slice(0, 2) ||
+    profile?.email?.trim().slice(0, 2) ||
+    "AU"
+  ).toUpperCase();
+  const coverPhotoUrl = profile?.coverPhotoUrl || null;
+  const locationSummary = [
+    profile?.location?.city,
+    profile?.location?.state,
+    profile?.location?.country,
+  ]
+    .filter(Boolean)
+    .join(", ");
+
   const sections = useMemo(
     () => [
       {
         title: "Selling",
         items: [
-          { icon: "shirt-outline", label: "My Inventory", count: 12 },
-          { icon: "wallet-outline", label: "Payments & Payouts" },
+          {
+            icon: "shirt-outline",
+            label: "My Inventory",
+            route: {
+              pathname: "/profile/inventory",
+              params: {
+                userId: profile?.id ? String(profile.id) : undefined,
+                sellerName: displayName,
+              },
+            },
+          },
+          {
+            icon: "wallet-outline",
+            label: "Payments & Payouts",
+            route: "/wallet",
+          },
         ],
       },
       {
@@ -56,8 +132,16 @@ export default function AccountScreen() {
             count: unreadMessages,
             route: "/messages",
           },
-          { icon: "heart-outline", label: "Saved Items", count: 45 },
-          { icon: "settings-outline", label: "Settings" },
+          {
+            icon: "heart-outline",
+            label: "Saved Items",
+            route: "/(tabs)/wishlist",
+          },
+          {
+            icon: "settings-outline",
+            label: "Edit Profile",
+            route: "/profile/edit",
+          },
         ],
       },
       {
@@ -65,7 +149,7 @@ export default function AccountScreen() {
         items: [{ icon: "help-circle-outline", label: "Help & Support" }],
       },
     ],
-    [unreadMessages],
+    [displayName, profile?.id, unreadMessages],
   );
   const themeOptions = [
     { label: "Auto", value: "system", icon: "phone-portrait-outline" },
@@ -75,45 +159,98 @@ export default function AccountScreen() {
 
   return (
     <View className="flex-1 bg-white dark:bg-[#0A0A0A]">
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ paddingBottom: insets.bottom + 96 }}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Full-Canvas Header (Spans inside Status Bar) */}
-        <View
+        <ImageBackground
+          source={coverPhotoUrl ? { uri: coverPhotoUrl } : undefined}
           className="bg-brand pb-12 rounded-b-[32px] items-center relative overflow-hidden"
+          imageStyle={{ opacity: coverPhotoUrl ? 0.38 : 0 }}
           style={{ paddingTop: insets.top + 12 }}
         >
+          <View className="absolute inset-0 bg-brand/80" />
           {/* Floating Actions */}
           <View className="w-full px-5 flex-row justify-between items-center">
-            <TouchableOpacity className="w-10 h-10 bg-white/20 rounded-full items-center justify-center">
+            <TouchableOpacity
+              onPress={() => router.back()}
+              className="w-10 h-10 bg-white/20 rounded-full items-center justify-center"
+            >
               <Ionicons name="chevron-back" size={20} color="white" />
             </TouchableOpacity>
-            <TouchableOpacity className="w-10 h-10 bg-white/20 rounded-full items-center justify-center">
-              <Ionicons name="ellipsis-vertical" size={20} color="white" />
+            <TouchableOpacity
+              onPress={() => router.push("/profile/edit")}
+              className="w-10 h-10 bg-white/20 rounded-full items-center justify-center"
+            >
+              <Ionicons name="create-outline" size={20} color="white" />
             </TouchableOpacity>
           </View>
 
           {/* Centered Avatar */}
           <View className="mt-4">
             <View className="w-28 h-28 rounded-full border border-white p-1">
-              <Image
-                source={{ uri: "https://i.pravatar.cc/150" }}
-                className="w-full h-full rounded-full"
-              />
+              {avatarUrl ? (
+                <Image
+                  source={{ uri: avatarUrl }}
+                  className="w-full h-full rounded-full"
+                />
+              ) : (
+                <View className="h-full w-full items-center justify-center rounded-full bg-white/20">
+                  <Text
+                    variant="none"
+                    className="text-4xl font-black text-white"
+                  >
+                    {initials}
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
 
           {/* Centered Info */}
           <View className="items-center mt-6 px-6">
             <Text className="text-2xl font-bold text-white tracking-tight">
-              Ronnie Ohan
+              {displayName}
             </Text>
             <Text className="text-xs text-center font-medium mt-1  tracking-widest text-gray-100">
-              titiloyepaul68@gmail.com
+              {email}
             </Text>
+            {locationSummary ? (
+              <View className="mt-3 flex-row items-center rounded-full bg-white/15 px-3 py-1.5">
+                <Ionicons name="location-outline" size={14} color="white" />
+                <Text className="ml-1.5 text-xs font-semibold text-white">
+                  {locationSummary}
+                </Text>
+              </View>
+            ) : null}
           </View>
+        </ImageBackground>
+
+        <View className="mx-4 mt-6 rounded-3xl border border-gray-100 bg-gray-50 p-4 dark:border-white/5 dark:bg-white/5">
+          <Text className="text-[11px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+            Profile
+          </Text>
+          <Text className="mt-2 text-sm leading-5 text-gray-600 dark:text-gray-300">
+            {profile?.bio || "Add a short bio so buyers and sellers know you."}
+          </Text>
+          {profile?.location?.address ? (
+            <View className="mt-4 flex-row items-start">
+              <Ionicons
+                name="home-outline"
+                size={18}
+                color={isDark ? "#9CA3AF" : "#6B7280"}
+              />
+              <Text className="ml-2 flex-1 text-sm text-gray-600 dark:text-gray-300">
+                {profile.location.address}
+              </Text>
+            </View>
+          ) : null}
         </View>
 
         {/* Menu Sections */}
-        <View className="px-4 pt-10 pb-6">
+        <View className="px-4 pt-8 pb-6">
           {sections.map((section) => (
             <View key={section.title} className="mb-10">
               <Text className="ml-4 mb-3 text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
@@ -233,7 +370,7 @@ export default function AccountScreen() {
         </View>
 
         {/* Logout Section */}
-        <View className="px-4 pb-12">
+        <View className="px-4">
           <TouchableOpacity
             onPress={handleLogout}
             activeOpacity={0.8}
