@@ -27,7 +27,7 @@ export function OnboardingFooter({
           return (
             <View
               key={index}
-              className={`rounded-full ${active ? "h-2.5 w-7" : "h-2.5 w-2.5 bg-white/15"}`}
+              className={`rounded-full ${active ? "h-2.5 w-7" : "h-2.5 w-2.5 bg-gray-200 dark:bg-white/15"}`}
               style={active ? { backgroundColor: accent } : undefined}
             />
           );

@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const API_BASE = (process.env.API_BASE || 'http://localhost:3000').replace(
+const API_BASE = (process.env.API_BASE || 'http://127.0.0.1:3000').replace(
   /\/$/,
   '',
 );
@@ -17,10 +17,13 @@ const EMAIL = process.env.SEED_EMAIL || 'ohanronnie@gmail.com';
 const PASSWORD = process.env.SEED_PASSWORD || 'Paul123@';
 const LIMIT = Number(process.env.SEED_LIMIT || 25);
 const IMAGES_PER_PRODUCT = Number(process.env.SEED_IMAGES_PER_PRODUCT || 3);
+const UPLOAD_IMAGES = process.env.SEED_UPLOAD_IMAGES === 'true';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FALLBACK_IMAGE_PATH =
   process.env.SEED_FALLBACK_IMAGE ||
   path.resolve(__dirname, '../src/products/shoe.jpg');
+const PLACEHOLDER_IMAGE_BASE =
+  process.env.SEED_PLACEHOLDER_IMAGE_BASE || 'https://placehold.co/900x900.jpg';
 
 const CONDITIONS = ['New', 'Foreign Used', 'Local Used'];
 const LOCATIONS = ['Lagos', 'Abuja', 'Rivers', 'Oyo', 'Enugu', 'Kano', 'Ogun'];
@@ -299,17 +302,84 @@ function sanitizeFilename(value) {
     .slice(0, 80);
 }
 
+function getErrorMessage(value) {
+  if (Array.isArray(value)) return value.join(', ');
+  if (value && typeof value === 'object') {
+    return value.message || JSON.stringify(value);
+  }
+  return value || 'Unknown error';
+}
+
+function isAbsoluteUrl(value) {
+  return /^https?:\/\//i.test(String(value || ''));
+}
+
+function normalizeUploadedImageUrl(file) {
+  const uploadedPath = file?.path || file?.url;
+  if (!uploadedPath) return null;
+  if (isAbsoluteUrl(uploadedPath)) return uploadedPath;
+
+  const pathWithoutSlash = String(uploadedPath).replace(/^\/+/, '');
+  if (pathWithoutSlash.startsWith('media/')) {
+    return `${MEDIA_BASE}/${pathWithoutSlash}`;
+  }
+
+  return `${MEDIA_BASE}/media/${pathWithoutSlash}`;
+}
+
+function getSourceImageUrls(product) {
+  return [...new Set([product.thumbnail, ...(product.images || [])])]
+    .filter((url) => isAbsoluteUrl(url))
+    .slice(0, Math.min(IMAGES_PER_PRODUCT, 5));
+}
+
+async function assertImageUrlReachable(url) {
+  const response = await request(
+    url,
+    { method: 'GET' },
+    `Checking image ${url}`,
+  );
+  assertOk(response, `Checking image ${url}`);
+
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.startsWith('image/')) {
+    throw new Error(`Image URL is not serving an image: ${url}`);
+  }
+}
+
+function getPlaceholderImageUrl(productTitle, index = 1) {
+  const text = encodeURIComponent(productTitle || `Avera product ${index}`);
+  const separator = PLACEHOLDER_IMAGE_BASE.includes('?') ? '&' : '?';
+  return `${PLACEHOLDER_IMAGE_BASE}${separator}text=${text}`;
+}
+
+async function request(url, options, label) {
+  try {
+    return await fetch(url, options);
+  } catch (error) {
+    throw new Error(
+      `${label} failed: ${error.message}. Is the backend running and reachable at ${API_BASE}?`,
+    );
+  }
+}
+
 async function login() {
-  const response = await fetch(`${API_BASE}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: EMAIL, password: PASSWORD }),
-  });
+  const response = await request(
+    `${API_BASE}/auth/login`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: EMAIL, password: PASSWORD }),
+    },
+    'Login request',
+  );
 
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(`Login failed: ${data?.message || response.statusText}`);
+    throw new Error(
+      `Login failed: ${getErrorMessage(data) || response.statusText}`,
+    );
   }
 
   if (!data.accessToken) {
@@ -321,7 +391,11 @@ async function login() {
 
 async function fetchSourceProducts() {
   try {
-    const response = await fetch(SOURCE_URL);
+    const response = await request(
+      SOURCE_URL,
+      undefined,
+      'Fetching source products',
+    );
     assertOk(response, 'Fetching source products');
     const data = await response.json();
     const products = (data.products || []).slice(0, LIMIT);
@@ -338,7 +412,11 @@ async function fetchSourceProducts() {
 }
 
 async function fetchCategories() {
-  const response = await fetch(`${API_BASE}/categories`);
+  const response = await request(
+    `${API_BASE}/categories`,
+    undefined,
+    'Fetching categories',
+  );
   assertOk(response, 'Fetching categories');
   const categories = await response.json();
 
@@ -356,7 +434,7 @@ function resolveCategoryId(product, categories) {
 }
 
 async function downloadImage(url, productTitle, index) {
-  const response = await fetch(url);
+  const response = await request(url, undefined, `Downloading image ${url}`);
   assertOk(response, `Downloading image ${url}`);
 
   const contentType = response.headers.get('content-type') || 'image/jpeg';
@@ -380,6 +458,13 @@ async function getFallbackImage(productTitle) {
 }
 
 async function uploadImages(product) {
+  if (!UPLOAD_IMAGES) {
+    const sourceUrls = getSourceImageUrls(product);
+    return sourceUrls.length
+      ? sourceUrls
+      : [getPlaceholderImageUrl(product.title)];
+  }
+
   const urls = [...new Set([product.thumbnail, ...(product.images || [])])]
     .filter(Boolean)
     .slice(0, Math.min(IMAGES_PER_PRODUCT, 5));
@@ -404,16 +489,20 @@ async function uploadImages(product) {
     formData.append('images', fallbackImage.blob, fallbackImage.filename);
   }
 
-  const response = await fetch(`${API_BASE}/uploads/images`, {
-    method: 'POST',
-    body: formData,
-  });
+  const response = await request(
+    `${API_BASE}/uploads/images`,
+    {
+      method: 'POST',
+      body: formData,
+    },
+    'Image upload request',
+  );
 
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
     throw new Error(
-      `Image upload failed: ${data?.message || response.statusText}`,
+      `Image upload failed: ${getErrorMessage(data) || response.statusText}`,
     );
   }
 
@@ -423,7 +512,16 @@ async function uploadImages(product) {
     throw new Error('Image upload returned no files');
   }
 
-  return uploadedFiles.map((file) => `${MEDIA_BASE}/media/${file.path}`);
+  const uploadedUrls = uploadedFiles
+    .map(normalizeUploadedImageUrl)
+    .filter(Boolean);
+  if (!uploadedUrls.length) {
+    throw new Error('Image upload returned no usable URLs');
+  }
+
+  await Promise.all(uploadedUrls.map((url) => assertImageUrlReachable(url)));
+
+  return uploadedUrls;
 }
 
 function buildPayload(product, categories, index, images) {
@@ -460,14 +558,18 @@ function buildPayload(product, categories, index, images) {
 }
 
 async function createProduct(payload, token) {
-  const response = await fetch(`${API_BASE}/products/create`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
+  const response = await request(
+    `${API_BASE}/products/create`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
     },
-    body: JSON.stringify(payload),
-  });
+    'Create product request',
+  );
 
   const data = await response.json().catch(() => ({}));
 
@@ -498,8 +600,23 @@ async function main() {
     const label = `${index + 1}/${products.length} ${product.title}`;
 
     try {
-      console.log(`Uploading images for ${label}`);
-      const images = await uploadImages(product);
+      console.log(
+        `${UPLOAD_IMAGES ? 'Uploading' : 'Resolving'} images for ${label}`,
+      );
+      let images;
+      try {
+        images = await uploadImages(product);
+      } catch (error) {
+        const sourceUrls = getSourceImageUrls(product);
+        images = sourceUrls.length
+          ? sourceUrls
+          : [getPlaceholderImageUrl(product.title, index + 1)];
+        console.warn(
+          `Image upload unavailable for ${product.title}; using ${
+            sourceUrls.length ? 'source image URLs' : 'placeholder image'
+          }: ${error.message}`,
+        );
+      }
       const payload = buildPayload(product, categories, index, images);
 
       console.log(`Creating product ${label}`);

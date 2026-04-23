@@ -1,20 +1,16 @@
 import { useEffect, useRef, useState } from "react";
+import { AveraLoader } from "@/components/brand/AveraLoader";
+import { CustomSelect } from "@/components/custom-select";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useColorScheme } from "nativewind";
-import {
-  ActivityIndicator,
-  Image,
-  Pressable,
-  ScrollView,
-  TextInput,
-  View,
-} from "react-native";
+import { Image, Pressable, ScrollView, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Text } from "@/components/themed/theme";
 import { useToast } from "@/contexts/ToastContext";
 import { BASE_URL, axiosInstance } from "@/utils/axios";
+import { emitSocketAck } from "@/utils/socket-events";
 
 const parseAmount = (value?: string | string[]) => {
   const rawValue = Array.isArray(value) ? value[0] : value;
@@ -31,6 +27,67 @@ const parseNumber = (value?: string | string[], fallback = 1) => {
 
 const formatPrice = (value: number) =>
   `₦${Number(value || 0).toLocaleString()}`;
+
+const NIGERIAN_STATE_OPTIONS = [
+  "Abia",
+  "Adamawa",
+  "Akwa Ibom",
+  "Anambra",
+  "Bauchi",
+  "Bayelsa",
+  "Benue",
+  "Borno",
+  "Cross River",
+  "Delta",
+  "Ebonyi",
+  "Edo",
+  "Ekiti",
+  "Enugu",
+  "FCT",
+  "Gombe",
+  "Imo",
+  "Jigawa",
+  "Kaduna",
+  "Kano",
+  "Katsina",
+  "Kebbi",
+  "Kogi",
+  "Kwara",
+  "Lagos",
+  "Nasarawa",
+  "Niger",
+  "Ogun",
+  "Ondo",
+  "Osun",
+  "Oyo",
+  "Plateau",
+  "Rivers",
+  "Sokoto",
+  "Taraba",
+  "Yobe",
+  "Zamfara",
+].map((state) => ({ label: state, value: state }));
+
+type DeliveryErrors = Partial<
+  Record<"name" | "phone" | "address" | "city" | "state", string>
+>;
+
+const resolveStateValue = (value?: string | null) => {
+  const trimmedValue = value?.trim() || "";
+  const normalizedValue = trimmedValue.toLowerCase();
+  const stateAliases: Record<string, string> = {
+    abuja: "FCT",
+    "federal capital territory": "FCT",
+    "federal capital territory (fct)": "FCT",
+  };
+  const option = NIGERIAN_STATE_OPTIONS.find(
+    (state) =>
+      state.value.toLowerCase() === normalizedValue ||
+      state.value === stateAliases[normalizedValue],
+  );
+
+  return option?.value || "";
+};
 
 export default function CheckoutReviewScreen() {
   const { colorScheme } = useColorScheme();
@@ -55,9 +112,7 @@ export default function CheckoutReviewScreen() {
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [deliveryCity, setDeliveryCity] = useState("");
   const [deliveryState, setDeliveryState] = useState("");
-  const [deliveryAddressError, setDeliveryAddressError] = useState<
-    string | null
-  >(null);
+  const [deliveryErrors, setDeliveryErrors] = useState<DeliveryErrors>({});
   const reviewStatusSentRef = useRef(false);
   const params = useLocalSearchParams<{
     productId?: string;
@@ -71,6 +126,7 @@ export default function CheckoutReviewScreen() {
     source?: string;
     conversationId?: string;
     offerMessageId?: string;
+    checkoutStatusNotified?: string;
   }>();
 
   const productName = params.productName || "Product listing";
@@ -98,14 +154,56 @@ export default function CheckoutReviewScreen() {
     return createdOrder?.statusText || "Order updated";
   };
 
+  const hasDeliveryDetails = [
+    deliveryName,
+    deliveryPhone,
+    deliveryAddress,
+    deliveryCity,
+    deliveryState,
+  ].every((value) => value.trim().length > 0);
+
+  const clearDeliveryError = (field: keyof DeliveryErrors) => {
+    setDeliveryErrors((current) => {
+      if (!current[field]) return current;
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+  };
+
+  const validateDeliveryDetails = () => {
+    const nextErrors: DeliveryErrors = {};
+
+    if (!deliveryName.trim()) nextErrors.name = "Recipient name is required";
+    if (!deliveryAddress.trim())
+      nextErrors.address = "Delivery address is required";
+    if (!deliveryCity.trim()) nextErrors.city = "City is required";
+    if (!deliveryState.trim()) nextErrors.state = "State is required";
+    if (!deliveryPhone.trim()) nextErrors.phone = "Phone number is required";
+
+    setDeliveryErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
   const notifySeller = async (content: string) => {
     if (!params.conversationId) return;
 
     try {
-      await axiosInstance.post(
-        `/chat/conversations/${params.conversationId}/messages`,
-        { content },
-      );
+      const response = await emitSocketAck<{
+        ok?: boolean;
+        message?: string | unknown;
+      }>("message:send", "message:sent", {
+        conversationId: Number(params.conversationId),
+        content,
+      });
+
+      if (!response.ok || typeof response.message === "string") {
+        throw new Error(
+          typeof response.message === "string"
+            ? response.message
+            : "Message not sent",
+        );
+      }
     } catch {
       // This is a status hint for the seller; checkout should continue if it fails.
     }
@@ -122,7 +220,8 @@ export default function CheckoutReviewScreen() {
       setDeliveryPhone(data.phoneNumber || "");
       setDeliveryAddress(data.location?.address || "");
       setDeliveryCity(data.location?.city || "");
-      setDeliveryState(data.location?.state || "");
+      setDeliveryState(resolveStateValue(data.location?.state));
+      setDeliveryErrors({});
       toast.show({
         title: fullName ? `Filled for ${fullName}` : "Delivery filled",
         description: "Review the address before creating the order.",
@@ -152,20 +251,30 @@ export default function CheckoutReviewScreen() {
 
     try {
       setPayingOrder(true);
-      const { data } = await axiosInstance.get(
-        `/send-money/${sellerAccount.accountNumber}/${createdOrder.totalAmount}`,
-        {
-          params: { reference: createdOrder.code },
-        },
-      );
+      const data = await emitSocketAck<{
+        ok?: boolean;
+        message?: string;
+        order?: typeof createdOrder;
+        orderStatus?: string;
+      }>("payment:mock-transfer", "payment:mock-transfer:confirmed", {
+        accountNumber: sellerAccount.accountNumber,
+        amount: createdOrder.totalAmount,
+        reference: createdOrder.code,
+      });
+
+      if (!data.ok) {
+        throw new Error(data.message || "Payment failed");
+      }
 
       setCreatedOrder((current) =>
-        current
-          ? {
-              ...current,
-              statusText: getStatusText(data.orderStatus),
-            }
-          : current,
+        data.order
+          ? data.order
+          : current
+            ? {
+                ...current,
+                statusText: getStatusText(data.orderStatus),
+              }
+            : current,
       );
       toast.show({
         title: "Payment confirmed",
@@ -180,6 +289,7 @@ export default function CheckoutReviewScreen() {
         title: "Payment failed",
         description:
           error?.response?.data?.message ||
+          error?.message ||
           "The dev transfer route could not confirm this order.",
         variant: "error",
       });
@@ -195,18 +305,25 @@ export default function CheckoutReviewScreen() {
       if (!params.productId) return;
 
       try {
-        const { data } = await axiosInstance.get("/orders/checkout/current", {
-          params: {
-            productId: Number(params.productId),
-            conversationId: params.conversationId
-              ? Number(params.conversationId)
-              : undefined,
-            offerMessageId: params.offerMessageId
-              ? Number(params.offerMessageId)
-              : undefined,
-            source: isOfferCheckout ? "offer" : "buy_now",
-          },
+        const data = await emitSocketAck<{
+          ok?: boolean;
+          message?: string;
+          order?: any;
+          paymentAccount?: any;
+        }>("checkout:get-current", "checkout:current", {
+          productId: Number(params.productId),
+          conversationId: params.conversationId
+            ? Number(params.conversationId)
+            : undefined,
+          offerMessageId: params.offerMessageId
+            ? Number(params.offerMessageId)
+            : undefined,
+          source: isOfferCheckout ? "offer" : "buy_now",
         });
+
+        if (!data.ok) {
+          throw new Error(data.message || "Checkout unavailable");
+        }
         if (!isMounted || !data.order) return;
 
         setCreatedOrder(data.order);
@@ -215,7 +332,7 @@ export default function CheckoutReviewScreen() {
         setDeliveryPhone(data.order.delivery?.phone || "");
         setDeliveryAddress(data.order.delivery?.address || "");
         setDeliveryCity(data.order.delivery?.city || "");
-        setDeliveryState(data.order.delivery?.state || "");
+        setDeliveryState(resolveStateValue(data.order.delivery?.state));
       } catch {
         if (isMounted) {
           setCreatedOrder(null);
@@ -238,20 +355,23 @@ export default function CheckoutReviewScreen() {
 
   useEffect(() => {
     if (reviewStatusSentRef.current || !params.conversationId) return;
+    if (params.checkoutStatusNotified === "true") {
+      reviewStatusSentRef.current = true;
+      return;
+    }
 
     reviewStatusSentRef.current = true;
     notifySeller("Checkout status: Buyer is reviewing the order.");
-  }, [params.conversationId]);
+  }, [params.checkoutStatusNotified, params.conversationId]);
 
   const createOrder = async () => {
     if (createdOrder) return payCreatedOrder();
 
     if (!params.productId) return;
-    if (!deliveryAddress.trim()) {
-      setDeliveryAddressError("Delivery address is required");
+    if (!validateDeliveryDetails()) {
       toast.show({
-        title: "Delivery address required",
-        description: "Add where the seller should send the order.",
+        title: "Delivery details required",
+        description: "Add name, address, state, city, and phone number.",
         variant: "error",
       });
       return;
@@ -259,8 +379,14 @@ export default function CheckoutReviewScreen() {
 
     try {
       setCreatingOrder(true);
-      setDeliveryAddressError(null);
-      const { data } = await axiosInstance.post("/orders", {
+      setDeliveryErrors({});
+      const data = await emitSocketAck<{
+        ok?: boolean;
+        message?: string;
+        order?: any;
+        paymentAccount?: any;
+        existing?: boolean;
+      }>("order:create", "order:created", {
         productId: Number(params.productId),
         conversationId: params.conversationId
           ? Number(params.conversationId)
@@ -278,6 +404,10 @@ export default function CheckoutReviewScreen() {
         deliveryCountry: "Nigeria",
       });
 
+      if (!data.ok || !data.order) {
+        throw new Error(data.message || "We couldn't create this order.");
+      }
+
       setCreatedOrder(data.order);
       setSellerAccount(data.paymentAccount);
       toast.show({
@@ -291,6 +421,7 @@ export default function CheckoutReviewScreen() {
         title: "Order unavailable",
         description:
           error?.response?.data?.message ||
+          error?.message ||
           "We couldn't create this order right now.",
         variant: "error",
       });
@@ -496,7 +627,7 @@ export default function CheckoutReviewScreen() {
               className="mb-3 h-11 flex-row items-center justify-center rounded-2xl border border-gray-100 bg-gray-50 dark:border-white/10 dark:bg-white/5"
             >
               {autofillingDelivery ? (
-                <ActivityIndicator color="#2563EB" size="small" />
+                <AveraLoader size={24} compact />
               ) : (
                 <>
                   <Ionicons name="sparkles-outline" size={16} color="#2563EB" />
@@ -511,56 +642,112 @@ export default function CheckoutReviewScreen() {
             </Pressable>
             <TextInput
               value={deliveryName}
-              onChangeText={setDeliveryName}
+              onChangeText={(value) => {
+                setDeliveryName(value);
+                if (value.trim()) clearDeliveryError("name");
+              }}
               placeholder="Recipient name"
               placeholderTextColor="#9CA3AF"
-              className="mb-3 h-14 rounded-2xl border border-gray-100 bg-gray-50 px-4 text-base text-gray-950 dark:border-white/10 dark:bg-white/5 dark:text-white"
-            />
-            <TextInput
-              value={deliveryAddress}
-              onChangeText={(value) => {
-                setDeliveryAddress(value);
-                if (value.trim()) setDeliveryAddressError(null);
-              }}
-              placeholder="Delivery address"
-              placeholderTextColor="#9CA3AF"
               className={`h-14 rounded-2xl border bg-gray-50 px-4 text-base text-gray-950 dark:bg-white/5 dark:text-white ${
-                deliveryAddressError
+                deliveryErrors.name
                   ? "border-red-500"
                   : "border-gray-100 dark:border-white/10"
               }`}
             />
-            {deliveryAddressError ? (
+            {deliveryErrors.name ? (
               <Text className="mb-3 mt-1 text-sm font-semibold text-red-500">
-                {deliveryAddressError}
+                {deliveryErrors.name}
               </Text>
             ) : (
               <View className="mb-3" />
             )}
-            <View className="mb-3 flex-row gap-3">
-              <TextInput
-                value={deliveryCity}
-                onChangeText={setDeliveryCity}
-                placeholder="City"
-                placeholderTextColor="#9CA3AF"
-                className="h-14 flex-1 rounded-2xl border border-gray-100 bg-gray-50 px-4 text-base text-gray-950 dark:border-white/10 dark:bg-white/5 dark:text-white"
-              />
-              <TextInput
-                value={deliveryState}
-                onChangeText={setDeliveryState}
-                placeholder="State"
-                placeholderTextColor="#9CA3AF"
-                className="h-14 flex-1 rounded-2xl border border-gray-100 bg-gray-50 px-4 text-base text-gray-950 dark:border-white/10 dark:bg-white/5 dark:text-white"
-              />
-            </View>
+            <TextInput
+              value={deliveryAddress}
+              onChangeText={(value) => {
+                setDeliveryAddress(value);
+                if (value.trim()) clearDeliveryError("address");
+              }}
+              placeholder="Delivery address"
+              placeholderTextColor="#9CA3AF"
+              className={`h-14 rounded-2xl border bg-gray-50 px-4 text-base text-gray-950 dark:bg-white/5 dark:text-white ${
+                deliveryErrors.address
+                  ? "border-red-500"
+                  : "border-gray-100 dark:border-white/10"
+              }`}
+            />
+            {deliveryErrors.address ? (
+              <Text className="mb-3 mt-1 text-sm font-semibold text-red-500">
+                {deliveryErrors.address}
+              </Text>
+            ) : (
+              <View className="mb-3" />
+            )}
+            <TextInput
+              value={deliveryCity}
+              onChangeText={(value) => {
+                setDeliveryCity(value);
+                if (value.trim()) clearDeliveryError("city");
+              }}
+              placeholder="City"
+              placeholderTextColor="#9CA3AF"
+              className={`h-14 rounded-2xl border bg-gray-50 px-4 text-base text-gray-950 dark:bg-white/5 dark:text-white ${
+                deliveryErrors.city
+                  ? "border-red-500"
+                  : "border-gray-100 dark:border-white/10"
+              }`}
+            />
+            {deliveryErrors.city ? (
+              <Text className="mb-3 mt-1 text-sm font-semibold text-red-500">
+                {deliveryErrors.city}
+              </Text>
+            ) : (
+              <View className="mb-3" />
+            )}
+            <CustomSelect
+              options={NIGERIAN_STATE_OPTIONS}
+              selectedValue={deliveryState}
+              onValueChange={(value) => {
+                setDeliveryState(value);
+                clearDeliveryError("state");
+              }}
+              placeholder="State"
+              searchable
+              searchPlaceholder="Search state"
+              dropdownMaxHeight={260}
+              className="z-20"
+              triggerClassName={
+                deliveryErrors.state
+                  ? "border-red-500"
+                  : "border-gray-100 dark:border-white/10"
+              }
+            />
+            {deliveryErrors.state ? (
+              <Text className="mb-3 mt-1 text-sm font-semibold text-red-500">
+                {deliveryErrors.state}
+              </Text>
+            ) : (
+              <View className="mb-3" />
+            )}
             <TextInput
               value={deliveryPhone}
-              onChangeText={setDeliveryPhone}
+              onChangeText={(value) => {
+                setDeliveryPhone(value);
+                if (value.trim()) clearDeliveryError("phone");
+              }}
               keyboardType="phone-pad"
               placeholder="Phone number"
               placeholderTextColor="#9CA3AF"
-              className="h-14 rounded-2xl border border-gray-100 bg-gray-50 px-4 text-base text-gray-950 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              className={`h-14 rounded-2xl border bg-gray-50 px-4 text-base text-gray-950 dark:bg-white/5 dark:text-white ${
+                deliveryErrors.phone
+                  ? "border-red-500"
+                  : "border-gray-100 dark:border-white/10"
+              }`}
             />
+            {deliveryErrors.phone ? (
+              <Text className="mt-1 text-sm font-semibold text-red-500">
+                {deliveryErrors.phone}
+              </Text>
+            ) : null}
           </View>
 
           {createdOrder ? (
@@ -606,7 +793,7 @@ export default function CheckoutReviewScreen() {
               { label: "Escrow fee", value: formatPrice(escrowFee) },
               {
                 label: "Delivery",
-                value: deliveryAddress.trim() ? "Address added" : "Required",
+                value: hasDeliveryDetails ? "Details added" : "Required",
               },
             ].map((item) => (
               <View
@@ -644,7 +831,7 @@ export default function CheckoutReviewScreen() {
           }`}
         >
           {creatingOrder || payingOrder ? (
-            <ActivityIndicator color="white" />
+            <AveraLoader size={24} color="#FFFFFF" compact />
           ) : (
             <Text variant="none" className="text-base font-bold text-white">
               {isOrderPaid

@@ -5,7 +5,7 @@ import { Platform } from "react-native";
 // Use environment variable or fallback
 export const BASE_URL = __DEV__
   ? "http://172.20.10.2:3000"
-  : "https://fox-delta-arrow.tunnel.rxnnie.tech";
+  : "https://echo-opal-coast.tunnel.rxnnie.tech";
 // || !__DEV__
 //   ? Platform.OS === "ios"
 //     ? "http://localhost:3000/"
@@ -96,7 +96,8 @@ const refreshAccessToken = async (): Promise<string> => {
 // === Interceptors ===
 axiosInstance.interceptors.request.use(
   async (config) => {
-    // await new Promise((res, rej) => setTimeout(res, 5000))
+
+     await new Promise((res, rej) => setTimeout(res, 1000))
     // If tokens are not in memory, load them once from storage
     if (!accessToken || !refreshToken) {
       await loadTokensFromStore();

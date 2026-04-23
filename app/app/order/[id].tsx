@@ -1,17 +1,19 @@
+import { AveraLoader } from "@/components/brand/AveraLoader";
 import { Text } from "@/components/themed/theme";
 import { useToast } from "@/contexts/ToastContext";
-import { axiosInstance } from "@/utils/axios";
+import { connectSocket } from "@/utils/socket";
+import { emitSocketAck } from "@/utils/socket-events";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useColorScheme } from "nativewind";
-import { ComponentProps, useCallback, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  Image,
-  Pressable,
-  ScrollView,
-  View,
-} from "react-native";
+  ComponentProps,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { Image, Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
@@ -132,13 +134,24 @@ export default function OrderDetailsScreen() {
 
     try {
       setLoading(true);
-      const { data } = await axiosInstance.get(`/orders/${orderId}`);
-      setOrder(data);
+      const data = await emitSocketAck<{
+        ok?: boolean;
+        message?: string;
+        order?: Order;
+      }>("order:get", "order:loaded", { orderId });
+
+      if (!data.ok || !data.order) {
+        throw new Error(data.message || "We couldn't load this order.");
+      }
+
+      setOrder(data.order);
     } catch (error: any) {
       toast.show({
         title: "Order unavailable",
         description:
-          error?.response?.data?.message || "We couldn't load this order.",
+          error?.response?.data?.message ||
+          error?.message ||
+          "We couldn't load this order.",
         variant: "error",
       });
     } finally {
@@ -152,18 +165,43 @@ export default function OrderDetailsScreen() {
     }, [loadOrder]),
   );
 
+  useEffect(() => {
+    if (!orderId) return;
+
+    const socket = connectSocket();
+    const handleOrderUpdated = (nextOrder: Order) => {
+      if (Number(nextOrder?.id) !== orderId) return;
+      setOrder(nextOrder);
+    };
+
+    socket.on("order:updated", handleOrderUpdated);
+    return () => {
+      socket.off("order:updated", handleOrderUpdated);
+    };
+  }, [orderId]);
+
   const updateStatus = async () => {
     if (!order || !action) return;
 
     try {
       setUpdating(true);
-      const { data } = await axiosInstance.post(`/orders/${order.id}/status`, {
+      const data = await emitSocketAck<{
+        ok?: boolean;
+        message?: string;
+        order?: Order;
+      }>("order:status:update", "order:status:updated", {
+        orderId: order.id,
         action: action.action,
       });
-      setOrder(data);
+
+      if (!data.ok || !data.order) {
+        throw new Error(data.message || "This status update is not available.");
+      }
+
+      setOrder(data.order);
       toast.show({
         title: "Order updated",
-        description: data.step,
+        description: data.order.step,
         variant: "success",
       });
     } catch (error: any) {
@@ -171,6 +209,7 @@ export default function OrderDetailsScreen() {
         title: "Update failed",
         description:
           error?.response?.data?.message ||
+          error?.message ||
           "This status update is not available right now.",
         variant: "error",
       });
@@ -206,10 +245,7 @@ export default function OrderDetailsScreen() {
 
       {loading ? (
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator color="#2563EB" />
-          <Text className="mt-3 text-sm text-gray-500 dark:text-gray-400">
-            Loading order...
-          </Text>
+          <AveraLoader label="Loading order" />
         </View>
       ) : order ? (
         <>
@@ -383,7 +419,7 @@ export default function OrderDetailsScreen() {
                 className="h-14 flex-row items-center justify-center rounded-2xl bg-brand"
               >
                 {updating ? (
-                  <ActivityIndicator color="white" />
+                  <AveraLoader size={24} color="#FFFFFF" compact />
                 ) : (
                   <>
                     <Ionicons name={action.icon} size={18} color="white" />

@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router/tabs";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useSegments } from "expo-router";
 import {
   Badge,
   Icon,
@@ -137,8 +137,11 @@ const IOS_TABS = [
 export default function TabsLayout() {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
+  const segments = useSegments();
   const [unreadMessages, setUnreadMessages] = useState(0);
-  const unreadBadge = unreadMessages > 9 ? "9+" : String(unreadMessages);
+  const [orderUpdates, setOrderUpdates] = useState(0);
+  const badgeCount = unreadMessages + orderUpdates;
+  const unreadBadge = badgeCount > 9 ? "9+" : String(badgeCount);
 
   const refreshUnreadMessages = useCallback(async () => {
     try {
@@ -161,15 +164,31 @@ export default function TabsLayout() {
     refreshUnreadMessages();
 
     const socket = connectSocket();
+    const handleUnreadCount = (payload: { count?: number }) => {
+      setUnreadMessages(Number(payload?.count || 0));
+    };
+    const handleOrderUpdated = () => {
+      setOrderUpdates((current) => Math.min(current + 1, 99));
+    };
 
     socket.on("message:new", refreshUnreadMessages);
     socket.on("conversation:read", refreshUnreadMessages);
+    socket.on("conversation:unread-count", handleUnreadCount);
+    socket.on("order:updated", handleOrderUpdated);
 
     return () => {
       socket.off("message:new", refreshUnreadMessages);
       socket.off("conversation:read", refreshUnreadMessages);
+      socket.off("conversation:unread-count", handleUnreadCount);
+      socket.off("order:updated", handleOrderUpdated);
     };
   }, [refreshUnreadMessages]);
+
+  useEffect(() => {
+    if (segments.at(-1) === "orders") {
+      setOrderUpdates(0);
+    }
+  }, [segments]);
 
   if (Platform.OS === "ios") {
     return (
@@ -202,7 +221,7 @@ export default function TabsLayout() {
           <NativeTabs.Trigger key={tab.name} name={tab.name}>
             <Icon sf={tab.sf} />
             <Label>{tab.label}</Label>
-            {tab.name === "orders" && unreadMessages > 0 ? (
+            {tab.name === "orders" && badgeCount > 0 ? (
               <Badge>{unreadBadge}</Badge>
             ) : null}
           </NativeTabs.Trigger>
@@ -269,7 +288,7 @@ export default function TabsLayout() {
         name="orders"
         options={{
           tabBarLabel: "Orders",
-          tabBarBadge: unreadMessages > 0 ? unreadBadge : undefined,
+          tabBarBadge: badgeCount > 0 ? unreadBadge : undefined,
           tabBarBadgeStyle: {
             backgroundColor: "#2563EB",
             color: "#FFFFFF",

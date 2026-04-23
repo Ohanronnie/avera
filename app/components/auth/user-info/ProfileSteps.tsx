@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
-import { ActivityIndicator, View } from "react-native";
+import { View } from "react-native";
 
+import { AveraLoader } from "@/components/brand/AveraLoader";
 import { CustomSelect } from "@/components/custom-select";
 import { Input, InputField } from "@/components/ui/input";
 import { Text } from "@/components/ui/text";
@@ -72,7 +73,7 @@ export function UsernameStep({
       inputRightElement={
         <View className="mr-3">
           {checkingUsername ? (
-            <ActivityIndicator color="#2563EB" size="small" />
+            <AveraLoader size={22} compact />
           ) : showSuccess || showError ? (
             <Ionicons
               name={showError ? "close-circle" : "checkmark-circle"}

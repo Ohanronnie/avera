@@ -5,7 +5,7 @@ import { Divider } from "@/components/ui/divider";
 import { Input, InputField } from "@/components/ui/input";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { View, Pressable, Image, ActivityIndicator } from "react-native";
+import { View, Pressable, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { z } from "zod";
 import { useColorScheme } from "nativewind";
@@ -15,6 +15,7 @@ import {
   useGoogleLoginMutation,
 } from "@/features/auth/hooks";
 import { useToast } from "@/contexts/ToastContext";
+import { AveraLoader } from "@/components/brand/AveraLoader";
 
 const loginSchema = z.object({
   email: z
@@ -217,7 +218,7 @@ export default function Login() {
             disabled={loginMutation.isPending}
           >
             {loginMutation.isPending ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
+              <AveraLoader size={24} color="#FFFFFF" compact />
             ) : (
               <ButtonText className="font-bold text-typography-white">
                 Sign In
@@ -241,9 +242,10 @@ export default function Login() {
             disabled={googleLoginMutation.isPending}
           >
             {googleLoginMutation.isPending ? (
-              <ActivityIndicator
+              <AveraLoader
+                size={24}
                 color={isDark ? "#FFFFFF" : "#111827"}
-                size="small"
+                compact
               />
             ) : (
               <>

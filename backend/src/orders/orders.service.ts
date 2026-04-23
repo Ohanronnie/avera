@@ -455,6 +455,19 @@ export class OrdersService {
     return this.mapOrder(order, userId);
   }
 
+  async getOrderParticipantIds(orderId: number) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: {
+        buyerId: true,
+        sellerId: true,
+      },
+    });
+
+    if (!order) return [];
+    return [order.buyerId, order.sellerId];
+  }
+
   async updateOrderStatus(orderId: number, userId: number, action?: string) {
     const order = await this.prisma.order.findFirst({
       where: {

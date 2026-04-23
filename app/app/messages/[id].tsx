@@ -5,7 +5,6 @@ import { useColorScheme } from "nativewind";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Gallery from "react-native-awesome-gallery";
 import {
-  ActivityIndicator,
   Image,
   Keyboard,
   KeyboardAvoidingView,
@@ -18,12 +17,14 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { AveraLoader } from "@/components/brand/AveraLoader";
 import { Text } from "@/components/themed/theme";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
 import { BASE_URL, axiosInstance } from "@/utils/axios";
 import { connectSocket } from "@/utils/socket";
+import { emitSocketAck } from "@/utils/socket-events";
 
 const quickReplies = [
   "Is this still available?",
@@ -136,6 +137,7 @@ export default function MessageDetailsScreen() {
   const toast = useToast();
   const scrollViewRef = useRef<ScrollView>(null);
   const messageInputRef = useRef<TextInput>(null);
+  const offerAmountInputRef = useRef<TextInput>(null);
   const [message, setMessage] = useState("");
   const [actionsOpen, setActionsOpen] = useState(false);
   const [offerOpen, setOfferOpen] = useState(false);
@@ -220,6 +222,12 @@ export default function MessageDetailsScreen() {
     setOfferQuantity((current) => Math.min(availableQuantity, current + 1));
   };
 
+  const closeOfferSheet = () => {
+    offerAmountInputRef.current?.blur();
+    Keyboard.dismiss();
+    setOfferOpen(false);
+  };
+
   const decrementBuyQuantity = () => {
     setBuyQuantity((current) => Math.max(1, current - 1));
   };
@@ -294,6 +302,13 @@ export default function MessageDetailsScreen() {
 
     return latestCheckoutStatus;
   }, [checkoutOrder?.code, checkoutOrder?.status, latestCheckoutStatus]);
+  const buyerCheckoutStatus = useMemo(() => {
+    if (!liveCheckoutStatus) return null;
+
+    return liveCheckoutStatus
+      .replace(/^Buyer is /i, "You are ")
+      .replace(/^Buyer /i, "You ");
+  }, [liveCheckoutStatus]);
   const acceptedOfferPaid =
     Boolean(acceptedOfferForCheckout) &&
     (/payment confirmed/i.test(liveCheckoutStatus || "") ||
@@ -305,6 +320,19 @@ export default function MessageDetailsScreen() {
         "COMPLETED",
       ].includes(checkoutOrder?.status || "") ||
       checkoutOrder?.statusText === "Paid in escrow");
+  const directCheckoutActive =
+    !isSeller &&
+    !acceptedOfferForCheckout &&
+    Boolean(checkoutOrder || buyerCheckoutStatus);
+  const directCheckoutPaid =
+    [
+      "PAID_IN_ESCROW",
+      "SELLER_PREPARING",
+      "SHIPPED",
+      "DELIVERED",
+      "COMPLETED",
+    ].includes(checkoutOrder?.status || "") ||
+    checkoutOrder?.statusText === "Paid in escrow";
 
   const appendMessage = useCallback((nextMessage: ChatMessage) => {
     setMessages((current) => {
@@ -514,14 +542,21 @@ export default function MessageDetailsScreen() {
     }
 
     try {
-      const { data } = await axiosInstance.get("/orders/checkout/current", {
-        params: {
-          productId,
-          conversationId,
-          offerMessageId: acceptedOfferForCheckout?.id,
-          source: "offer",
-        },
+      const data = await emitSocketAck<{
+        ok?: boolean;
+        message?: string;
+        order?: any;
+      }>("checkout:get-current", "checkout:current", {
+        productId,
+        conversationId,
+        offerMessageId: acceptedOfferForCheckout?.id,
+        source: acceptedOfferForCheckout ? "offer" : "buy_now",
       });
+
+      if (!data.ok) {
+        throw new Error(data.message || "Checkout unavailable");
+      }
+      console.log("Checkout status refreshed", JSON.stringify(data));
       setCheckoutOrder(data.order || null);
     } catch {
       setCheckoutOrder(null);
@@ -569,59 +604,24 @@ export default function MessageDetailsScreen() {
       ...input,
     };
 
-    const sendWithRest = async () => {
-      const { data } = await axiosInstance.post(
-        `/chat/conversations/${conversation.id}/messages`,
-        input,
+    const response = await emitSocketAck<{
+      ok?: boolean;
+      message?: ChatMessage | string;
+    }>("message:send", "message:sent", payload);
+
+    if (
+      !response?.ok ||
+      typeof response.message === "string" ||
+      !response.message
+    ) {
+      throw new Error(
+        typeof response?.message === "string"
+          ? response.message
+          : "Message not sent",
       );
-      return data as ChatMessage;
-    };
-
-    try {
-      const socket = connectSocket();
-      const clientRequestId = `${Date.now()}-${Math.random()
-        .toString(36)
-        .slice(2)}`;
-      const response = await new Promise<{
-        ok?: boolean;
-        message?: ChatMessage | string;
-      }>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          socket.off("message:sent", handleSent);
-          reject(new Error("Socket send timed out"));
-        }, 8000);
-
-        const handleSent = (nextResponse: any) => {
-          if (nextResponse?.clientRequestId !== clientRequestId) return;
-          clearTimeout(timeout);
-          socket.off("message:sent", handleSent);
-          resolve(nextResponse);
-        };
-
-        socket.on("message:sent", handleSent);
-        socket.emit("message:send", {
-          ...payload,
-          clientRequestId,
-        });
-      });
-
-      if (
-        !response?.ok ||
-        typeof response.message === "string" ||
-        !response.message
-      ) {
-        throw new Error(
-          typeof response?.message === "string"
-            ? response.message
-            : "Message not sent",
-        );
-      }
-
-      return response.message;
-    } catch {
-      console.log("Falling back to REST for sending message");
-      return sendWithRest();
     }
+
+    return response.message;
   };
 
   const respondToOfferRequest = async (
@@ -630,62 +630,30 @@ export default function MessageDetailsScreen() {
   ): Promise<{ offer: ChatMessage; message: ChatMessage }> => {
     if (!conversation?.id) throw new Error("Conversation not available");
 
-    const respondWithRest = async () => {
-      const { data } = await axiosInstance.post(
-        `/chat/conversations/${conversation.id}/offers/${offerMessageId}/respond`,
-        { accepted },
+    const response = await emitSocketAck<{
+      ok?: boolean;
+      offer?: ChatMessage;
+      message?: ChatMessage | string;
+    }>("offer:respond", "offer:responded", {
+      conversationId: conversation.id,
+      offerMessageId,
+      accepted,
+    });
+
+    if (
+      !response?.ok ||
+      !response.offer ||
+      typeof response.message === "string" ||
+      !response.message
+    ) {
+      throw new Error(
+        typeof response?.message === "string"
+          ? response.message
+          : "Offer response not sent",
       );
-      return data as { offer: ChatMessage; message: ChatMessage };
-    };
-
-    try {
-      const socket = connectSocket();
-      const clientRequestId = `${Date.now()}-${Math.random()
-        .toString(36)
-        .slice(2)}`;
-      const response = await new Promise<{
-        ok?: boolean;
-        offer?: ChatMessage;
-        message?: ChatMessage | string;
-      }>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          socket.off("offer:responded", handleResponded);
-          reject(new Error("Socket offer response timed out"));
-        }, 8000);
-
-        const handleResponded = (nextResponse: any) => {
-          if (nextResponse?.clientRequestId !== clientRequestId) return;
-          clearTimeout(timeout);
-          socket.off("offer:responded", handleResponded);
-          resolve(nextResponse);
-        };
-
-        socket.on("offer:responded", handleResponded);
-        socket.emit("offer:respond", {
-          clientRequestId,
-          conversationId: conversation.id,
-          offerMessageId,
-          accepted,
-        });
-      });
-
-      if (
-        !response?.ok ||
-        !response.offer ||
-        typeof response.message === "string" ||
-        !response.message
-      ) {
-        throw new Error(
-          typeof response?.message === "string"
-            ? response.message
-            : "Offer response not sent",
-        );
-      }
-
-      return { offer: response.offer, message: response.message };
-    } catch {
-      return respondWithRest();
     }
+
+    return { offer: response.offer, message: response.message };
   };
 
   const createOptimisticMessage = (
@@ -920,6 +888,8 @@ export default function MessageDetailsScreen() {
 
     try {
       setSending(true);
+      offerAmountInputRef.current?.blur();
+      Keyboard.dismiss();
       const payload = {
         content: `I would like to offer ₦${amount.toLocaleString()} x ${offerQuantity} for this item.`,
         offerAmount: amount,
@@ -1128,10 +1098,7 @@ export default function MessageDetailsScreen() {
 
           {loadingConversation ? (
             <View className="items-center justify-center py-16">
-              <ActivityIndicator color="#2563EB" />
-              <Text className="mt-3 text-sm text-gray-500 dark:text-gray-400">
-                Opening chat...
-              </Text>
+              <AveraLoader label="Opening chat" />
             </View>
           ) : messages.length === 0 ? (
             <View className="items-center justify-center py-16">
@@ -1544,6 +1511,66 @@ export default function MessageDetailsScreen() {
                 </Text>
               </Pressable>
             </View>
+          ) : directCheckoutActive ? (
+            <View className="mb-3 rounded-3xl border border-brand/20 bg-brand/10 p-4">
+              <View className="flex-row items-start">
+                <View className="h-10 w-10 items-center justify-center rounded-2xl bg-brand/10">
+                  <Ionicons
+                    name={
+                      directCheckoutPaid
+                        ? "shield-checkmark-outline"
+                        : "card-outline"
+                    }
+                    size={20}
+                    color="#2563EB"
+                  />
+                </View>
+                <View className="ml-3 flex-1">
+                  <Text
+                    variant="none"
+                    className="text-xs font-bold uppercase tracking-widest text-brand"
+                  >
+                    {directCheckoutPaid ? "Payment secured" : "Checkout active"}
+                  </Text>
+                  <Text className="mt-1 text-sm font-bold text-gray-950 dark:text-white">
+                    {buyerCheckoutStatus ||
+                      `${checkoutOrder?.code || "Order"} is in progress.`}
+                  </Text>
+                  <Text className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {directCheckoutPaid
+                      ? "Your payment is held in escrow."
+                      : "Continue when you're ready to complete payment."}
+                  </Text>
+                </View>
+              </View>
+              <Pressable
+                onPress={() =>
+                  directCheckoutPaid && checkoutOrder?.id
+                    ? router.push({
+                        pathname: "/order/[id]",
+                        params: { id: String(checkoutOrder.id) },
+                      })
+                    : openCheckoutReview({
+                        source: "buy_now",
+                        unitPrice: productNumericPrice,
+                        quantity: buyQuantity,
+                      })
+                }
+                className="mt-4 h-11 flex-row items-center justify-center rounded-2xl bg-brand"
+              >
+                <Ionicons
+                  name={directCheckoutPaid ? "receipt-outline" : "card-outline"}
+                  size={16}
+                  color="white"
+                />
+                <Text
+                  variant="none"
+                  className="ml-2 text-sm font-black text-white"
+                >
+                  {directCheckoutPaid ? "View order" : "Continue checkout"}
+                </Text>
+              </Pressable>
+            </View>
           ) : isSeller ? (
             latestIncomingOffer?.offerAmount ? (
               <View className="mb-3 rounded-3xl border border-brand/20 bg-brand/10 p-4">
@@ -1717,7 +1744,7 @@ export default function MessageDetailsScreen() {
               }`}
             >
               {sendingImage ? (
-                <ActivityIndicator size="small" color="#2563EB" />
+                <AveraLoader size={22} compact />
               ) : (
                 <Ionicons
                   name="add"
@@ -1877,7 +1904,7 @@ export default function MessageDetailsScreen() {
         coverTabs
         title="Make an offer"
         subtitle="Send a price offer to the seller. This does not create an order yet."
-        onClose={() => setOfferOpen(false)}
+        onClose={closeOfferSheet}
       >
         <View>
           <View className="border-b border-gray-100 pb-4 dark:border-white/10">
@@ -1898,13 +1925,28 @@ export default function MessageDetailsScreen() {
                 ₦
               </Text>
               <TextInput
+                ref={offerAmountInputRef}
                 value={offerAmount}
                 onChangeText={formatOfferInput}
                 keyboardType="numeric"
+                returnKeyType="done"
+                blurOnSubmit
+                onSubmitEditing={Keyboard.dismiss}
                 placeholder="Enter amount"
                 placeholderTextColor="#888"
                 className="h-16 flex-1 px-3 text-2xl font-black text-gray-950 dark:text-white"
               />
+              <Pressable
+                onPress={() => {
+                  offerAmountInputRef.current?.blur();
+                  Keyboard.dismiss();
+                }}
+                className="h-9 items-center justify-center rounded-full bg-white px-4 dark:bg-white/10"
+              >
+                <Text variant="none" className="text-xs font-black text-brand">
+                  Done
+                </Text>
+              </Pressable>
             </View>
             {offerPercent ? (
               <Text
@@ -2013,7 +2055,7 @@ export default function MessageDetailsScreen() {
 
           <View className="mt-6 flex-row gap-3">
             <Pressable
-              onPress={() => setOfferOpen(false)}
+              onPress={closeOfferSheet}
               className="h-14 flex-1 items-center justify-center rounded-2xl border border-gray-200 bg-gray-50 dark:border-white/10 dark:bg-white/5"
             >
               <Text className="font-bold text-gray-950 dark:text-white">

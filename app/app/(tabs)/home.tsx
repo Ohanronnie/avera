@@ -1,4 +1,6 @@
+import { AveraLoader } from "@/components/brand/AveraLoader";
 import { ProductCard, IProduct } from "@/components/products/product-card";
+import { AnimatedAveraLogo } from "@/components/brand/AnimatedAveraLogo";
 import { ApiProduct, mapProductToCard } from "@/features/products/types";
 import { Text } from "@/components/themed/theme";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
@@ -7,13 +9,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { ComponentProps } from "react";
 import { useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  View,
-  Dimensions,
-} from "react-native";
+import { Pressable, ScrollView, View, Dimensions } from "react-native";
 import Categories from "@/components/products/categories";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useColorScheme } from "nativewind";
@@ -165,7 +161,9 @@ export default function HomeScreen() {
     <SafeAreaView className="flex-1 bg-white dark:bg-[#0A0A0A]" edges={["top"]}>
       {/* Fixed Full-Width Header */}
       <View className="flex flex-row justify-between items-center px-5 py-4 border-b border-gray-100 dark:border-white/5 bg-white dark:bg-[#0A0A0A]">
-        <Text className="text-3xl font-bold text-brand">Avera</Text>
+        <View className="flex-row items-center gap-x-2">
+          <AnimatedAveraLogo size={42} />
+        </View>
         <View className="flex-row gap-x-2">
           <Pressable
             onPress={() => router.push("/product/search")}
@@ -300,7 +298,7 @@ export default function HomeScreen() {
         <View className="mt-8 pb-80">
           {productsLoading ? (
             <View className="mx-5 items-center justify-center rounded-3xl border border-gray-100 bg-gray-50 py-12 dark:border-white/5 dark:bg-white/5">
-              <ActivityIndicator color="#2563EB" size="small" />
+              <AveraLoader size={34} compact />
             </View>
           ) : productSections.length ? (
             productSections.map((section) => (

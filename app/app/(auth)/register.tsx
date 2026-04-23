@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { AveraLoader } from "@/components/brand/AveraLoader";
 import { Text } from "@/components/ui/text";
 import { Button, ButtonText } from "@/components/ui/button";
 import { Divider } from "@/components/ui/divider";
@@ -12,7 +13,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
-  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { z } from "zod";
@@ -206,7 +206,7 @@ export default function Register() {
             disabled={registerMutation.isPending}
           >
             {registerMutation.isPending ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
+              <AveraLoader size={24} color="#FFFFFF" compact />
             ) : (
               <ButtonText className="font-bold text-typography-white">
                 Sign Up
@@ -230,9 +230,10 @@ export default function Register() {
             disabled={googleLoginMutation.isPending}
           >
             {googleLoginMutation.isPending ? (
-              <ActivityIndicator
+              <AveraLoader
+                size={24}
                 color={isDark ? "#FFFFFF" : "#111827"}
-                size="small"
+                compact
               />
             ) : (
               <>

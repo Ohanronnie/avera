@@ -2,15 +2,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { useColorScheme } from "nativewind";
 import { useCallback, useState } from "react";
-import {
-  ActivityIndicator,
-  Image,
-  Pressable,
-  ScrollView,
-  View,
-} from "react-native";
+import { Image, Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { AveraLoader } from "@/components/brand/AveraLoader";
 import { Text } from "@/components/themed/theme";
 import { useToast } from "@/contexts/ToastContext";
 import { axiosInstance } from "@/utils/axios";
@@ -122,10 +117,7 @@ export default function MessagesInboxScreen() {
 
       {loading ? (
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator color="#2563EB" />
-          <Text className="mt-3 text-sm text-gray-500 dark:text-gray-400">
-            Loading messages...
-          </Text>
+          <AveraLoader label="Loading messages" />
         </View>
       ) : conversations.length ? (
         <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>

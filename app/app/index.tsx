@@ -1,19 +1,35 @@
 import { useEffect, useRef } from "react";
 import { router } from "expo-router";
 import * as SecureStore from "expo-secure-store";
-import { Animated, StyleSheet, View, Dimensions } from "react-native";
+import { Animated, StyleSheet, Text, View } from "react-native";
+
+import { AnimatedAveraLogo } from "@/components/brand/AnimatedAveraLogo";
+import { useTheme } from "@/contexts/ThemeContext";
 
 export default function Index() {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const { isDark } = useTheme();
+  const scaleAnim = useRef(new Animated.Value(0)).current;
+  const wordmarkAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     let isMounted = true;
+    let routeTimeout: ReturnType<typeof setTimeout> | undefined;
 
-    const animation = Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 1000,
-      useNativeDriver: true,
-    });
+    const entranceAnimation = Animated.parallel([
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 650,
+        useNativeDriver: true,
+      }),
+      Animated.sequence([
+        Animated.delay(360),
+        Animated.timing(wordmarkAnim, {
+          toValue: 1,
+          duration: 650,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]);
 
     const decideRoute = async () => {
       const token = await SecureStore.getItemAsync("accessToken");
@@ -27,30 +43,35 @@ export default function Index() {
       }
     };
 
-    animation.start(({ finished }) => {
+    entranceAnimation.start(({ finished }) => {
       if (finished) {
-        decideRoute();
+        routeTimeout = setTimeout(decideRoute, 1500);
       }
     });
 
     return () => {
       isMounted = false;
-      animation.stop();
-      fadeAnim.stopAnimation();
+      if (routeTimeout) clearTimeout(routeTimeout);
+      entranceAnimation.stop();
+      scaleAnim.stopAnimation();
+      wordmarkAnim.stopAnimation();
     };
-  }, [fadeAnim]);
+  }, [scaleAnim, wordmarkAnim]);
 
   return (
-    <View style={styles.container}>
-      <Animated.Image
-        source={require("../assets/images/splash.png")}
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: isDark ? "#0A0A0A" : "#ffffff" },
+      ]}
+    >
+      <Animated.View
         style={[
-          styles.logo,
+          styles.logoWrap,
           {
-            opacity: fadeAnim,
             transform: [
               {
-                scale: fadeAnim.interpolate({
+                scale: scaleAnim.interpolate({
                   inputRange: [0, 1],
                   outputRange: [0.85, 1],
                 }),
@@ -58,8 +79,31 @@ export default function Index() {
             ],
           },
         ]}
-        resizeMode="contain"
-      />
+      >
+        <AnimatedAveraLogo size={240} />
+      </Animated.View>
+      <Animated.View
+        style={[
+          styles.wordmarkWrap,
+          {
+            transform: [
+              {
+                translateY: wordmarkAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [10, 0],
+                }),
+              },
+            ],
+          },
+        ]}
+      >
+        <Text style={styles.wordmark}>Avera</Text>
+        <Text
+          style={[styles.tagline, { color: isDark ? "#9CA3AF" : "#6B7280" }]}
+        >
+          The marketplace you can trust
+        </Text>
+      </Animated.View>
     </View>
   );
 }
@@ -67,12 +111,29 @@ export default function Index() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#ffffff",
     alignItems: "center",
     justifyContent: "center",
   },
-  logo: {
-    width: Dimensions.get("window").width * 0.7,
-    height: Dimensions.get("window").width * 0.7,
+  logoWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  wordmarkWrap: {
+    position: "absolute",
+    alignItems: "center",
+    bottom: 72,
+  },
+  wordmark: {
+    color: "#2563EB",
+    fontSize: 36,
+    fontWeight: "800",
+    lineHeight: 44,
+  },
+  tagline: {
+    marginTop: 6,
+    color: "#6B7280",
+    fontSize: 14,
+    fontWeight: "500",
+    lineHeight: 20,
   },
 });

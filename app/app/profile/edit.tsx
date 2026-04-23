@@ -1,6 +1,5 @@
 import { Fragment, useCallback, useState } from "react";
 import {
-  ActivityIndicator,
   Image,
   ImageBackground,
   KeyboardAvoidingView,
@@ -15,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 
+import { AveraLoader } from "@/components/brand/AveraLoader";
 import { CustomSelect } from "@/components/custom-select";
 import { Text } from "@/components/themed/theme";
 import { NIGERIA_STATE_OPTIONS } from "@/components/auth/user-info/constants";
@@ -289,7 +289,7 @@ export default function EditProfileScreen() {
       >
         {loading ? (
           <View className="flex-1 items-center justify-center">
-            <ActivityIndicator color="#2563EB" size="small" />
+            <AveraLoader label="Loading profile" />
           </View>
         ) : (
           <ScrollView
@@ -324,7 +324,7 @@ export default function EditProfileScreen() {
                 ) : (
                   <View className="h-full items-center justify-center">
                     {uploadingImage === "coverPhotoUrl" ? (
-                      <ActivityIndicator color="#2563EB" size="small" />
+                      <AveraLoader size={28} compact />
                     ) : (
                       <>
                         <Ionicons
@@ -347,7 +347,7 @@ export default function EditProfileScreen() {
                   className="h-24 w-24 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-gray-100 dark:border-[#0A0A0A] dark:bg-white/10"
                 >
                   {uploadingImage === "avatarUrl" ? (
-                    <ActivityIndicator color="#2563EB" size="small" />
+                    <AveraLoader size={28} compact />
                   ) : form.avatarUrl ? (
                     <Image
                       source={{ uri: form.avatarUrl }}
@@ -429,7 +429,7 @@ export default function EditProfileScreen() {
               className="mt-2 h-14 flex-row items-center justify-center rounded-full bg-brand"
             >
               {saving ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
+                <AveraLoader size={24} color="#FFFFFF" compact />
               ) : (
                 <>
                   <Ionicons name="checkmark" size={20} color="#FFFFFF" />

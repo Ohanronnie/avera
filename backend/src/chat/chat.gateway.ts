@@ -10,6 +10,8 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { Server, Socket } from 'socket.io';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { OrdersService } from 'src/orders/orders.service';
+import { WalletService } from 'src/wallet/wallet.service';
 import { ChatService } from './chat.service';
 
 type AuthenticatedSocket = Socket & {
@@ -34,6 +36,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
     private readonly chatService: ChatService,
+    private readonly ordersService: OrdersService,
+    private readonly walletService: WalletService,
   ) {}
 
   private getToken(socket: Socket) {
@@ -138,6 +142,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         ...readState,
         readerId: userId,
       });
+      await this.emitUnreadCount(userId);
     } catch (error: any) {
       socket.emit('chat:error', {
         message: error?.message || 'Unable to mark messages read',
@@ -249,6 +254,192 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
+  @SubscribeMessage('checkout:get-current')
+  async getCurrentCheckout(
+    @ConnectedSocket() socket: AuthenticatedSocket,
+    @MessageBody()
+    body: {
+      clientRequestId?: string;
+      productId?: number;
+      conversationId?: number;
+      offerMessageId?: number;
+      source?: string;
+    },
+  ) {
+    try {
+      const userId = socket.data.userId;
+      if (!userId) return;
+
+      const data = await this.ordersService.getCurrentCheckout(userId, {
+        productId: Number(body?.productId),
+        conversationId: body?.conversationId
+          ? Number(body.conversationId)
+          : undefined,
+        offerMessageId: body?.offerMessageId
+          ? Number(body.offerMessageId)
+          : undefined,
+        source: body?.source,
+      });
+
+      socket.emit('checkout:current', {
+        clientRequestId: body?.clientRequestId,
+        ok: true,
+        ...data,
+      });
+    } catch (error: any) {
+      socket.emit('checkout:current', {
+        clientRequestId: body?.clientRequestId,
+        ok: false,
+        message: error?.message || 'Checkout unavailable',
+      });
+      socket.emit('chat:error', {
+        message: error?.message || 'Checkout unavailable',
+      });
+    }
+  }
+
+  @SubscribeMessage('order:create')
+  async createOrder(
+    @ConnectedSocket() socket: AuthenticatedSocket,
+    @MessageBody() body: any,
+  ) {
+    try {
+      const userId = socket.data.userId;
+      if (!userId) return;
+
+      const data = await this.ordersService.createOrder(userId, body);
+      await this.emitOrderUpdated(data.order.id);
+      socket.emit('order:created', {
+        clientRequestId: body?.clientRequestId,
+        ok: true,
+        ...data,
+      });
+    } catch (error: any) {
+      socket.emit('order:created', {
+        clientRequestId: body?.clientRequestId,
+        ok: false,
+        message: error?.message || 'Order unavailable',
+      });
+      socket.emit('chat:error', {
+        message: error?.message || 'Order unavailable',
+      });
+    }
+  }
+
+  @SubscribeMessage('order:get')
+  async getOrder(
+    @ConnectedSocket() socket: AuthenticatedSocket,
+    @MessageBody() body: { clientRequestId?: string; orderId?: number },
+  ) {
+    try {
+      const userId = socket.data.userId;
+      const orderId = Number(body?.orderId);
+      if (!userId || !orderId) return;
+
+      const order = await this.ordersService.getOrder(orderId, userId);
+      socket.emit('order:loaded', {
+        clientRequestId: body?.clientRequestId,
+        ok: true,
+        order,
+      });
+    } catch (error: any) {
+      socket.emit('order:loaded', {
+        clientRequestId: body?.clientRequestId,
+        ok: false,
+        message: error?.message || 'Order unavailable',
+      });
+      socket.emit('chat:error', {
+        message: error?.message || 'Order unavailable',
+      });
+    }
+  }
+
+  @SubscribeMessage('order:status:update')
+  async updateOrderStatus(
+    @ConnectedSocket() socket: AuthenticatedSocket,
+    @MessageBody()
+    body: {
+      clientRequestId?: string;
+      orderId?: number;
+      action?: string;
+    },
+  ) {
+    try {
+      const userId = socket.data.userId;
+      const orderId = Number(body?.orderId);
+      if (!userId || !orderId) return;
+
+      const order = await this.ordersService.updateOrderStatus(
+        orderId,
+        userId,
+        body?.action,
+      );
+      await this.emitOrderUpdated(order.id);
+      socket.emit('order:status:updated', {
+        clientRequestId: body?.clientRequestId,
+        ok: true,
+        order,
+      });
+    } catch (error: any) {
+      socket.emit('order:status:updated', {
+        clientRequestId: body?.clientRequestId,
+        ok: false,
+        message: error?.message || 'Order update failed',
+      });
+      socket.emit('chat:error', {
+        message: error?.message || 'Order update failed',
+      });
+    }
+  }
+
+  @SubscribeMessage('payment:mock-transfer')
+  async confirmMockTransfer(
+    @ConnectedSocket() socket: AuthenticatedSocket,
+    @MessageBody()
+    body: {
+      clientRequestId?: string;
+      accountNumber?: string;
+      amount?: number;
+      reference?: string;
+    },
+  ) {
+    try {
+      const result = await this.walletService.sendMoneyToAccount(
+        String(body?.accountNumber || ''),
+        Number(body?.amount),
+        body?.reference,
+      );
+
+      if (result.orderId) {
+        await this.emitOrderUpdated(result.orderId);
+      }
+
+      const order =
+        result.orderId && socket.data.userId
+          ? await this.ordersService.getOrder(
+              result.orderId,
+              socket.data.userId,
+            )
+          : null;
+
+      socket.emit('payment:mock-transfer:confirmed', {
+        clientRequestId: body?.clientRequestId,
+        ok: true,
+        order,
+        ...result,
+      });
+    } catch (error: any) {
+      socket.emit('payment:mock-transfer:confirmed', {
+        clientRequestId: body?.clientRequestId,
+        ok: false,
+        message: error?.message || 'Payment failed',
+      });
+      socket.emit('chat:error', {
+        message: error?.message || 'Payment failed',
+      });
+    }
+  }
+
   async emitNewMessage(conversationId: number, message: any) {
     const participantIds =
       await this.chatService.getConversationParticipantIds(conversationId);
@@ -258,6 +449,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     ];
 
     this.server.to(rooms).emit('message:new', message);
+    await this.emitUnreadCounts(participantIds);
   }
 
   emitConversationRead(conversationId: number, readState: any) {
@@ -271,5 +463,28 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       conversationId,
       offer,
     });
+  }
+
+  async emitOrderUpdated(orderId: number) {
+    const participantIds =
+      await this.ordersService.getOrderParticipantIds(orderId);
+
+    await Promise.all(
+      participantIds.map(async (userId) => {
+        const order = await this.ordersService.getOrder(orderId, userId);
+        this.server.to(`user:${userId}`).emit('order:updated', order);
+      }),
+    );
+  }
+
+  private async emitUnreadCount(userId: number) {
+    const count = await this.chatService.getUnreadCount(userId);
+    this.server.to(`user:${userId}`).emit('conversation:unread-count', {
+      count,
+    });
+  }
+
+  private async emitUnreadCounts(userIds: number[]) {
+    await Promise.all(userIds.map((userId) => this.emitUnreadCount(userId)));
   }
 }

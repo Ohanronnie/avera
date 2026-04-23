@@ -1,15 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useColorScheme } from "nativewind";
-import {
-  ActivityIndicator,
-  Image,
-  Pressable,
-  ScrollView,
-  View,
-} from "react-native";
+import { Image, Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { AveraLoader } from "@/components/brand/AveraLoader";
 import { Text } from "@/components/themed/theme";
 import { axiosInstance } from "@/utils/axios";
 import { useQuery } from "@tanstack/react-query";
@@ -116,7 +111,7 @@ export default function SellerProfileScreen() {
       >
         {isLoading ? (
           <View className="flex-1 items-center justify-center px-10">
-            <ActivityIndicator size={25} className="color-brand" />
+            <AveraLoader label="Loading seller" />
           </View>
         ) : error ? (
           <View className="flex-1 items-center justify-center px-10">

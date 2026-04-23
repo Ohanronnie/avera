@@ -1,3 +1,4 @@
+import { AveraLoader } from "@/components/brand/AveraLoader";
 import { ProductCard, IProduct } from "@/components/products/product-card";
 import { mapProductToCard } from "@/features/products/types";
 import { Text } from "@/components/themed/theme";
@@ -6,12 +7,12 @@ import { Input, InputField } from "@/components/ui/input";
 import { axiosInstance } from "@/utils/axios";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useColorScheme } from "nativewind";
 import { createMMKV } from "react-native-mmkv";
 import {
-  ActivityIndicator,
   FlatList,
+  PanResponder,
   Pressable,
   ScrollView,
   View,
@@ -19,6 +20,9 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 const PRODUCT_PAGE_SIZE = 10;
 const RECENT_SEARCHES_KEY = "recentSearches";
+const PRICE_RANGE_MIN = 0;
+const PRICE_RANGE_MAX = 2000000;
+const PRICE_RANGE_STEP = 50000;
 const fallbackTrendingSearches = [
   "iPhone 14 Pro Max",
   "MacBook Air M2",
@@ -73,6 +77,8 @@ type ProductFilters = {
   condition: "all" | "new" | "used";
   sort: "newest" | "budget" | "premium";
   featured: boolean;
+  minPrice: number;
+  maxPrice: number;
 };
 
 const conditionOptions: Array<{
@@ -90,21 +96,45 @@ const sortOptions: Array<{ label: string; value: ProductFilters["sort"] }> = [
   { label: "Premium", value: "premium" },
 ];
 
+const getInitialPrice = (value: string | undefined, fallback: number) => {
+  const price = Number(value);
+  if (!Number.isFinite(price)) return fallback;
+  return Math.min(Math.max(price, PRICE_RANGE_MIN), PRICE_RANGE_MAX);
+};
+
+const clampPrice = (value: number) =>
+  Math.min(Math.max(value, PRICE_RANGE_MIN), PRICE_RANGE_MAX);
+
+const snapPrice = (value: number) =>
+  Math.round(clampPrice(value) / PRICE_RANGE_STEP) * PRICE_RANGE_STEP;
+
+const formatPrice = (price: number) => `₦${price.toLocaleString()}`;
+
 const getInitialFilters = (params: {
   sort?: string;
   condition?: string;
   featured?: string;
-}): ProductFilters => ({
-  condition:
-    params.condition === "used" || params.condition === "new"
-      ? params.condition
-      : "all",
-  sort:
-    params.sort === "budget" || params.sort === "premium"
-      ? params.sort
-      : "newest",
-  featured: params.featured === "true",
-});
+  minPrice?: string;
+  maxPrice?: string;
+}): ProductFilters => {
+  const minPrice = getInitialPrice(params.minPrice, PRICE_RANGE_MIN);
+  const maxPrice = getInitialPrice(params.maxPrice, PRICE_RANGE_MAX);
+  const hasValidPriceRange = minPrice + PRICE_RANGE_STEP <= maxPrice;
+
+  return {
+    condition:
+      params.condition === "used" || params.condition === "new"
+        ? params.condition
+        : "all",
+    sort:
+      params.sort === "budget" || params.sort === "premium"
+        ? params.sort
+        : "newest",
+    featured: params.featured === "true",
+    minPrice: hasValidPriceRange ? minPrice : PRICE_RANGE_MIN,
+    maxPrice: hasValidPriceRange ? maxPrice : PRICE_RANGE_MAX,
+  };
+};
 
 const FilterChip = ({
   label,
@@ -133,6 +163,169 @@ const FilterChip = ({
     </Text>
   </Pressable>
 );
+
+const PriceRangeSlider = ({
+  minPrice,
+  maxPrice,
+  onChange,
+}: {
+  minPrice: number;
+  maxPrice: number;
+  onChange: (range: { minPrice: number; maxPrice: number }) => void;
+}) => {
+  const [trackWidth, setTrackWidth] = useState(0);
+  const trackRef = useRef<View>(null);
+  const trackLayoutRef = useRef({ x: 0, width: 1 });
+  const usableWidth = Math.max(trackWidth, 1);
+  const valueRange = PRICE_RANGE_MAX - PRICE_RANGE_MIN;
+  const minPercent = ((minPrice - PRICE_RANGE_MIN) / valueRange) * 100;
+  const maxPercent = ((maxPrice - PRICE_RANGE_MIN) / valueRange) * 100;
+
+  const measureTrack = useCallback((afterMeasure?: () => void) => {
+    trackRef.current?.measureInWindow((x, _y, width) => {
+      trackLayoutRef.current = { x, width: Math.max(width, 1) };
+      setTrackWidth(width);
+      afterMeasure?.();
+    });
+  }, []);
+
+  const priceFromPageX = useCallback((pageX: number) => {
+    const { x, width } = trackLayoutRef.current;
+    const localX = Math.min(Math.max(pageX - x, 0), width);
+
+    return snapPrice(
+      PRICE_RANGE_MIN + (localX / width) * (PRICE_RANGE_MAX - PRICE_RANGE_MIN),
+    );
+  }, []);
+
+  const updateMinPrice = useCallback(
+    (pageX: number) => {
+      const nextMinPrice = Math.min(
+        priceFromPageX(pageX),
+        maxPrice - PRICE_RANGE_STEP,
+      );
+      onChange({ minPrice: nextMinPrice, maxPrice });
+    },
+    [maxPrice, onChange, priceFromPageX],
+  );
+
+  const updateMaxPrice = useCallback(
+    (pageX: number) => {
+      const nextMaxPrice = Math.max(
+        priceFromPageX(pageX),
+        minPrice + PRICE_RANGE_STEP,
+      );
+      onChange({ minPrice, maxPrice: nextMaxPrice });
+    },
+    [minPrice, onChange, priceFromPageX],
+  );
+
+  const minPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: (event) => {
+          const pageX = event.nativeEvent.pageX;
+          measureTrack(() => updateMinPrice(pageX));
+        },
+        onPanResponderMove: (event) => {
+          updateMinPrice(event.nativeEvent.pageX);
+        },
+      }),
+    [measureTrack, updateMinPrice],
+  );
+
+  const maxPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: (event) => {
+          const pageX = event.nativeEvent.pageX;
+          measureTrack(() => updateMaxPrice(pageX));
+        },
+        onPanResponderMove: (event) => {
+          updateMaxPrice(event.nativeEvent.pageX);
+        },
+      }),
+    [measureTrack, updateMaxPrice],
+  );
+
+  const handleTrackPress = useCallback(
+    (pageX: number) => {
+      measureTrack(() => {
+        const selectedPrice = priceFromPageX(pageX);
+        const isCloserToMin =
+          Math.abs(selectedPrice - minPrice) <=
+          Math.abs(selectedPrice - maxPrice);
+
+        if (isCloserToMin) {
+          updateMinPrice(pageX);
+        } else {
+          updateMaxPrice(pageX);
+        }
+      });
+    },
+    [
+      maxPrice,
+      measureTrack,
+      minPrice,
+      priceFromPageX,
+      updateMaxPrice,
+      updateMinPrice,
+    ],
+  );
+
+  return (
+    <View className="mt-3">
+      <View className="mb-3 flex-row items-center justify-between">
+        <Text variant="none" className="text-sm font-bold text-brand">
+          {formatPrice(minPrice)}
+        </Text>
+        <Text variant="none" className="text-sm font-bold text-brand">
+          {formatPrice(maxPrice)}
+        </Text>
+      </View>
+      <View
+        ref={trackRef}
+        className="h-12 justify-center"
+        onLayout={(event) => {
+          setTrackWidth(event.nativeEvent.layout.width);
+          measureTrack();
+        }}
+        onTouchStart={(event) => handleTrackPress(event.nativeEvent.pageX)}
+      >
+        <View className="h-2 rounded-full bg-gray-100 dark:bg-white/10" />
+        <View
+          className="absolute h-2 rounded-full bg-brand"
+          style={{
+            left: `${minPercent}%`,
+            right: `${100 - maxPercent}%`,
+          }}
+        />
+        <View
+          {...minPanResponder.panHandlers}
+          className="absolute h-7 w-7 items-center justify-center rounded-full border-4 border-white bg-brand shadow-sm dark:border-[#1A1A1A]"
+          style={{ left: `${minPercent}%`, transform: [{ translateX: -14 }] }}
+        />
+        <View
+          {...maxPanResponder.panHandlers}
+          className="absolute h-7 w-7 items-center justify-center rounded-full border-4 border-white bg-brand shadow-sm dark:border-[#1A1A1A]"
+          style={{ left: `${maxPercent}%`, transform: [{ translateX: -14 }] }}
+        />
+      </View>
+      <View className="mt-1 flex-row items-center justify-between">
+        <Text className="text-xs text-gray-500 dark:text-gray-400">
+          {formatPrice(PRICE_RANGE_MIN)}
+        </Text>
+        <Text className="text-xs text-gray-500 dark:text-gray-400">
+          {formatPrice(PRICE_RANGE_MAX)}
+        </Text>
+      </View>
+    </View>
+  );
+};
 
 const SuggestionsScreen = ({
   onSearchTerm,
@@ -295,6 +488,8 @@ export default function SearchScreen() {
     sort?: string;
     condition?: string;
     featured?: string;
+    minPrice?: string;
+    maxPrice?: string;
   }>();
   const [searchQuery, setSearchQuery] = useState(params.query || "");
   const [activeQuery, setActiveQuery] = useState(params.query || "");
@@ -401,7 +596,7 @@ export default function SearchScreen() {
         }
 
         setShowSuggestions(false);
-
+        await new Promise((resolve) => setTimeout(resolve, 5000));
         const { data } = await axiosInstance.get("/products", {
           params: {
             query: nextQuery || "",
@@ -414,6 +609,12 @@ export default function SearchScreen() {
               : {}),
             ...(nextFilters.sort !== "newest"
               ? { sort: nextFilters.sort }
+              : {}),
+            ...(nextFilters.minPrice > PRICE_RANGE_MIN
+              ? { minPrice: nextFilters.minPrice }
+              : {}),
+            ...(nextFilters.maxPrice < PRICE_RANGE_MAX
+              ? { maxPrice: nextFilters.maxPrice }
               : {}),
           },
         });
@@ -448,6 +649,8 @@ export default function SearchScreen() {
       hasNextPage,
       filters.condition,
       filters.featured,
+      filters.maxPrice,
+      filters.minPrice,
       filters.sort,
       params.categoryId,
     ],
@@ -476,6 +679,8 @@ export default function SearchScreen() {
     params.query,
     params.section,
     params.sort,
+    params.maxPrice,
+    params.minPrice,
   ]);
 
   const submitSearch = (nextQuery = searchQuery) => {
@@ -514,6 +719,8 @@ export default function SearchScreen() {
       condition: "all",
       sort: "newest",
       featured: false,
+      minPrice: PRICE_RANGE_MIN,
+      maxPrice: PRICE_RANGE_MAX,
     };
 
     setDraftFilters(nextFilters);
@@ -524,7 +731,10 @@ export default function SearchScreen() {
   const activeFilterCount =
     (filters.condition !== "all" ? 1 : 0) +
     (filters.sort !== "newest" ? 1 : 0) +
-    (filters.featured ? 1 : 0);
+    (filters.featured ? 1 : 0) +
+    (filters.minPrice > PRICE_RANGE_MIN || filters.maxPrice < PRICE_RANGE_MAX
+      ? 1
+      : 0);
 
   const title = params.categoryName || params.section || "All Products";
   const fetchSuggestions = async (query: string) => {
@@ -626,7 +836,7 @@ export default function SearchScreen() {
       <View className="flex-1">
         {initialLoading ? (
           <View className="flex-1 items-center justify-center">
-            <ActivityIndicator color="#2563EB" />
+            <AveraLoader />
           </View>
         ) : showSuggestions ? (
           <SuggestionsScreen
@@ -655,7 +865,7 @@ export default function SearchScreen() {
             ListFooterComponent={
               loadingMore ? (
                 <View className="items-center justify-center py-6">
-                  <ActivityIndicator color="#2563EB" size="small" />
+                  <AveraLoader size={28} compact />
                 </View>
               ) : null
             }
@@ -688,7 +898,6 @@ export default function SearchScreen() {
         visible={filterSheetOpen}
         coverTabs
         title="Filter products"
-        subtitle="Narrow the list without losing infinite scroll."
         onClose={() => setFilterSheetOpen(false)}
       >
         <View>
@@ -732,6 +941,22 @@ export default function SearchScreen() {
                 />
               ))}
             </View>
+          </View>
+
+          <View className="mt-6">
+            <Text className="text-base font-bold text-gray-950 dark:text-white">
+              Price range
+            </Text>
+            <PriceRangeSlider
+              minPrice={draftFilters.minPrice}
+              maxPrice={draftFilters.maxPrice}
+              onChange={(range) =>
+                setDraftFilters((current) => ({
+                  ...current,
+                  ...range,
+                }))
+              }
+            />
           </View>
 
           {/* <Pressable

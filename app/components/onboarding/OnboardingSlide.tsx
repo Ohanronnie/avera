@@ -23,10 +23,10 @@ export function OnboardingSlide({ slide }: OnboardingSlideProps) {
         >
           {slide.eyebrow}
         </Text>
-        <Text className="mt-2 text-3xl font-extrabold tracking-tight text-white">
+        <Text className="mt-2 text-3xl font-extrabold tracking-tight text-gray-950 dark:text-white">
           {slide.title}
         </Text>
-        <Text className="mt-3 text-lg leading-7 text-gray-400">
+        <Text className="mt-3 text-lg leading-7 text-gray-500 dark:text-gray-400">
           {slide.description}
         </Text>
       </View>

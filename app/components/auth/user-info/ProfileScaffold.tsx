@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
-import { ActivityIndicator, Pressable, View } from "react-native";
+import { Pressable, View } from "react-native";
 
+import { AveraLoader } from "@/components/brand/AveraLoader";
 import { Button, ButtonText } from "@/components/ui/button";
 import { Text } from "@/components/ui/text";
 
@@ -100,7 +101,7 @@ export function StepActions({
         disabled={disabled}
       >
         {loading ? (
-          <ActivityIndicator color="#FFFFFF" size="small" />
+          <AveraLoader size={24} color="#FFFFFF" compact />
         ) : (
           <ButtonText className="font-bold text-typography-white">
             {isLastStep ? "Submit" : "Continue"}

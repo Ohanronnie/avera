@@ -4,15 +4,15 @@
     "slug": "Avera",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/splash.png",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/splash.png",
+      "image": "./assets/transparent-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff",
       "dark": {
-        "image": "./assets/images/splash.png",
+        "image": "./assets/transparent-icon.png",
         "backgroundColor": "#0A0A0A"
       }
     },
@@ -20,22 +20,30 @@
       "supportsTablet": true,
       "bundleIdentifier": "avera.app",
       "splash": {
-        "image": "./assets/images/splash.png",
+        "image": "./assets/transparent-icon.png",
         "resizeMode": "contain",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#ffffff",
+        "dark": {
+          "image": "./assets/transparent-icon.png",
+          "backgroundColor": "#0A0A0A"
+        }
       }
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/splash.png",
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
       "package": "avera.app",
       "splash": {
-        "image": "./assets/images/splash.png",
+        "image": "./assets/transparent-icon.png",
         "resizeMode": "contain",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#ffffff",
+        "dark": {
+          "image": "./assets/transparent-icon.png",
+          "backgroundColor": "#0A0A0A"
+        }
       }
     },
     "web": {

@@ -99,30 +99,6 @@ export class ProductsService {
         isOwner: product.sellerId === userId,
       };
     }
-    if (query.categoryId && !query.query) {
-      console.log(query);
-      return await this.prisma.product.findMany({
-        where: {
-          categoryId: query.categoryId,
-        },
-        include: {
-          seller: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              avatarUrl: true,
-            },
-          },
-          images: true,
-          category: true,
-        },
-        take: query.limit || 20,
-        skip: query.offset || 0,
-        orderBy: { createdAt: 'desc' },
-      });
-    }
     const where: Record<string, any> = {
       quantity: {
         gte: 0,
@@ -142,12 +118,12 @@ export class ProductsService {
     if (query.condition === 'new') {
       where.condition = 'New';
     }
-    if (query.minPrice || query.maxPrice) {
+    if (query.minPrice !== undefined || query.maxPrice !== undefined) {
       where.price = {};
-      if (query.minPrice) {
+      if (query.minPrice !== undefined) {
         where.price.gte = query.minPrice;
       }
-      if (query.maxPrice) {
+      if (query.maxPrice !== undefined) {
         where.price.lte = query.maxPrice;
       }
     }

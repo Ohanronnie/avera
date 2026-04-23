@@ -3,6 +3,7 @@ import { Link } from "expo-router";
 import { Pressable, View } from "react-native";
 
 import { Text } from "@/components/ui/text";
+import { useTheme } from "@/contexts/ThemeContext";
 
 type OnboardingHeaderProps = {
   showBack: boolean;
@@ -15,14 +16,17 @@ export function OnboardingHeader({
   showSkip,
   onBack,
 }: OnboardingHeaderProps) {
+  const { isDark } = useTheme();
+  const controlIconColor = isDark ? "#FFFFFF" : "#111827";
+
   return (
     <View className="flex-row items-center justify-between pt-1">
       {showBack ? (
         <Pressable
           onPress={onBack}
-          className="h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5"
+          className="h-10 w-10 items-center justify-center rounded-full border border-gray-100 bg-gray-50 dark:border-white/10 dark:bg-white/5"
         >
-          <Ionicons name="chevron-back" size={18} color="#FFFFFF" />
+          <Ionicons name="chevron-back" size={18} color={controlIconColor} />
         </Pressable>
       ) : (
         <View className="h-10 w-10" />
@@ -34,8 +38,10 @@ export function OnboardingHeader({
 
       {showSkip ? (
         <Link href="/(auth)/login" asChild>
-          <Pressable className="min-h-9 items-center justify-center rounded-full border border-white/10 bg-white/5 px-3">
-            <Text className="text-xs font-bold text-white">Skip</Text>
+          <Pressable className="min-h-9 items-center justify-center rounded-full border border-gray-100 bg-gray-50 px-3 dark:border-white/10 dark:bg-white/5">
+            <Text className="text-xs font-bold text-gray-700 dark:text-white">
+              Skip
+            </Text>
           </Pressable>
         </Link>
       ) : (

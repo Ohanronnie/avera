@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { router } from "expo-router";
 
+import { AveraLoader } from "@/components/brand/AveraLoader";
 import { OTPInput } from "@/components/auth/otp/OTPInput";
 import { Button, ButtonText } from "@/components/ui/button";
 import { Text } from "@/components/ui/text";
@@ -141,7 +142,7 @@ export function VerificationContent({
           disabled={loading}
         >
           {loading ? (
-            <ActivityIndicator color="#FFFFFF" size="small" />
+            <AveraLoader size={24} color="#FFFFFF" compact />
           ) : (
             <ButtonText className="font-bold text-typography-white">
               Verify

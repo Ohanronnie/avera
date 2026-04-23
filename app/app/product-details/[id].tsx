@@ -1,3 +1,4 @@
+import { AveraLoader } from "@/components/brand/AveraLoader";
 import { useEffect, useMemo, useState } from "react";
 import {
   View,
@@ -7,7 +8,6 @@ import {
   ScrollView,
   FlatList,
   TouchableOpacity,
-  ActivityIndicator,
   ImageSourcePropType,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -20,6 +20,7 @@ import { axiosInstance } from "@/utils/axios";
 import { useToast } from "@/contexts/ToastContext";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { useAuth } from "@/contexts/AuthContext";
+import { emitSocketAck } from "@/utils/socket-events";
 import {
   useToggleWishlistMutation,
   useWishlistProductIds,
@@ -113,6 +114,7 @@ export default function ProductDetailsPage() {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [openingChat, setOpeningChat] = useState(false);
+  const [openingCheckout, setOpeningCheckout] = useState(false);
   const [buyerQuantity, setBuyerQuantity] = useState(1);
   const [detailWishlistState, setDetailWishlistState] = useState<
     boolean | null
@@ -174,24 +176,65 @@ export default function ProductDetailsPage() {
       product?.seller?.id &&
       Number(product.seller.id) === currentUserId,
     );
-  const openCheckoutReview = () => {
-    if (!product) return;
 
-    setCheckoutOpen(false);
-    router.push({
-      pathname: "/checkout/review",
-      params: {
-        productId: String(product.id),
-        productName: product.name,
-        sellerName,
-        sellerId: String(product.seller?.id || ""),
-        unitPrice: String(price),
-        quantity: String(buyerQuantity),
-        availableQuantity: String(availableQuantity),
-        source: "buy_now",
-        ...(productImageUrl ? { productImage: productImageUrl } : {}),
-      },
+  const openProductConversation = async () => {
+    const { data } = await axiosInstance.post("/chat/conversations", {
+      productId,
     });
+
+    return data;
+  };
+
+  const notifySellerCheckoutStarted = async (conversationId: number) => {
+    try {
+      await emitSocketAck<{
+        ok?: boolean;
+        message?: string | unknown;
+      }>("message:send", "message:sent", {
+        conversationId,
+        content: `Checkout status: Buyer started checkout for ${product?.name || "this item"}.`,
+      });
+    } catch {
+      // Checkout can still continue; this only wakes the seller's chat badge.
+    }
+  };
+
+  const openCheckoutReview = async () => {
+    if (!product || isOwnProduct || openingCheckout) return;
+
+    try {
+      setOpeningCheckout(true);
+      const conversation = await openProductConversation();
+      await notifySellerCheckoutStarted(Number(conversation.id));
+
+      setCheckoutOpen(false);
+      router.push({
+        pathname: "/checkout/review",
+        params: {
+          productId: String(product.id),
+          productName: product.name,
+          sellerName,
+          sellerId: String(product.seller?.id || ""),
+          unitPrice: String(price),
+          quantity: String(buyerQuantity),
+          availableQuantity: String(availableQuantity),
+          source: "buy_now",
+          conversationId: String(conversation.id),
+          checkoutStatusNotified: "true",
+          ...(productImageUrl ? { productImage: productImageUrl } : {}),
+        },
+      });
+    } catch (error: any) {
+      toast.show({
+        title: "Checkout unavailable",
+        description:
+          error?.response?.data?.message ||
+          "We couldn't start checkout with this seller right now.",
+        variant: "error",
+      });
+    } finally {
+      setOpeningCheckout(false);
+    }
   };
 
   useEffect(() => {
@@ -211,10 +254,7 @@ export default function ProductDetailsPage() {
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-white dark:bg-[#0A0A0A]">
-        <ActivityIndicator color="#2563EB" size="small" />
-        <Text className="mt-3 text-sm text-gray-500 dark:text-gray-400">
-          Loading product...
-        </Text>
+        <AveraLoader label="Loading product" />
       </View>
     );
   }
@@ -485,9 +525,7 @@ export default function ProductDetailsPage() {
 
             try {
               setOpeningChat(true);
-              const { data } = await axiosInstance.post("/chat/conversations", {
-                productId,
-              });
+              const data = await openProductConversation();
 
               router.push({
                 pathname: "/messages/[id]",
@@ -513,7 +551,11 @@ export default function ProductDetailsPage() {
           }`}
         >
           {openingChat ? (
-            <ActivityIndicator color={isDark ? "white" : "#111"} />
+            <AveraLoader
+              size={24}
+              color={isDark ? "#FFFFFF" : "#111827"}
+              compact
+            />
           ) : (
             <Ionicons
               name="chatbubble-ellipses-outline"
@@ -684,11 +726,16 @@ export default function ProductDetailsPage() {
             </Pressable>
             <Pressable
               onPress={openCheckoutReview}
+              disabled={openingCheckout}
               className="h-14 flex-1 items-center justify-center rounded-2xl bg-brand"
             >
-              <Text variant="none" className="font-bold text-white">
-                Continue
-              </Text>
+              {openingCheckout ? (
+                <AveraLoader size={24} color="#FFFFFF" compact />
+              ) : (
+                <Text variant="none" className="font-bold text-white">
+                  Continue
+                </Text>
+              )}
             </Pressable>
           </View>
         </View>

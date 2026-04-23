@@ -1,12 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
+import { AveraLoader } from "@/components/brand/AveraLoader";
 import { Text } from "@/components/themed/theme";
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Pressable, ScrollView, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useColorScheme } from "nativewind";
 import { router } from "expo-router";
@@ -36,10 +31,7 @@ export default function WishlistScreen() {
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         {isLoading ? (
           <View className="items-center justify-center px-10 py-32">
-            <ActivityIndicator color="#2563EB" size="small" />
-            <Text className="mt-3 text-sm text-gray-500 dark:text-gray-400">
-              Loading saved items...
-            </Text>
+            <AveraLoader label="Loading saved items" />
           </View>
         ) : isError ? (
           <View className="items-center justify-center px-10 py-32">

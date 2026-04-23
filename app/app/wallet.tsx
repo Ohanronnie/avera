@@ -201,7 +201,7 @@ export default function WalletScreen() {
                     <View className="flex-row items-center justify-between">
                       <View>
                         <Text className="text-xs font-bold uppercase tracking-widest text-gray-500">
-                          Locked escrow
+                          Locked balance
                         </Text>
                         <Text className="mt-2 text-2xl font-black text-gray-950 dark:text-white">
                           ₦
@@ -220,8 +220,14 @@ export default function WalletScreen() {
                       </View>
                     </View>
                     <Text className="mt-3 text-sm leading-5 text-gray-500 dark:text-gray-400">
-                      Mock transfer payments land here until buyer confirmation
-                      and release flows are added.
+                      ₦
+                      {Number(lockedBalance).toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}{" "}
+                      is currently locked and cannot be withdrawn. Deliver the
+                      associated order or resolve any disputes to unlock these
+                      funds.
                     </Text>
                   </View>
                 </>

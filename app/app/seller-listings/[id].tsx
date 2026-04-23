@@ -1,3 +1,4 @@
+import { AveraLoader } from "@/components/brand/AveraLoader";
 import { ProductCard, IProduct } from "@/components/products/product-card";
 import { Text } from "@/components/themed/theme";
 import {
@@ -9,7 +10,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useColorScheme } from "nativewind";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, View } from "react-native";
+import { FlatList, Pressable, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const SELLER_LISTINGS_PAGE_SIZE = 10;
@@ -119,7 +120,7 @@ export default function SellerListingsScreen() {
 
       {initialLoading ? (
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator color="#2563EB" />
+          <AveraLoader label="Loading listings" />
         </View>
       ) : hasError ? (
         <View className="flex-1 items-center justify-center px-10">
@@ -193,7 +194,7 @@ export default function SellerListingsScreen() {
           ListFooterComponent={
             loadingMore ? (
               <View className="items-center justify-center py-6">
-                <ActivityIndicator color="#2563EB" size="small" />
+                <AveraLoader size={28} compact />
               </View>
             ) : null
           }

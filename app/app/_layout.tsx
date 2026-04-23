@@ -9,8 +9,13 @@ import { axiosInstance } from "@/utils/axios";
 import { StatusBar } from "expo-status-bar";
 import { router, useSegments } from "expo-router";
 import { useEffect } from "react";
+import * as SplashScreen from "expo-splash-screen";
 
 const client = new QueryClient();
+
+SplashScreen.preventAutoHideAsync().catch(() => {
+  // The splash screen may already be hidden in fast refresh.
+});
 
 function RootNavigator() {
   return (
@@ -73,8 +78,13 @@ function AuthGate() {
 }
 
 function AppProviders() {
-  const { isDark } = useTheme();
+  const { hydrated, isDark } = useTheme();
 
+  useEffect(() => {
+    if (!hydrated) return;
+    SplashScreen.hideAsync().catch(() => {});
+  }, [hydrated]);
+  console.log("Theme hydrated:", hydrated, "Dark mode:", isDark);
   return (
     <AuthProvider>
       <GluestackUIProvider mode={isDark ? "dark" : "light"}>

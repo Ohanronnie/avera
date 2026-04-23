@@ -1,16 +1,18 @@
+import { AveraLoader } from "@/components/brand/AveraLoader";
 import { Text } from "@/components/themed/theme";
 import { axiosInstance } from "@/utils/axios";
+import { connectSocket } from "@/utils/socket";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { useColorScheme } from "nativewind";
-import { ComponentProps, useCallback, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  Image,
-  Pressable,
-  ScrollView,
-  View,
-} from "react-native";
+  ComponentProps,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { Image, Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
@@ -107,37 +109,56 @@ export default function OrdersScreen() {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
 
+  const refreshUnreadMessages = useCallback(async () => {
+    try {
+      const { data } = await axiosInstance.get(
+        "/chat/conversations/unread-count",
+      );
+      setUnreadMessages(Number(data.count || 0));
+    } catch {
+      setUnreadMessages(0);
+    }
+  }, []);
+
+  const refreshOrders = useCallback(async () => {
+    try {
+      setLoadingOrders(true);
+      const { data } = await axiosInstance.get("/orders");
+      setOrders(data);
+    } catch {
+      setOrders([]);
+    } finally {
+      setLoadingOrders(false);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
-      let isMounted = true;
-
-      axiosInstance
-        .get("/chat/conversations/unread-count")
-        .then(({ data }) => {
-          if (isMounted) setUnreadMessages(Number(data.count || 0));
-        })
-        .catch(() => {
-          if (isMounted) setUnreadMessages(0);
-        });
-
-      setLoadingOrders(true);
-      axiosInstance
-        .get("/orders")
-        .then(({ data }) => {
-          if (isMounted) setOrders(data);
-        })
-        .catch(() => {
-          if (isMounted) setOrders([]);
-        })
-        .finally(() => {
-          if (isMounted) setLoadingOrders(false);
-        });
-
-      return () => {
-        isMounted = false;
-      };
-    }, []),
+      refreshUnreadMessages();
+      refreshOrders();
+    }, [refreshOrders, refreshUnreadMessages]),
   );
+
+  useEffect(() => {
+    refreshUnreadMessages();
+
+    const socket = connectSocket();
+    const handleUnreadCount = (payload: { count?: number }) => {
+      setUnreadMessages(Number(payload?.count || 0));
+    };
+
+    socket.on("message:new", refreshUnreadMessages);
+    socket.on("conversation:read", refreshUnreadMessages);
+    socket.on("conversation:unread-count", handleUnreadCount);
+    socket.on("order:updated", refreshOrders);
+
+    return () => {
+      socket.off("message:new", refreshUnreadMessages);
+      socket.off("conversation:read", refreshUnreadMessages);
+      socket.off("conversation:unread-count", handleUnreadCount);
+      socket.off("order:updated", refreshOrders);
+    };
+  }, [refreshOrders, refreshUnreadMessages]);
 
   const filteredOrders = useMemo(
     () =>
@@ -242,10 +263,7 @@ export default function OrdersScreen() {
 
           {loadingOrders ? (
             <View className="items-center justify-center py-24">
-              <ActivityIndicator color="#2563EB" />
-              <Text className="mt-3 text-sm text-gray-500 dark:text-gray-400">
-                Loading orders...
-              </Text>
+              <AveraLoader label="Loading orders" />
             </View>
           ) : filteredOrders.length ? (
             <View className="mt-5">
@@ -319,7 +337,7 @@ export default function OrdersScreen() {
                     </View>
 
                     <View className="mt-4 border-t border-gray-100 pt-4 dark:border-white/5">
-                      <View className="flex-row items-center">
+                      {/* <View className="flex-row items-center">
                         <Ionicons
                           name={tone.icon}
                           size={17}
@@ -334,58 +352,71 @@ export default function OrdersScreen() {
                         <Text className="ml-2 flex-1 text-sm font-bold text-gray-950 dark:text-white">
                           {order.step}
                         </Text>
-                      </View>
+                      </View> */}
                       <Text className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                         {order.escrowState}
                       </Text>
                     </View>
 
-                    <View className="mt-4 flex-row items-center">
-                      {timeline.map((item, index) => (
-                        <View
-                          key={item.label}
-                          className="flex-1 flex-row items-center"
-                        >
-                          <View
-                            className={`h-6 w-6 items-center justify-center rounded-full ${
-                              item.done
-                                ? "bg-brand"
-                                : "bg-gray-100 dark:bg-white/10"
-                            }`}
-                          >
-                            <Ionicons
-                              name={item.done ? "checkmark" : "ellipse-outline"}
-                              size={13}
-                              color={
-                                item.done
-                                  ? "white"
-                                  : isDark
-                                    ? "#9CA3AF"
-                                    : "#6B7280"
-                              }
-                            />
-                          </View>
-                          {index < timeline.length - 1 && (
+                    <View className="mt-4">
+                      <View className="relative h-6 justify-center">
+                        <View className="absolute left-3 right-3 flex-row">
+                          {timeline.slice(0, -1).map((item) => (
                             <View
+                              key={item.label}
                               className={`mx-2 h-0.5 flex-1 rounded-full ${
                                 item.done
                                   ? "bg-brand"
                                   : "bg-gray-100 dark:bg-white/10"
                               }`}
                             />
-                          )}
+                          ))}
                         </View>
-                      ))}
-                    </View>
-                    <View className="mt-2 flex-row justify-between">
-                      {timeline.map((item) => (
-                        <Text
-                          key={item.label}
-                          className="text-[10px] font-bold uppercase text-gray-400"
-                        >
-                          {item.label}
-                        </Text>
-                      ))}
+
+                        <View className="flex-row items-center justify-between">
+                          {timeline.map((item) => (
+                            <View
+                              key={item.label}
+                              className={`h-6 w-6 items-center justify-center rounded-full ${
+                                item.done
+                                  ? "bg-brand"
+                                  : "bg-gray-100 dark:bg-white/10"
+                              }`}
+                            >
+                              <Ionicons
+                                name={
+                                  item.done ? "checkmark" : "ellipse-outline"
+                                }
+                                size={13}
+                                color={
+                                  item.done
+                                    ? "white"
+                                    : isDark
+                                      ? "#9CA3AF"
+                                      : "#6B7280"
+                                }
+                              />
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+
+                      <View className="mt-2 flex-row justify-between">
+                        {timeline.map((item, index) => (
+                          <Text
+                            key={item.label}
+                            className={`w-12 text-[10px] font-bold uppercase text-gray-400 ${
+                              index === 0
+                                ? "text-left"
+                                : index === timeline.length - 1
+                                  ? "text-right"
+                                  : "text-center"
+                            }`}
+                          >
+                            {item.label}
+                          </Text>
+                        ))}
+                      </View>
                     </View>
 
                     <View className="mt-4 flex-row gap-3">

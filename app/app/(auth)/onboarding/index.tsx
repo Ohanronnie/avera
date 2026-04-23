@@ -51,8 +51,8 @@ export default function OnboardingScreen() {
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-[#0A0A0A]">
-      <View className="flex-1 bg-[#0A0A0A] px-4">
+    <SafeAreaView className="flex-1 bg-white dark:bg-[#0A0A0A]">
+      <View className="flex-1 bg-white px-4 dark:bg-[#0A0A0A]">
         <OnboardingHeader
           showBack={currentStep > 0}
           showSkip={!isLastStep}
