@@ -162,6 +162,8 @@ export default function MessageDetailsScreen() {
     code?: string;
     status?: string;
     statusText?: string;
+    quantity?: number;
+    unitPrice?: number;
   } | null>(null);
   const params = useLocalSearchParams<{
     id?: string;
@@ -324,6 +326,7 @@ export default function MessageDetailsScreen() {
     !isSeller &&
     !acceptedOfferForCheckout &&
     Boolean(checkoutOrder || buyerCheckoutStatus);
+  const directCheckoutPending = checkoutOrder?.status === "PENDING_TRANSFER";
   const directCheckoutPaid =
     [
       "PAID_IN_ESCROW",
@@ -333,6 +336,13 @@ export default function MessageDetailsScreen() {
       "COMPLETED",
     ].includes(checkoutOrder?.status || "") ||
     checkoutOrder?.statusText === "Paid in escrow";
+  const directBuyLabel = isOwnProduct
+    ? "Your listing"
+    : directCheckoutPending
+      ? "Continue checkout"
+      : directCheckoutActive
+        ? "View active order"
+        : "Buy now";
 
   const appendMessage = useCallback((nextMessage: ChatMessage) => {
     setMessages((current) => {
@@ -700,6 +710,38 @@ export default function MessageDetailsScreen() {
     offerMessageId?: number;
   }) => {
     if (!productId) return;
+
+    if (source === "buy_now" && !offerMessageId && checkoutOrder?.id) {
+      setBuyNowOpen(false);
+
+      if (directCheckoutPending) {
+        router.push({
+          pathname: "/checkout/review",
+          params: {
+            productId: String(productId),
+            productName,
+            sellerName,
+            sellerId: String(sellerId || ""),
+            unitPrice: String(checkoutOrder.unitPrice || unitPrice),
+            quantity: String(checkoutOrder.quantity || quantity),
+            availableQuantity: String(availableQuantity),
+            source,
+            ...(conversation?.id
+              ? { conversationId: String(conversation.id) }
+              : {}),
+            ...(productImage ? { productImage } : {}),
+            checkoutStatusNotified: "true",
+          },
+        });
+        return;
+      }
+
+      router.push({
+        pathname: "/order/[id]",
+        params: { id: String(checkoutOrder.id) },
+      });
+      return;
+    }
 
     setBuyNowOpen(false);
     router.push({
@@ -1654,6 +1696,23 @@ export default function MessageDetailsScreen() {
                 onPress={() => {
                   if (isOwnProduct) return;
 
+                  if (directCheckoutPending) {
+                    openCheckoutReview({
+                      source: "buy_now",
+                      unitPrice: productNumericPrice,
+                      quantity: buyQuantity,
+                    });
+                    return;
+                  }
+
+                  if (directCheckoutActive && checkoutOrder?.id) {
+                    router.push({
+                      pathname: "/order/[id]",
+                      params: { id: String(checkoutOrder.id) },
+                    });
+                    return;
+                  }
+
                   setBuyNowOpen(true);
                 }}
                 disabled={isOwnProduct}
@@ -1669,7 +1728,7 @@ export default function MessageDetailsScreen() {
                       : "text-brand"
                   }`}
                 >
-                  {isOwnProduct ? "Your listing" : "Buy now"}
+                  {directBuyLabel}
                 </Text>
               </Pressable>
             </View>

@@ -150,13 +150,15 @@ export class AuthService {
    * Validates a Google token and logs in or registers the user.
    */
   async validateGoogleToken(token: string): Promise<TokensResponse> {
+    console.log(token);
     if (!token) throw new BadRequestException('Google token is required');
+    console.log('Verifying Google token...');
     const ticket = await this.googleClient.verifyIdToken({
       idToken: token,
       audience: process.env.GOOGLE_CLIENT_ID,
     });
     const payload = ticket.getPayload();
-
+    console.log('Google token payload:', payload);
     if (!payload) {
       throw new BadRequestException('Invalid Google token');
     }

@@ -1,5 +1,5 @@
 import { AveraLoader } from "@/components/brand/AveraLoader";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Pressable,
@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Text } from "@/components/themed/theme";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Star } from "lucide-react-native";
 import { useColorScheme } from "nativewind";
 import { axiosInstance } from "@/utils/axios";
@@ -66,6 +66,18 @@ type ProductDetails = {
   isOwner?: boolean;
 };
 
+type ActiveCheckoutOrder = {
+  id: number;
+  code?: string;
+  conversationId?: number | null;
+  offerMessageId?: number | null;
+  source?: string;
+  status?: string;
+  statusText?: string;
+  quantity?: number;
+  unitPrice?: number;
+};
+
 const formatPrice = (value: number | string | undefined) => {
   const price = Number(value || 0);
   return `₦${price.toLocaleString()}`;
@@ -116,6 +128,8 @@ export default function ProductDetailsPage() {
   const [openingChat, setOpeningChat] = useState(false);
   const [openingCheckout, setOpeningCheckout] = useState(false);
   const [buyerQuantity, setBuyerQuantity] = useState(1);
+  const [activeCheckoutOrder, setActiveCheckoutOrder] =
+    useState<ActiveCheckoutOrder | null>(null);
   const [detailWishlistState, setDetailWishlistState] = useState<
     boolean | null
   >(null);
@@ -176,6 +190,15 @@ export default function ProductDetailsPage() {
       product?.seller?.id &&
       Number(product.seller.id) === currentUserId,
     );
+  const hasActiveCheckout = Boolean(activeCheckoutOrder?.id);
+  const canResumeCheckout = activeCheckoutOrder?.status === "PENDING_TRANSFER";
+  const checkoutPrimaryLabel = isOwnProduct
+    ? "Your listing"
+    : canResumeCheckout
+      ? "Continue checkout"
+      : hasActiveCheckout
+        ? "View active order"
+        : "Buy now";
 
   const openProductConversation = async () => {
     const { data } = await axiosInstance.post("/chat/conversations", {
@@ -198,6 +221,73 @@ export default function ProductDetailsPage() {
       // Checkout can still continue; this only wakes the seller's chat badge.
     }
   };
+
+  const loadActiveCheckout = useCallback(async () => {
+    if (!productId || isOwnProduct) {
+      setActiveCheckoutOrder(null);
+      return;
+    }
+
+    try {
+      const data = await emitSocketAck<{
+        ok?: boolean;
+        message?: string;
+        order?: ActiveCheckoutOrder | null;
+      }>("checkout:get-current", "checkout:current", {
+        productId,
+        source: "buy_now",
+      });
+
+      if (!data.ok) {
+        throw new Error(data.message || "Checkout unavailable");
+      }
+
+      setActiveCheckoutOrder(data.order || null);
+    } catch {
+      setActiveCheckoutOrder(null);
+    }
+  }, [isOwnProduct, productId]);
+
+  const openExistingCheckout = () => {
+    if (!product || !activeCheckoutOrder) return;
+
+    router.push({
+      pathname: "/checkout/review",
+      params: {
+        productId: String(product.id),
+        productName: product.name,
+        sellerName,
+        sellerId: String(product.seller?.id || ""),
+        unitPrice: String(activeCheckoutOrder.unitPrice || price),
+        quantity: String(activeCheckoutOrder.quantity || 1),
+        availableQuantity: String(availableQuantity),
+        source: activeCheckoutOrder.source === "OFFER" ? "offer" : "buy_now",
+        ...(activeCheckoutOrder.conversationId
+          ? { conversationId: String(activeCheckoutOrder.conversationId) }
+          : {}),
+        ...(activeCheckoutOrder.offerMessageId
+          ? { offerMessageId: String(activeCheckoutOrder.offerMessageId) }
+          : {}),
+        checkoutStatusNotified: "true",
+        ...(productImageUrl ? { productImage: productImageUrl } : {}),
+      },
+    });
+  };
+
+  const openActiveOrder = () => {
+    if (!activeCheckoutOrder?.id) return;
+
+    router.push({
+      pathname: "/order/[id]",
+      params: { id: String(activeCheckoutOrder.id) },
+    });
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      loadActiveCheckout();
+    }, [loadActiveCheckout]),
+  );
 
   const openCheckoutReview = async () => {
     if (!product || isOwnProduct || openingCheckout) return;
@@ -569,6 +659,16 @@ export default function ProductDetailsPage() {
           onPress={() => {
             if (isOwnProduct) return;
 
+            if (canResumeCheckout) {
+              openExistingCheckout();
+              return;
+            }
+
+            if (hasActiveCheckout) {
+              openActiveOrder();
+              return;
+            }
+
             setCheckoutOpen(true);
           }}
           disabled={isOwnProduct}
@@ -582,7 +682,7 @@ export default function ProductDetailsPage() {
               isOwnProduct ? "text-gray-500 dark:text-gray-400" : "text-white"
             }`}
           >
-            {isOwnProduct ? "Your listing" : "Buy Now"}
+            {checkoutPrimaryLabel}
           </Text>
         </TouchableOpacity>
       </View>

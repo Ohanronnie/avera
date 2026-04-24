@@ -5,7 +5,8 @@ import { Platform } from "react-native";
 // Use environment variable or fallback
 export const BASE_URL = __DEV__
   ? "http://172.20.10.2:3000"
-  : "https://echo-opal-coast.tunnel.rxnnie.tech";
+  : "https://ember-lotus.tunnel.rxnnie.tech";
+console.log(BASE_URL);
 // || !__DEV__
 //   ? Platform.OS === "ios"
 //     ? "http://localhost:3000/"
