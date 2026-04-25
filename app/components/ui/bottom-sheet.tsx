@@ -3,14 +3,16 @@ import {
   Animated,
   Dimensions,
   Modal,
+  PanResponder,
+  Platform,
   Pressable,
   View,
-  PanResponder,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Text } from "@/components/themed/theme";
 import { useColorScheme } from "nativewind";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -131,7 +133,10 @@ export function BottomSheet({
 
       <Animated.View
         className="rounded-t-[32px] border border-gray-100 bg-white px-5 pt-3 shadow-2xl dark:border-white/10 dark:bg-[#101010]"
-        style={{ transform: [{ translateY }] }}
+        style={{
+          maxHeight: SCREEN_HEIGHT - insets.top - 24,
+          transform: [{ translateY }],
+        }}
       >
         <View {...panResponder.panHandlers} className="items-center pb-4 pt-1">
           <View className="h-1.5 w-12 rounded-full bg-gray-300 dark:bg-white/20" />
@@ -167,8 +172,17 @@ export function BottomSheet({
           </View>
         )}
 
-        {children}
-        <View style={{ height: Math.max(insets.bottom, 20) + 16 }} />
+        <KeyboardAwareScrollView
+          bounces={false}
+          bottomOffset={Math.max(insets.bottom, 20) + 24}
+          extraKeyboardSpace={24}
+          keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {children}
+          <View style={{ height: Math.max(insets.bottom, 20) + 16 }} />
+        </KeyboardAwareScrollView>
       </Animated.View>
     </View>
   );

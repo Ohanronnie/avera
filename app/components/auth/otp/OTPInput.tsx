@@ -38,7 +38,7 @@ export function OTPInput({ correct, setOtps }: OTPInputProps) {
           ref={(ref) => {
             inputRefs.current[index] = ref;
           }}
-          className={`h-14 w-12 rounded-xl border text-center text-xl font-bold text-black dark:text-white ${
+          className={`h-14 w-12 rounded-2xl border text-center text-xl font-bold text-black dark:text-white ${
             correct == null
               ? "border-gray-200 dark:border-white/10"
               : correct

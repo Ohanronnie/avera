@@ -5,7 +5,6 @@ import {
   Put,
   Param,
   UseGuards,
-  Req,
   HttpException,
   InternalServerErrorException,
   BadRequestException,
@@ -22,6 +21,7 @@ import { CreateUserDto, CreateUserInfoDto } from './dtos/create-user.dto';
 import { OTPVerificationDto } from './dtos/login-user.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { isEmail } from 'class-validator';
+import { CurrentUser } from './current-user.decorator';
 
 @Controller('auth')
 export class AuthController {
@@ -58,10 +58,7 @@ export class AuthController {
    */
   @Post('refresh-token')
   //  @UseGuards(AuthGuard('jwt'))
-  async refreshToken(
-    @Body('refreshToken') refreshToken: string,
-    @Req() request: any,
-  ) {
+  async refreshToken(@Body('refreshToken') refreshToken: string) {
     try {
       return await this.authService.refreshToken(refreshToken);
     } catch (error) {
@@ -121,11 +118,9 @@ export class AuthController {
   @UseGuards(AuthGuard('jwt'))
   async updateUserInfo(
     @Body() userInfo: CreateUserInfoDto,
-    @Req() request: any,
+    @CurrentUser('userId') userId: number,
   ) {
     try {
-      const user = request.user;
-      const userId = user.userId;
       return await this.authService.createUserInfo(userInfo, userId);
     } catch (error) {
       this.handleError(error);

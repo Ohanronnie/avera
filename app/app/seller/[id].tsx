@@ -9,8 +9,8 @@ import { Text } from "@/components/themed/theme";
 import { axiosInstance } from "@/utils/axios";
 import { useQuery } from "@tanstack/react-query";
 
-const sellerBadges = ["Verified seller", "Fast replies", "Escrow ready"];
-const memberBadges = ["Verified member", "Fast replies", "Escrow ready"];
+const sellerBadges = ["Verified seller", "Fast replies"];
+const memberBadges = ["Verified member", "Fast replies"];
 const sellerDetails = async (userId: string) => {
   const response = await axiosInstance.get(`/users/${userId}`);
   return response.data;
@@ -59,7 +59,8 @@ export default function SellerProfileScreen() {
     isLoading,
   } = useSellerDetails(params.id || "");
   const sellerName = params.sellerName || "Avera Seller";
-  const isSellerProfile = params.profileKind !== "profile";
+  const profileKind = params.profileKind === "buyer" ? "buyer" : "seller";
+  const isSellerProfile = profileKind === "seller";
   const openSellerListings = () => {
     router.push({
       pathname: "/seller-listings/[id]",
@@ -92,7 +93,7 @@ export default function SellerProfileScreen() {
           />
         </Pressable>
         <Text className="text-lg font-bold text-gray-950 dark:text-white">
-          {isSellerProfile ? "Seller Profile" : "Profile"}
+          {isSellerProfile ? "Seller Profile" : "Buyer Profile"}
         </Text>
         <Pressable className="h-11 w-11 items-center justify-center rounded-full bg-gray-50 dark:bg-white/5">
           <Ionicons
@@ -119,7 +120,7 @@ export default function SellerProfileScreen() {
               <Ionicons name="search-outline" size={32} color="#9CA3AF" />
             </View>
             <Text className="text-center text-lg font-bold text-gray-900 dark:text-white">
-              {isSellerProfile ? "Seller not found" : "Profile not found"}
+              {isSellerProfile ? "Seller not found" : "Buyer not found"}
             </Text>
             <Text className="mt-2 text-center text-sm text-gray-500">
               We couldn't find the profile you're looking for.
@@ -132,12 +133,12 @@ export default function SellerProfileScreen() {
                 <View className="h-24 w-24 items-center justify-center rounded-[32px] bg-brand/10">
                   <Text
                     variant="none"
-                    className="text-4xl font-black text-brand"
+                    className="text-4xl font-semibold text-brand"
                   >
                     {sellerData.firstName.slice(0, 1).toUpperCase()}
                   </Text>
                 </View>
-                <Text className="mt-4 text-3xl font-black text-gray-950 dark:text-white">
+                <Text className="mt-4 text-xl font-semibold text-gray-950 dark:text-white">
                   {sellerData.firstName} {sellerData.lastName}
                 </Text>
                 <View className="mt-2 flex-row items-center">
@@ -149,10 +150,10 @@ export default function SellerProfileScreen() {
                 </View>
               </View>
 
-              <View className="mt-6 flex-row rounded-3xl border border-gray-100 bg-gray-50 p-3 dark:border-white/5 dark:bg-white/5">
+              <View className="mt-6 flex-row rounded-2xl border border-gray-100 bg-gray-50 p-3 dark:border-white/5 dark:bg-white/5">
                 {stats.map((item) => (
                   <View key={item.label} className="flex-1 items-center py-3">
-                    <Text className="text-2xl font-black text-gray-950 dark:text-white">
+                    <Text className="text-2xl font-semibold text-gray-950 dark:text-white">
                       {item.value}
                     </Text>
                     <Text className="mt-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
@@ -190,15 +191,15 @@ export default function SellerProfileScreen() {
                 </View>
               </View>
 
-              <View className="mt-6 rounded-3xl border border-gray-100 bg-white p-5 dark:border-white/5 dark:bg-white/5">
+              <View className="mt-6 rounded-2xl border border-gray-100 bg-white p-5 dark:border-white/5 dark:bg-white/5">
                 <Text className="text-lg font-bold text-gray-950 dark:text-white">
-                  {isSellerProfile ? "About seller" : "About"}
+                  {isSellerProfile ? "About seller" : "About buyer"}
                 </Text>
                 <Text className="mt-2 text-sm leading-6 text-gray-500 dark:text-gray-400">
                   {sellerData.bio ||
                     (isSellerProfile
                       ? "This seller hasn't added a bio yet."
-                      : "This member hasn't added a bio yet.")}
+                      : "This buyer hasn't added a bio yet.")}
                 </Text>
               </View>
 
@@ -207,7 +208,7 @@ export default function SellerProfileScreen() {
                   <Text className="mb-3 text-lg font-bold text-gray-950 dark:text-white">
                     Current listing
                   </Text>
-                  <View className="flex-row rounded-3xl border border-gray-100 bg-gray-50 p-3 dark:border-white/5 dark:bg-white/5">
+                  <View className="flex-row rounded-2xl border border-gray-100 bg-gray-50 p-3 dark:border-white/5 dark:bg-white/5">
                     {params.productImage ? (
                       <Image
                         source={{ uri: params.productImage }}
@@ -229,7 +230,7 @@ export default function SellerProfileScreen() {
                       >
                         {params.productName}
                       </Text>
-                      <Text className="mt-1 text-sm font-black text-brand">
+                      <Text className="mt-1 text-sm font-semibold text-brand">
                         {params.productPrice || "Price available"}
                       </Text>
                       <Text className="mt-1 text-xs text-gray-500 dark:text-gray-400">

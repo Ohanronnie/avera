@@ -1,18 +1,11 @@
 import { AveraLoader } from "@/components/brand/AveraLoader";
 import { Text } from "@/components/themed/theme";
 import { useToast } from "@/contexts/ToastContext";
-import { connectSocket } from "@/utils/socket";
-import { emitSocketAck } from "@/utils/socket-events";
+import { axiosInstance } from "@/utils/axios";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useColorScheme } from "nativewind";
-import {
-  ComponentProps,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { ComponentProps, useCallback, useMemo, useState } from "react";
 import { Image, Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -134,17 +127,8 @@ export default function OrderDetailsScreen() {
 
     try {
       setLoading(true);
-      const data = await emitSocketAck<{
-        ok?: boolean;
-        message?: string;
-        order?: Order;
-      }>("order:get", "order:loaded", { orderId });
-
-      if (!data.ok || !data.order) {
-        throw new Error(data.message || "We couldn't load this order.");
-      }
-
-      setOrder(data.order);
+      const { data } = await axiosInstance.get<Order>(`/orders/${orderId}`);
+      setOrder(data);
     } catch (error: any) {
       toast.show({
         title: "Order unavailable",
@@ -165,43 +149,22 @@ export default function OrderDetailsScreen() {
     }, [loadOrder]),
   );
 
-  useEffect(() => {
-    if (!orderId) return;
-
-    const socket = connectSocket();
-    const handleOrderUpdated = (nextOrder: Order) => {
-      if (Number(nextOrder?.id) !== orderId) return;
-      setOrder(nextOrder);
-    };
-
-    socket.on("order:updated", handleOrderUpdated);
-    return () => {
-      socket.off("order:updated", handleOrderUpdated);
-    };
-  }, [orderId]);
-
   const updateStatus = async () => {
     if (!order || !action) return;
 
     try {
       setUpdating(true);
-      const data = await emitSocketAck<{
-        ok?: boolean;
-        message?: string;
-        order?: Order;
-      }>("order:status:update", "order:status:updated", {
-        orderId: order.id,
-        action: action.action,
-      });
+      const { data } = await axiosInstance.post<Order>(
+        `/orders/${order.id}/status`,
+        {
+          action: action.action,
+        },
+      );
 
-      if (!data.ok || !data.order) {
-        throw new Error(data.message || "This status update is not available.");
-      }
-
-      setOrder(data.order);
+      setOrder(data);
       toast.show({
         title: "Order updated",
-        description: data.order.step,
+        description: data.step,
         variant: "success",
       });
     } catch (error: any) {
@@ -251,14 +214,14 @@ export default function OrderDetailsScreen() {
         <>
           <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
             <View className="px-5 pb-28 pt-5">
-              <View className="rounded-3xl border border-brand/20 bg-brand/10 p-4">
+              <View className="rounded-2xl border border-brand/20 bg-brand/10 p-4">
                 <Text
                   variant="none"
-                  className="text-xs font-black uppercase tracking-widest text-brand"
+                  className="text-xs font-semibold uppercase tracking-widest text-brand"
                 >
                   {order.statusText}
                 </Text>
-                <Text className="mt-2 text-2xl font-black text-gray-950 dark:text-white">
+                <Text className="mt-2 text-2xl font-semibold text-gray-950 dark:text-white">
                   {order.step}
                 </Text>
                 <Text className="mt-1 text-sm leading-5 text-gray-600 dark:text-gray-300">
@@ -266,7 +229,7 @@ export default function OrderDetailsScreen() {
                 </Text>
               </View>
 
-              <View className="mt-5 flex-row rounded-3xl border border-gray-100 bg-white p-3 dark:border-white/5 dark:bg-white/5">
+              <View className="mt-5 flex-row rounded-2xl border border-gray-100 bg-white p-3 dark:border-white/5 dark:bg-white/5">
                 <Image
                   source={
                     order.product.imageUrl
@@ -278,11 +241,11 @@ export default function OrderDetailsScreen() {
                 <View className="ml-3 flex-1 justify-center">
                   <Text
                     numberOfLines={2}
-                    className="text-lg font-black text-gray-950 dark:text-white"
+                    className="text-lg font-semibold text-gray-950 dark:text-white"
                   >
                     {order.product.name}
                   </Text>
-                  <Text className="mt-1 text-sm font-black text-brand">
+                  <Text className="mt-1 text-sm font-semibold text-brand">
                     {formatPrice(order.totalAmount)}
                   </Text>
                   <Text className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -291,7 +254,7 @@ export default function OrderDetailsScreen() {
                 </View>
               </View>
 
-              <View className="mt-5 rounded-3xl border border-gray-100 bg-white p-4 dark:border-white/5 dark:bg-white/5">
+              <View className="mt-5 rounded-2xl border border-gray-100 bg-white p-4 dark:border-white/5 dark:bg-white/5">
                 <Text className="mb-4 text-base font-bold text-gray-950 dark:text-white">
                   Progress
                 </Text>
@@ -327,7 +290,7 @@ export default function OrderDetailsScreen() {
                 })}
               </View>
 
-              <View className="mt-5 rounded-3xl border border-gray-100 bg-white p-4 dark:border-white/5 dark:bg-white/5">
+              <View className="mt-5 rounded-2xl border border-gray-100 bg-white p-4 dark:border-white/5 dark:bg-white/5">
                 <Text className="mb-3 text-base font-bold text-gray-950 dark:text-white">
                   Delivery
                 </Text>
@@ -346,7 +309,7 @@ export default function OrderDetailsScreen() {
                     key={item.label}
                     className="border-b border-gray-100 py-3 last:border-b-0 dark:border-white/5"
                   >
-                    <Text className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                    <Text className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">
                       {item.label}
                     </Text>
                     <Text className="mt-1 text-sm font-bold text-gray-950 dark:text-white">
@@ -356,7 +319,7 @@ export default function OrderDetailsScreen() {
                 ))}
               </View>
 
-              <View className="mt-5 rounded-3xl border border-gray-100 bg-white p-4 dark:border-white/5 dark:bg-white/5">
+              <View className="mt-5 rounded-2xl border border-gray-100 bg-white p-4 dark:border-white/5 dark:bg-white/5">
                 {[
                   { label: "Unit price", value: formatPrice(order.unitPrice) },
                   { label: "Quantity", value: `x${order.quantity}` },

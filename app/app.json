@@ -35,6 +35,7 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
+      "softwareKeyboardLayoutMode": "pan",
       "package": "avera.app",
       "splash": {
         "image": "./assets/transparent-icon.png",

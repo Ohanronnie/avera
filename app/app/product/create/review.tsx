@@ -100,7 +100,7 @@ export default function ReviewScreen() {
           placeholder="e.g. apple, iphone, phone"
         />
 
-        <View className="mt-2 bg-gray-50/50 dark:bg-white/5 rounded-3xl p-5 border border-gray-100 dark:border-white/10">
+        <View className="mt-2 bg-gray-50/50 dark:bg-white/5 rounded-2xl p-5 border border-gray-100 dark:border-white/10">
           <Text className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-widest mb-4">
             Listing Summary
           </Text>

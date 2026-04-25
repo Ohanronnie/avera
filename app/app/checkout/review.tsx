@@ -3,19 +3,15 @@ import { AveraLoader } from "@/components/brand/AveraLoader";
 import { CustomSelect } from "@/components/custom-select";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
+import { parsePhoneNumberFromString } from "libphonenumber-js";
 import { useColorScheme } from "nativewind";
 import { Image, Pressable, ScrollView, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Text } from "@/components/themed/theme";
 import { useToast } from "@/contexts/ToastContext";
-import { BASE_URL, axiosInstance } from "@/utils/axios";
-import { emitSocketAck } from "@/utils/socket-events";
-
-const parseAmount = (value?: string | string[]) => {
-  const rawValue = Array.isArray(value) ? value[0] : value;
-  return Number(String(rawValue || "").replace(/[^0-9.]/g, "")) || 0;
-};
+import { axiosInstance } from "@/utils/axios";
+import { connectSocket } from "@/utils/socket";
 
 const parseNumber = (value?: string | string[], fallback = 1) => {
   const rawValue = Array.isArray(value) ? value[0] : value;
@@ -27,6 +23,23 @@ const parseNumber = (value?: string | string[], fallback = 1) => {
 
 const formatPrice = (value: number) =>
   `₦${Number(value || 0).toLocaleString()}`;
+
+const formatNigerianPhone = (value: string) => {
+  const trimmedValue = value.trim();
+  if (!trimmedValue) return { valid: false, e164: "" };
+
+  try {
+    const parsed =
+      parsePhoneNumberFromString(trimmedValue, "NG") ||
+      parsePhoneNumberFromString(trimmedValue);
+
+    if (parsed?.isValid() && parsed.country === "NG") {
+      return { valid: true, e164: parsed.number };
+    }
+  } catch {}
+
+  return { valid: false, e164: "" };
+};
 
 const NIGERIAN_STATE_OPTIONS = [
   "Abia",
@@ -89,21 +102,38 @@ const resolveStateValue = (value?: string | null) => {
   return option?.value || "";
 };
 
+type ReviewOrderPayload = {
+  conversationId: number;
+  productId?: number;
+  sellerId?: number;
+  sellerName?: string | null;
+  buyerName?: string | null;
+  buyerAddress?: string | null;
+  buyerState?: string | null;
+  buyerCity?: string | null;
+  offeredPrice?: number | string | null;
+  offerMessageId?: number | null;
+  offerQuantity?: number | null;
+  source?: "buy_now" | "offer" | null;
+  product?: {
+    id: number;
+    name?: string | null;
+    price?: number | string | null;
+    quantity?: number | null;
+    images?: Array<{ url?: string | null }>;
+  } | null;
+};
+
 export default function CheckoutReviewScreen() {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   const toast = useToast();
-  const [sellerAccount, setSellerAccount] = useState<{
-    accountName: string;
-    accountNumber: string;
-    bankName: string;
-  } | null>(null);
   const [creatingOrder, setCreatingOrder] = useState(false);
-  const [payingOrder, setPayingOrder] = useState(false);
   const [autofillingDelivery, setAutofillingDelivery] = useState(false);
   const [createdOrder, setCreatedOrder] = useState<{
     id: number;
     code: string;
+    status: string;
     statusText: string;
     totalAmount: number;
   } | null>(null);
@@ -113,46 +143,39 @@ export default function CheckoutReviewScreen() {
   const [deliveryCity, setDeliveryCity] = useState("");
   const [deliveryState, setDeliveryState] = useState("");
   const [deliveryErrors, setDeliveryErrors] = useState<DeliveryErrors>({});
+  const [reviewData, setReviewData] = useState<ReviewOrderPayload | null>(null);
   const reviewStatusSentRef = useRef(false);
   const params = useLocalSearchParams<{
-    productId?: string;
-    sellerId?: string;
-    productName?: string;
-    sellerName?: string;
-    productImage?: string;
-    unitPrice?: string;
     quantity?: string;
-    availableQuantity?: string;
-    source?: string;
     conversationId?: string;
-    offerMessageId?: string;
-    checkoutStatusNotified?: string;
   }>();
 
-  const productName = params.productName || "Product listing";
-  const sellerName = params.sellerName || "Avera seller";
-  const unitPrice = parseAmount(params.unitPrice);
+  const resolvedProductId =
+    reviewData?.productId || reviewData?.product?.id || 0;
+  const resolvedSellerName = reviewData?.sellerName || "Avera seller";
+  const resolvedProductName = reviewData?.product?.name || "Product listing";
+  const resolvedProductImage = reviewData?.product?.images?.[0]?.url || "";
+  const listedUnitPrice =
+    reviewData?.product?.price != null ? Number(reviewData.product.price) : 0;
+  const resolvedUnitPrice =
+    reviewData?.offeredPrice != null
+      ? Number(reviewData.offeredPrice)
+      : reviewData?.product?.price != null
+        ? Number(reviewData.product.price)
+        : 0;
   const quantity = parseNumber(params.quantity);
-  const availableQuantity = parseNumber(params.availableQuantity, quantity);
-  const subtotal = unitPrice * quantity;
-  const escrowFee = Math.round(subtotal * 0.015);
+  const availableQuantity = parseNumber(
+    reviewData?.product?.quantity != null
+      ? String(reviewData.product.quantity)
+      : undefined,
+    quantity,
+  );
+  const subtotal = resolvedUnitPrice * quantity;
+  const escrowFee = Math.round(subtotal * 0.01);
   const total = subtotal + escrowFee;
-  const isOfferCheckout = params.source === "offer";
-  const isOrderPaid = createdOrder?.statusText === "Paid in escrow";
-  const paymentReference = createdOrder?.code || null;
-  const paymentAmount = createdOrder?.totalAmount || total;
-  const transferUrl =
-    sellerAccount && paymentReference
-      ? `${BASE_URL}/send-money/${sellerAccount.accountNumber}/${paymentAmount}?reference=${encodeURIComponent(paymentReference)}`
-      : sellerAccount
-        ? `${BASE_URL}/send-money/${sellerAccount.accountNumber}/${paymentAmount}`
-        : null;
-
-  const getStatusText = (status?: string | null) => {
-    if (status === "PAID_IN_ESCROW") return "Paid in escrow";
-    if (status === "PENDING_TRANSFER") return "Pending transfer";
-    return createdOrder?.statusText || "Order updated";
-  };
+  const isOfferCheckout =
+    reviewData?.source === "offer" || reviewData?.offeredPrice != null;
+  const isOrderPaid = createdOrder?.status === "PAID_IN_ESCROW";
 
   const hasDeliveryDetails = [
     deliveryName,
@@ -173,13 +196,18 @@ export default function CheckoutReviewScreen() {
 
   const validateDeliveryDetails = () => {
     const nextErrors: DeliveryErrors = {};
+    const normalizedPhone = formatNigerianPhone(deliveryPhone);
 
     if (!deliveryName.trim()) nextErrors.name = "Recipient name is required";
     if (!deliveryAddress.trim())
       nextErrors.address = "Delivery address is required";
     if (!deliveryCity.trim()) nextErrors.city = "City is required";
     if (!deliveryState.trim()) nextErrors.state = "State is required";
-    if (!deliveryPhone.trim()) nextErrors.phone = "Phone number is required";
+    if (!deliveryPhone.trim()) {
+      nextErrors.phone = "Phone number is required";
+    } else if (!normalizedPhone.valid) {
+      nextErrors.phone = "Enter a valid Nigerian phone number";
+    }
 
     setDeliveryErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
@@ -189,25 +217,48 @@ export default function CheckoutReviewScreen() {
     if (!params.conversationId) return;
 
     try {
-      const response = await emitSocketAck<{
-        ok?: boolean;
-        message?: string | unknown;
-      }>("message:send", "message:sent", {
+      connectSocket().emit("conversation:message", {
         conversationId: Number(params.conversationId),
         content,
       });
-
-      if (!response.ok || typeof response.message === "string") {
-        throw new Error(
-          typeof response.message === "string"
-            ? response.message
-            : "Message not sent",
-        );
-      }
     } catch {
       // This is a status hint for the seller; checkout should continue if it fails.
     }
   };
+
+  useEffect(() => {
+    let active = true;
+
+    const loadReviewData = async () => {
+      if (!params.conversationId) return;
+
+      try {
+        const { data } = await axiosInstance.get<ReviewOrderPayload>(
+          `/chat/conversations/order-review/${params.conversationId}`,
+        );
+
+        if (!active) return;
+
+        setReviewData(data);
+        setDeliveryName((current) => current || data.buyerName || "");
+        setDeliveryAddress((current) => current || data.buyerAddress || "");
+        setDeliveryCity((current) => current || data.buyerCity || "");
+        setDeliveryState(
+          (current) => current || resolveStateValue(data.buyerState),
+        );
+      } catch {
+        if (active) {
+          setReviewData(null);
+        }
+      }
+    };
+
+    loadReviewData();
+
+    return () => {
+      active = false;
+    };
+  }, [params.conversationId]);
 
   const fillDeliveryFromProfile = async () => {
     try {
@@ -239,135 +290,39 @@ export default function CheckoutReviewScreen() {
     }
   };
 
-  const payCreatedOrder = async () => {
-    if (!sellerAccount || !createdOrder) {
-      toast.show({
-        title: "Create order first",
-        description: "The payment reference is created with the order.",
-        variant: "info",
-      });
-      return;
-    }
-
-    try {
-      setPayingOrder(true);
-      const data = await emitSocketAck<{
-        ok?: boolean;
-        message?: string;
-        order?: typeof createdOrder;
-        orderStatus?: string;
-      }>("payment:mock-transfer", "payment:mock-transfer:confirmed", {
-        accountNumber: sellerAccount.accountNumber,
-        amount: createdOrder.totalAmount,
-        reference: createdOrder.code,
-      });
-
-      if (!data.ok) {
-        throw new Error(data.message || "Payment failed");
-      }
-
-      setCreatedOrder((current) =>
-        data.order
-          ? data.order
-          : current
-            ? {
-                ...current,
-                statusText: getStatusText(data.orderStatus),
-              }
-            : current,
-      );
-      toast.show({
-        title: "Payment confirmed",
-        description: `${createdOrder.code} is now tracked as paid in escrow.`,
-        variant: "success",
-      });
-      notifySeller(
-        `Checkout status: Payment confirmed for ${createdOrder.code}.`,
-      );
-    } catch (error: any) {
-      toast.show({
-        title: "Payment failed",
-        description:
-          error?.response?.data?.message ||
-          error?.message ||
-          "The dev transfer route could not confirm this order.",
-        variant: "error",
-      });
-    } finally {
-      setPayingOrder(false);
-    }
-  };
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const loadCurrentCheckout = async () => {
-      if (!params.productId) return;
-
-      try {
-        const data = await emitSocketAck<{
-          ok?: boolean;
-          message?: string;
-          order?: any;
-          paymentAccount?: any;
-        }>("checkout:get-current", "checkout:current", {
-          productId: Number(params.productId),
-          conversationId: params.conversationId
-            ? Number(params.conversationId)
-            : undefined,
-          offerMessageId: params.offerMessageId
-            ? Number(params.offerMessageId)
-            : undefined,
-          source: isOfferCheckout ? "offer" : "buy_now",
-        });
-
-        if (!data.ok) {
-          throw new Error(data.message || "Checkout unavailable");
-        }
-        if (!isMounted || !data.order) return;
-
-        setCreatedOrder(data.order);
-        setSellerAccount(data.paymentAccount);
-        setDeliveryName(data.order.delivery?.name || "");
-        setDeliveryPhone(data.order.delivery?.phone || "");
-        setDeliveryAddress(data.order.delivery?.address || "");
-        setDeliveryCity(data.order.delivery?.city || "");
-        setDeliveryState(resolveStateValue(data.order.delivery?.state));
-      } catch {
-        if (isMounted) {
-          setCreatedOrder(null);
-          setSellerAccount(null);
-        }
-      }
-    };
-
-    loadCurrentCheckout();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [
-    isOfferCheckout,
-    params.conversationId,
-    params.offerMessageId,
-    params.productId,
-  ]);
-
   useEffect(() => {
     if (reviewStatusSentRef.current || !params.conversationId) return;
-    if (params.checkoutStatusNotified === "true") {
-      reviewStatusSentRef.current = true;
+    reviewStatusSentRef.current = true;
+    notifySeller("Checkout status: Buyer is reviewing the order.");
+  }, [params.conversationId]);
+
+  const openPaymentScreen = (orderId: number) => {
+    if (!params.conversationId) return;
+
+    router.push({
+      pathname: "/checkout/pay",
+      params: {
+        orderId: String(orderId),
+        conversationId: String(params.conversationId),
+        quantity: String(quantity),
+      },
+    });
+  };
+
+  const createOrder = async () => {
+    if (createdOrder) {
+      if (createdOrder.status === "PAID_IN_ESCROW") {
+        router.push({
+          pathname: "/order/[id]",
+          params: { id: String(createdOrder.id) },
+        });
+        return;
+      }
+      openPaymentScreen(createdOrder.id);
       return;
     }
 
-    reviewStatusSentRef.current = true;
-    notifySeller("Checkout status: Buyer is reviewing the order.");
-  }, [params.checkoutStatusNotified, params.conversationId]);
-
-  const createOrder = async () => {
-    if (createdOrder) return payCreatedOrder();
-
-    if (!params.productId) return;
+    if (!resolvedProductId) return;
     if (!validateDeliveryDetails()) {
       toast.show({
         title: "Delivery details required",
@@ -377,46 +332,55 @@ export default function CheckoutReviewScreen() {
       return;
     }
 
+    const normalizedPhone = formatNigerianPhone(deliveryPhone);
+    if (!normalizedPhone.valid) return;
+
     try {
       setCreatingOrder(true);
       setDeliveryErrors({});
-      const data = await emitSocketAck<{
-        ok?: boolean;
+      const { data } = await axiosInstance.post<{
         message?: string;
-        order?: any;
-        paymentAccount?: any;
         existing?: boolean;
-      }>("order:create", "order:created", {
-        productId: Number(params.productId),
+        order?: {
+          id: number;
+          code: string;
+          status: string;
+          statusText: string;
+          totalAmount: number;
+        };
+      }>("/orders", {
+        productId: resolvedProductId,
         conversationId: params.conversationId
           ? Number(params.conversationId)
           : undefined,
-        offerMessageId: params.offerMessageId
-          ? Number(params.offerMessageId)
-          : undefined,
+        offerMessageId: reviewData?.offerMessageId || undefined,
         quantity,
-        source: isOfferCheckout ? "offer" : "buy_now",
+        source: isOfferCheckout ? "OFFER" : "BUY_NOW",
         deliveryName: deliveryName.trim() || undefined,
-        deliveryPhone: deliveryPhone.trim() || undefined,
+        deliveryPhone: normalizedPhone.e164,
         deliveryAddress: deliveryAddress.trim() || undefined,
         deliveryCity: deliveryCity.trim() || undefined,
         deliveryState: deliveryState.trim() || undefined,
         deliveryCountry: "Nigeria",
       });
 
-      if (!data.ok || !data.order) {
+      if (!data.order) {
         throw new Error(data.message || "We couldn't create this order.");
       }
 
       setCreatedOrder(data.order);
-      setSellerAccount(data.paymentAccount);
       toast.show({
         title: data.existing ? "Checkout resumed" : "Order ready",
-        description: "Transfer the exact total to lock payment in escrow.",
+        description: "Continue to payment to complete this checkout.",
         variant: "success",
       });
       notifySeller(`Checkout status: Buyer is paying for ${data.order.code}.`);
+      openPaymentScreen(data.order.id);
     } catch (error: any) {
+      console.log(
+        "Create order error",
+        JSON.stringify(error.response, null, 2),
+      );
       toast.show({
         title: "Order unavailable",
         description:
@@ -449,7 +413,7 @@ export default function CheckoutReviewScreen() {
               Review order
             </Text>
             <Text className="mt-0.5 text-xs font-medium text-gray-500 dark:text-gray-400">
-              Confirm the details before escrow payment.
+              Confirm the details before payment.
             </Text>
           </View>
         </View>
@@ -457,10 +421,10 @@ export default function CheckoutReviewScreen() {
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         <View className="px-5 pb-28 pt-5">
-          <View className="flex-row rounded-3xl border border-gray-100 bg-gray-50 p-3 dark:border-white/5 dark:bg-white/5">
-            {params.productImage ? (
+          <View className="flex-row rounded-2xl border border-gray-100 bg-gray-50 p-3 dark:border-white/5 dark:bg-white/5">
+            {resolvedProductImage ? (
               <Image
-                source={{ uri: params.productImage }}
+                source={{ uri: resolvedProductImage }}
                 className="h-24 w-24 rounded-2xl bg-gray-200 dark:bg-white/10"
               />
             ) : (
@@ -471,21 +435,30 @@ export default function CheckoutReviewScreen() {
             <View className="ml-3 flex-1 justify-center">
               <Text
                 numberOfLines={2}
-                className="text-lg font-black text-gray-950 dark:text-white"
+                className="text-lg font-semibold text-gray-950 dark:text-white"
               >
-                {productName}
+                {resolvedProductName}
               </Text>
-              <Text className="mt-1 text-sm font-black text-brand">
-                {formatPrice(unitPrice)}
-              </Text>
+              <View className="mt-1 flex-row items-center">
+                {isOfferCheckout && listedUnitPrice > 0 ? (
+                  <Text className="text-sm font-semibold text-gray-400 line-through dark:text-gray-500">
+                    {formatPrice(listedUnitPrice)}
+                  </Text>
+                ) : null}
+                <Text
+                  className={`${isOfferCheckout && listedUnitPrice > 0 ? "ml-2" : ""} text-sm font-semibold text-brand`}
+                >
+                  {formatPrice(resolvedUnitPrice)}
+                </Text>
+              </View>
               <Text className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Sold by {sellerName}
+                Sold by {resolvedSellerName}
               </Text>
             </View>
           </View>
 
           {isOfferCheckout ? (
-            <View className="mt-5 rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+            <View className="mt-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
               <View className="flex-row items-start">
                 <View className="h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/10">
                   <Ionicons
@@ -510,7 +483,7 @@ export default function CheckoutReviewScreen() {
             </View>
           ) : null}
 
-          <View className="mt-5 rounded-3xl border border-brand/20 bg-brand/10 p-4">
+          <View className="mt-5 rounded-2xl border border-brand/20 bg-brand/10 p-4">
             <View className="flex-row items-start">
               <View className="h-10 w-10 items-center justify-center rounded-2xl bg-brand/10">
                 <Ionicons
@@ -531,83 +504,7 @@ export default function CheckoutReviewScreen() {
             </View>
           </View>
 
-          <View className="mt-5 rounded-3xl border border-gray-100 bg-white p-4 dark:border-white/5 dark:bg-white/5">
-            <View className="flex-row items-start">
-              <View className="h-10 w-10 items-center justify-center rounded-2xl bg-brand/10">
-                <Ionicons name="business-outline" size={20} color="#2563EB" />
-              </View>
-              <View className="ml-3 flex-1">
-                <Text className="text-base font-bold text-gray-950 dark:text-white">
-                  Transfer to seller escrow account
-                </Text>
-                <Text className="mt-1 text-sm leading-5 text-gray-500 dark:text-gray-400">
-                  {createdOrder
-                    ? "For now this is a mock transfer. Opening the test route will simulate a webhook and lock the money for this seller."
-                    : "Bank details unlock after you confirm the delivery address and start payment."}
-                </Text>
-              </View>
-            </View>
-
-            {createdOrder ? (
-              <View className="mt-4 rounded-2xl bg-gray-50 dark:bg-white/5">
-                {[
-                  {
-                    label: "Bank",
-                    value: sellerAccount?.bankName || "Loading",
-                  },
-                  {
-                    label: "Account name",
-                    value: sellerAccount?.accountName || sellerName,
-                  },
-                  {
-                    label: "Account number",
-                    value: sellerAccount?.accountNumber || "Generating",
-                  },
-                  { label: "Reference", value: createdOrder.code },
-                  {
-                    label: "Amount",
-                    value: formatPrice(createdOrder.totalAmount),
-                  },
-                ].map((item, index, items) => (
-                  <View
-                    key={item.label}
-                    className={`px-4 py-3 ${
-                      index !== items.length - 1
-                        ? "border-b border-gray-100 dark:border-white/5"
-                        : ""
-                    }`}
-                  >
-                    <Text className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                      {item.label}
-                    </Text>
-                    <Text className="mt-1 text-sm font-bold text-gray-950 dark:text-white">
-                      {item.value}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-
-            {transferUrl && createdOrder ? (
-              <Pressable
-                onPress={payCreatedOrder}
-                disabled={payingOrder || isOrderPaid}
-                className="mt-4 rounded-2xl border border-dashed border-brand/30 bg-brand/5 p-3"
-              >
-                <Text
-                  variant="none"
-                  className="text-[10px] font-black uppercase tracking-widest text-brand"
-                >
-                  Dev transfer route with reference
-                </Text>
-                <Text className="mt-2 text-xs font-semibold leading-5 text-gray-600 dark:text-gray-300">
-                  {transferUrl}
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
-
-          <View className="mt-5 rounded-3xl border border-gray-100 bg-white p-4 dark:border-white/5 dark:bg-white/5">
+          <View className="mt-5 rounded-2xl border border-gray-100 bg-white p-4 dark:border-white/5 dark:bg-white/5">
             <View className="mb-4 flex-row items-start">
               <View className="h-10 w-10 items-center justify-center rounded-2xl bg-brand/10">
                 <Ionicons name="location-outline" size={20} color="#2563EB" />
@@ -621,25 +518,7 @@ export default function CheckoutReviewScreen() {
                 </Text>
               </View>
             </View>
-            <Pressable
-              onPress={fillDeliveryFromProfile}
-              disabled={autofillingDelivery}
-              className="mb-3 h-11 flex-row items-center justify-center rounded-2xl border border-gray-100 bg-gray-50 dark:border-white/10 dark:bg-white/5"
-            >
-              {autofillingDelivery ? (
-                <AveraLoader size={24} compact />
-              ) : (
-                <>
-                  <Ionicons name="sparkles-outline" size={16} color="#2563EB" />
-                  <Text
-                    variant="none"
-                    className="ml-2 text-sm font-bold text-brand"
-                  >
-                    Autofill from profile
-                  </Text>
-                </>
-              )}
-            </Pressable>
+
             <TextInput
               value={deliveryName}
               onChangeText={(value) => {
@@ -732,10 +611,12 @@ export default function CheckoutReviewScreen() {
               value={deliveryPhone}
               onChangeText={(value) => {
                 setDeliveryPhone(value);
-                if (value.trim()) clearDeliveryError("phone");
+                if (value.trim() && formatNigerianPhone(value).valid) {
+                  clearDeliveryError("phone");
+                }
               }}
               keyboardType="phone-pad"
-              placeholder="Phone number"
+              placeholder="Phone number (Nigeria)"
               placeholderTextColor="#9CA3AF"
               className={`h-14 rounded-2xl border bg-gray-50 px-4 text-base text-gray-950 dark:bg-white/5 dark:text-white ${
                 deliveryErrors.phone
@@ -751,43 +632,27 @@ export default function CheckoutReviewScreen() {
           </View>
 
           {createdOrder ? (
-            <View className="mt-5 rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+            <View className="mt-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
               <Text
                 variant="none"
-                className="text-xs font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400"
+                className="text-xs font-semibold uppercase tracking-widest text-emerald-600 dark:text-emerald-400"
               >
                 Order created
               </Text>
-              <Text className="mt-2 text-2xl font-black text-gray-950 dark:text-white">
+              <Text className="mt-2 text-2xl font-semibold text-gray-950 dark:text-white">
                 {createdOrder.code}
               </Text>
               <Text className="mt-1 text-sm font-semibold text-gray-600 dark:text-gray-300">
                 {isOrderPaid
                   ? "Payment is confirmed and held in escrow."
-                  : `${createdOrder.statusText}. Transfer the exact total to simulate payment confirmation.`}
+                  : `${createdOrder.statusText}. Continue to payment when you're ready.`}
               </Text>
             </View>
           ) : null}
 
-          <View className="mt-5 rounded-3xl border border-gray-100 bg-white p-4 dark:border-white/5 dark:bg-white/5">
-            <View className="flex-row items-center justify-between">
-              <Text className="text-base font-bold text-gray-950 dark:text-white">
-                Quantity
-              </Text>
-              <View className="items-end">
-                <Text className="text-lg font-black text-gray-950 dark:text-white">
-                  {quantity}
-                </Text>
-                <Text className="text-xs text-gray-500 dark:text-gray-400">
-                  {availableQuantity} available
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          <View className="mt-5 rounded-3xl border border-gray-100 bg-white p-4 dark:border-white/5 dark:bg-white/5">
+          <View className="mt-5 rounded-2xl border border-gray-100 bg-white p-4 dark:border-white/5 dark:bg-white/5">
             {[
-              { label: "Unit price", value: formatPrice(unitPrice) },
+              { label: "Unit price", value: formatPrice(resolvedUnitPrice) },
               { label: "Quantity", value: `x${quantity}` },
               { label: "Subtotal", value: formatPrice(subtotal) },
               { label: "Escrow fee", value: formatPrice(escrowFee) },
@@ -813,7 +678,7 @@ export default function CheckoutReviewScreen() {
                 <Text className="text-base font-bold text-gray-950 dark:text-white">
                   Total
                 </Text>
-                <Text className="text-2xl font-black text-brand">
+                <Text className="text-2xl font-semibold text-brand">
                   {formatPrice(total)}
                 </Text>
               </View>
@@ -824,20 +689,20 @@ export default function CheckoutReviewScreen() {
 
       <View className="border-t border-gray-100 bg-white px-5 pb-6 pt-4 dark:border-white/5 dark:bg-[#0A0A0A]">
         <Pressable
-          onPress={createdOrder ? payCreatedOrder : createOrder}
-          disabled={creatingOrder || payingOrder || isOrderPaid}
+          onPress={createOrder}
+          disabled={creatingOrder || isOrderPaid}
           className={`h-14 items-center justify-center rounded-2xl ${
             isOrderPaid ? "bg-emerald-500" : "bg-brand"
           }`}
         >
-          {creatingOrder || payingOrder ? (
+          {creatingOrder ? (
             <AveraLoader size={24} color="#FFFFFF" compact />
           ) : (
             <Text variant="none" className="text-base font-bold text-white">
               {isOrderPaid
-                ? "Payment confirmed"
+                ? "View order"
                 : createdOrder
-                  ? "Pay with dev transfer"
+                  ? "Continue paying"
                   : "Pay now"}
             </Text>
           )}

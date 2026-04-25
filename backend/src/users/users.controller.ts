@@ -11,7 +11,6 @@ import {
   Patch,
   Put,
   Query,
-  Req,
   UseGuards,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
@@ -19,6 +18,7 @@ import { CreateUserInfoDto } from './dto/create-user.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { CurrentUser } from 'src/auth/current-user.decorator';
 
 @Controller('users')
 export class UsersController {
@@ -28,11 +28,9 @@ export class UsersController {
   @UseGuards(AuthGuard('jwt'))
   async updateUserInfo(
     @Body() userInfo: CreateUserInfoDto,
-    @Req() request: any,
+    @CurrentUser('userId') userId: number,
   ) {
     try {
-      const user = request.user;
-      const userId = user.userId;
       return await this.usersService.createUserInfo(userInfo, userId);
     } catch (error) {
       this.handleError(error);
@@ -40,10 +38,8 @@ export class UsersController {
   }
   @Get('me')
   @UseGuards(AuthGuard('jwt'))
-  async getUser(@Req() request: any) {
+  async getUser(@CurrentUser('userId') userId: number) {
     try {
-      const user = request.user;
-      const userId = user.userId;
       return await this.usersService.getCurrentUserProfile(userId);
     } catch (error) {
       this.handleError(error);
@@ -52,10 +48,11 @@ export class UsersController {
 
   @Patch('me')
   @UseGuards(AuthGuard('jwt'))
-  async updateProfile(@Req() request: any, @Body() body: UpdateProfileDto) {
+  async updateProfile(
+    @CurrentUser('userId') userId: number,
+    @Body() body: UpdateProfileDto,
+  ) {
     try {
-      const user = request.user;
-      const userId = user.userId;
       return await this.usersService.updateCurrentUserProfile(userId, body);
     } catch (error) {
       this.handleError(error);
@@ -64,10 +61,11 @@ export class UsersController {
 
   @Patch('me/change-password')
   @UseGuards(AuthGuard('jwt'))
-  async changePassword(@Req() request: any, @Body() body: ChangePasswordDto) {
+  async changePassword(
+    @CurrentUser('userId') userId: number,
+    @Body() body: ChangePasswordDto,
+  ) {
     try {
-      const user = request.user;
-      const userId = user.userId;
       return await this.usersService.changePassword(userId, body);
     } catch (error) {
       this.handleError(error);

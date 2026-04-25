@@ -23,7 +23,7 @@ export function NairaWalletContent({
 }) {
   return (
     <>
-      <View className="mt-6 rounded-3xl border border-gray-100 bg-gray-50 p-5 dark:border-white/5 dark:bg-[#121214]">
+      <View className="mt-6 rounded-2xl border border-gray-100 bg-gray-50 p-5 dark:border-white/5 dark:bg-[#121214]">
         <View className="flex-row items-start justify-between">
           <View>
             <Text className="text-sm font-medium uppercase tracking-widest text-gray-500">
@@ -59,7 +59,7 @@ export function NairaWalletContent({
         </View>
       </View>
 
-      <View className="mt-8 rounded-3xl border border-gray-100 bg-gray-50 p-5 dark:border-white/5 dark:bg-[#101113]">
+      <View className="mt-8 rounded-2xl border border-gray-100 bg-gray-50 p-5 dark:border-white/5 dark:bg-[#101113]">
         <Text className="text-sm font-medium uppercase tracking-widest text-gray-500">
           Account Details
         </Text>

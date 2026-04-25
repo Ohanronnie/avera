@@ -16,13 +16,15 @@ export class UploadsController {
   constructor(private readonly r2StorageService: R2StorageService) {}
 
   private readonly maxImageSize = 5 * 1024 * 1024;
+  private readonly maxVideoSize = 30 * 1024 * 1024;
+  private readonly maxImageCount = 8;
 
   @Post('images')
   @UseInterceptors(
-    FilesInterceptor('images', 5, {
+    FilesInterceptor('images', 8, {
       storage: memoryStorage(),
       limits: {
-        fileSize: 5 * 1024 * 1024,
+        fileSize: 30 * 1024 * 1024,
       },
     }),
   )
@@ -31,19 +33,33 @@ export class UploadsController {
       throw new BadRequestException('No files uploaded');
     }
 
+    if (files.length > this.maxImageCount) {
+      throw new BadRequestException(`You can upload up to ${this.maxImageCount} images at once`);
+    }
+
     const savedFiles = await Promise.all(
       files.map(async (file) => {
         if (!file.buffer?.length) {
           throw new BadRequestException('Invalid image file');
         }
 
-        if (file.buffer.length > this.maxImageSize) {
-          throw new BadRequestException('File size should not exceed 5MB');
+        const detectedType = await fileTypeFromBuffer(file.buffer);
+        if (!detectedType) {
+          throw new BadRequestException('Unsupported media file');
+        }
+        const isImage = Boolean(detectedType?.mime.startsWith('image/'));
+        const isVideo = Boolean(detectedType?.mime.startsWith('video/'));
+
+        if (!isImage && !isVideo) {
+          throw new BadRequestException('Only image and video files are allowed');
         }
 
-        const detectedType = await fileTypeFromBuffer(file.buffer);
-        if (!detectedType?.mime.startsWith('image/')) {
-          throw new BadRequestException('Only image files are allowed');
+        if (isImage && file.buffer.length > this.maxImageSize) {
+          throw new BadRequestException('Image size should not exceed 5MB');
+        }
+
+        if (isVideo && file.buffer.length > this.maxVideoSize) {
+          throw new BadRequestException('Video size should not exceed 30MB');
         }
 
         const originalBaseName = path

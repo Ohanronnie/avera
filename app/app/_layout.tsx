@@ -10,6 +10,7 @@ import { StatusBar } from "expo-status-bar";
 import { router, useSegments } from "expo-router";
 import { useEffect } from "react";
 import * as SplashScreen from "expo-splash-screen";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 
 const client = new QueryClient();
 
@@ -86,14 +87,16 @@ function AppProviders() {
   }, [hydrated]);
   console.log("Theme hydrated:", hydrated, "Dark mode:", isDark);
   return (
-    <AuthProvider>
-      <GluestackUIProvider mode={isDark ? "dark" : "light"}>
-        <ToastProvider>
-          <StatusBar style={isDark ? "light" : "dark"} />
-          <AuthGate />
-        </ToastProvider>
-      </GluestackUIProvider>
-    </AuthProvider>
+    <KeyboardProvider>
+      <AuthProvider>
+        <GluestackUIProvider mode={isDark ? "dark" : "light"}>
+          <ToastProvider>
+            <StatusBar style={isDark ? "light" : "dark"} />
+            <AuthGate />
+          </ToastProvider>
+        </GluestackUIProvider>
+      </AuthProvider>
+    </KeyboardProvider>
   );
 }
 

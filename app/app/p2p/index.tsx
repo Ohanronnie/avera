@@ -94,7 +94,7 @@ export default function P2PScreen() {
             <View className="absolute -right-1 -top-1 h-5 w-5 items-center justify-center rounded-full bg-brand">
               <Text
                 variant="none"
-                className="text-[10px] font-black text-white"
+                className="text-[10px] font-semibold text-white"
               >
                 {activeFilterCount}
               </Text>
@@ -125,7 +125,7 @@ export default function P2PScreen() {
             <Pressable
               key={item}
               onPress={() => setSide(item)}
-              className={`flex-1 items-center rounded-xl py-3 ${side === item ? "bg-white dark:bg-[#1B1D21]" : ""}`}
+              className={`flex-1 items-center rounded-2xl py-3 ${side === item ? "bg-white dark:bg-[#1B1D21]" : ""}`}
             >
               <Text
                 className={`text-base font-bold ${side === item ? "text-gray-950 dark:text-white" : "text-gray-500"}`}
@@ -163,14 +163,14 @@ export default function P2PScreen() {
             listings.map((listing) => (
               <View
                 key={listing.id}
-                className="rounded-3xl border border-gray-100 bg-gray-50 p-4 dark:border-white/5 dark:bg-[#111214]"
+                className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-white/5 dark:bg-[#111214]"
               >
                 <View className="flex-row items-center justify-between">
                   <View className="flex-1 flex-row items-center pr-3">
                     <View className="h-10 w-10 items-center justify-center rounded-2xl bg-brand/10">
                       <Text
                         variant="none"
-                        className="text-sm font-black text-brand"
+                        className="text-sm font-semibold text-brand"
                       >
                         {listing.seller.slice(0, 1)}
                       </Text>
@@ -195,7 +195,7 @@ export default function P2PScreen() {
                     </View>
                   </View>
                   <View className="items-end">
-                    <Text className="text-xl font-black text-gray-950 dark:text-white">
+                    <Text className="text-xl font-semibold text-gray-950 dark:text-white">
                       ₦{listing.rate.toLocaleString()}
                     </Text>
                     <Text className="mt-1 text-xs font-bold text-brand">
@@ -223,7 +223,7 @@ export default function P2PScreen() {
                         },
                       })
                     }
-                    className="h-10 items-center justify-center rounded-xl bg-brand px-5"
+                    className="h-10 items-center justify-center rounded-2xl bg-brand px-5"
                   >
                     <Text
                       variant="none"
@@ -236,7 +236,7 @@ export default function P2PScreen() {
               </View>
             ))
           ) : (
-            <View className="items-center rounded-3xl border border-gray-100 bg-gray-50 p-8 dark:border-white/5 dark:bg-white/5">
+            <View className="items-center rounded-2xl border border-gray-100 bg-gray-50 p-8 dark:border-white/5 dark:bg-white/5">
               <Ionicons name="search-outline" size={30} color="#6B7280" />
               <Text className="mt-4 text-lg font-bold text-gray-950 dark:text-white">
                 No offers found

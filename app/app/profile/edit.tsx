@@ -304,7 +304,7 @@ export default function EditProfileScreen() {
             <View className="mt-5">
               <Pressable
                 onPress={() => pickProfileImage("coverPhotoUrl")}
-                className="h-44 overflow-hidden rounded-3xl border border-gray-100 bg-gray-50 dark:border-white/10 dark:bg-white/5"
+                className="h-44 overflow-hidden rounded-2xl border border-gray-100 bg-gray-50 dark:border-white/10 dark:bg-white/5"
               >
                 {form.coverPhotoUrl ? (
                   <ImageBackground

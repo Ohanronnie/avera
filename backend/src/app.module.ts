@@ -18,6 +18,7 @@ import { WishlistModule } from './wishlist/wishlist.module';
 import { ChatModule } from './chat/chat.module';
 import { WalletModule } from './wallet/wallet.module';
 import { OrdersModule } from './orders/orders.module';
+import { PaystackModule } from './paystack/paystack.module';
 @Module({
   imports: [
     LoggerModule,
@@ -41,6 +42,7 @@ import { OrdersModule } from './orders/orders.module';
     ChatModule,
     WalletModule,
     OrdersModule,
+    PaystackModule,
   ],
   controllers: [AppController],
   providers: [AppService],

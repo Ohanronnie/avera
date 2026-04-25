@@ -70,7 +70,7 @@ export default function WalletQuoteScreen() {
           <Text className="mt-4 text-sm font-bold uppercase tracking-widest text-gray-500">
             You are buying
           </Text>
-          <Text className="mt-2 text-4xl font-black text-gray-950 dark:text-white">
+          <Text className="mt-2 text-4xl font-semibold text-gray-950 dark:text-white">
             ${amount.toLocaleString()}
           </Text>
           <Text className="mt-2 text-base font-semibold text-brand">
@@ -78,7 +78,7 @@ export default function WalletQuoteScreen() {
           </Text>
         </View>
 
-        <View className="mt-5 rounded-3xl border border-gray-100 bg-gray-50 p-5 dark:border-white/5 dark:bg-[#111214]">
+        <View className="mt-5 rounded-2xl border border-gray-100 bg-gray-50 p-5 dark:border-white/5 dark:bg-[#111214]">
           <Text className="text-sm font-bold uppercase tracking-widest text-gray-500">
             Quote breakdown
           </Text>
@@ -109,14 +109,14 @@ export default function WalletQuoteScreen() {
               <Text className="text-base font-bold text-gray-950 dark:text-white">
                 Total to pay
               </Text>
-              <Text className="text-2xl font-black text-brand">
+              <Text className="text-2xl font-semibold text-brand">
                 ₦{Math.round(total * rate).toLocaleString()}
               </Text>
             </View>
           </View>
         </View>
 
-        <View className="mt-5 rounded-3xl border border-gray-100 bg-gray-50 dark:border-white/5 dark:bg-[#111214]">
+        <View className="mt-5 rounded-2xl border border-gray-100 bg-gray-50 dark:border-white/5 dark:bg-[#111214]">
           {quoteRows.map((row, index) => (
             <View
               key={row.label}
@@ -132,7 +132,7 @@ export default function WalletQuoteScreen() {
           ))}
         </View>
 
-        <View className="mt-5 rounded-3xl border border-brand/20 bg-brand/10 p-4">
+        <View className="mt-5 rounded-2xl border border-brand/20 bg-brand/10 p-4">
           <View className="flex-row items-start">
             <Ionicons
               name="shield-checkmark-outline"

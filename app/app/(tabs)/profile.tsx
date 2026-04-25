@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useUnreadConversationCount } from "@/hooks/use-unread-conversation-count";
 
 type ProfileUser = {
   id?: number;
@@ -38,8 +39,8 @@ export default function AccountScreen() {
   const insets = useSafeAreaInsets();
   const { isDark, themeMode, setTheme } = useTheme();
   const { logout, login } = useAuth();
-  const [unreadMessages, setUnreadMessages] = useState(0);
   const [profile, setProfile] = useState<ProfileUser | null>(null);
+  const { unreadConversationCount } = useUnreadConversationCount();
 
   useFocusEffect(
     useCallback(() => {
@@ -54,15 +55,6 @@ export default function AccountScreen() {
         })
         .catch(() => {
           if (isMounted) setProfile(null);
-        });
-
-      axiosInstance
-        .get("/chat/conversations/unread-count")
-        .then(({ data }) => {
-          if (isMounted) setUnreadMessages(Number(data.count || 0));
-        })
-        .catch(() => {
-          if (isMounted) setUnreadMessages(0);
         });
 
       return () => {
@@ -129,7 +121,7 @@ export default function AccountScreen() {
           {
             icon: "chatbubbles-outline",
             label: "Messages",
-            count: unreadMessages,
+            count: unreadConversationCount,
             route: "/messages",
           },
           {
@@ -149,7 +141,7 @@ export default function AccountScreen() {
         items: [{ icon: "help-circle-outline", label: "Help & Support" }],
       },
     ],
-    [displayName, profile?.id, unreadMessages],
+    [displayName, profile?.id, unreadConversationCount],
   );
   const themeOptions = [
     { label: "Auto", value: "system", icon: "phone-portrait-outline" },
@@ -200,7 +192,7 @@ export default function AccountScreen() {
                 <View className="h-full w-full items-center justify-center rounded-full bg-white/20">
                   <Text
                     variant="none"
-                    className="text-4xl font-black text-white"
+                    className="text-4xl font-semibold text-white"
                   >
                     {initials}
                   </Text>
@@ -228,7 +220,7 @@ export default function AccountScreen() {
           </View>
         </ImageBackground>
 
-        <View className="mx-4 mt-6 rounded-3xl border border-gray-100 bg-gray-50 p-4 dark:border-white/5 dark:bg-white/5">
+        <View className="mx-4 mt-6 rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-white/5 dark:bg-white/5">
           <Text className="text-[11px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">
             Profile
           </Text>
@@ -256,7 +248,7 @@ export default function AccountScreen() {
               <Text className="ml-4 mb-3 text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
                 {section.title}
               </Text>
-              <View className="bg-gray-50/50 dark:bg-white/5 rounded-3xl border border-gray-100 dark:border-white/5 overflow-hidden">
+              <View className="bg-gray-50/50 dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/5 overflow-hidden">
                 {section.items.map((item, index) => (
                   <TouchableOpacity
                     key={index}
@@ -281,8 +273,8 @@ export default function AccountScreen() {
                       {item.label}
                     </Text>
                     {Boolean(item.count) && (
-                      <View className="bg-brand/10 px-2.5 py-1 rounded-xl mr-2">
-                        <Text className="text-brand text-xs font-black">
+                      <View className="bg-brand/10 px-2.5 py-1 rounded-2xl mr-2">
+                        <Text className="text-brand text-xs font-semibold">
                           {item.count}
                         </Text>
                       </View>
@@ -303,7 +295,7 @@ export default function AccountScreen() {
             <Text className="ml-4 mb-3 text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
               Preferences
             </Text>
-            <View className="bg-gray-50/50 dark:bg-white/5 rounded-3xl border border-gray-100 dark:border-white/5 overflow-hidden">
+            <View className="bg-gray-50/50 dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/5 overflow-hidden">
               <View className="py-4 px-4">
                 <View className="flex-row items-center">
                   <View className="w-11 h-11 bg-white dark:bg-white/5 rounded-2xl items-center justify-center border border-gray-100 dark:border-white/10">
@@ -339,7 +331,7 @@ export default function AccountScreen() {
                         key={option.value}
                         activeOpacity={0.75}
                         onPress={() => setTheme(option.value)}
-                        className={`h-11 flex-1 flex-row items-center justify-center rounded-xl ${
+                        className={`h-11 flex-1 flex-row items-center justify-center rounded-2xl ${
                           active ? "bg-brand" : ""
                         }`}
                       >
@@ -374,7 +366,7 @@ export default function AccountScreen() {
           <TouchableOpacity
             onPress={handleLogout}
             activeOpacity={0.8}
-            className="flex-row items-center justify-center bg-gray-50 dark:bg-red-500/5 py-5 rounded-3xl border border-gray-100 dark:border-red-500/10"
+            className="flex-row items-center justify-center bg-gray-50 dark:bg-red-500/5 py-5 rounded-2xl border border-gray-100 dark:border-red-500/10"
           >
             <Ionicons name="log-out-outline" size={20} color="#EF4444" />
             <Text className="ml-3 font-bold text-red-500">Sign Out</Text>

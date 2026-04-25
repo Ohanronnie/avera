@@ -13,6 +13,7 @@ import { RedisModule } from 'src/redis/redis.module';
     PassportModule,
     RedisModule,
     JwtModule.registerAsync({
+      global: true,
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
         secret: configService.getOrThrow<string>('JWT_SECRET'),

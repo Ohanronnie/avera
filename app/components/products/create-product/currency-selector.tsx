@@ -20,7 +20,7 @@ export function CurrencySelector({
       <Text className="text-base font-medium mb-1 text-white">Currency</Text>
       <Pressable
         onPress={onOpenModal}
-        className="border border-gray-300 rounded-xl h-14 flex-row items-center justify-between px-3"
+        className="border border-gray-300 rounded-2xl h-14 flex-row items-center justify-between px-3"
       >
         <Text className="text-white">{value}</Text>
         <Ionicons name="chevron-down" size={20} color="gray" />

@@ -2,6 +2,7 @@ import { AveraLoader } from "@/components/brand/AveraLoader";
 import { Text } from "@/components/themed/theme";
 import { axiosInstance } from "@/utils/axios";
 import { connectSocket } from "@/utils/socket";
+import { useUnreadConversationCount } from "@/hooks/use-unread-conversation-count";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { useColorScheme } from "nativewind";
@@ -103,22 +104,11 @@ const getStatusTone = (status: OrderStatus) => {
 export default function OrdersScreen() {
   const [activeMode, setActiveMode] = useState<OrderMode>("buying");
   const [activeStatus, setActiveStatus] = useState<OrderStatus>("active");
-  const [unreadMessages, setUnreadMessages] = useState(0);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
-
-  const refreshUnreadMessages = useCallback(async () => {
-    try {
-      const { data } = await axiosInstance.get(
-        "/chat/conversations/unread-count",
-      );
-      setUnreadMessages(Number(data.count || 0));
-    } catch {
-      setUnreadMessages(0);
-    }
-  }, []);
+  const { unreadConversationCount } = useUnreadConversationCount();
 
   const refreshOrders = useCallback(async () => {
     try {
@@ -134,31 +124,18 @@ export default function OrdersScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      refreshUnreadMessages();
       refreshOrders();
-    }, [refreshOrders, refreshUnreadMessages]),
+    }, [refreshOrders]),
   );
 
   useEffect(() => {
-    refreshUnreadMessages();
-
     const socket = connectSocket();
-    const handleUnreadCount = (payload: { count?: number }) => {
-      setUnreadMessages(Number(payload?.count || 0));
-    };
-
-    socket.on("message:new", refreshUnreadMessages);
-    socket.on("conversation:read", refreshUnreadMessages);
-    socket.on("conversation:unread-count", handleUnreadCount);
     socket.on("order:updated", refreshOrders);
 
     return () => {
-      socket.off("message:new", refreshUnreadMessages);
-      socket.off("conversation:read", refreshUnreadMessages);
-      socket.off("conversation:unread-count", handleUnreadCount);
       socket.off("order:updated", refreshOrders);
     };
-  }, [refreshOrders, refreshUnreadMessages]);
+  }, [refreshOrders]);
 
   const filteredOrders = useMemo(
     () =>
@@ -167,7 +144,7 @@ export default function OrdersScreen() {
           order.mode === activeMode &&
           getStatusGroup(order.status) === activeStatus,
       ),
-    [activeMode, activeStatus],
+    [orders, activeMode, activeStatus],
   );
 
   return (
@@ -189,13 +166,13 @@ export default function OrdersScreen() {
               size={21}
               color={isDark ? "white" : "#111827"}
             />
-            {unreadMessages ? (
+            {unreadConversationCount ? (
               <View className="absolute -right-1 -top-1 min-w-5 items-center justify-center rounded-full bg-brand px-1.5 py-0.5">
                 <Text
                   variant="none"
-                  className="text-[10px] font-black text-white"
+                  className="text-[10px] font-semibold text-white"
                 >
-                  {unreadMessages > 9 ? "9+" : unreadMessages}
+                  {unreadConversationCount > 9 ? "9+" : unreadConversationCount}
                 </Text>
               </View>
             ) : null}
@@ -205,7 +182,7 @@ export default function OrdersScreen() {
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         <View className="px-5 pb-28 pt-5">
-          <View className="flex-row rounded-xl bg-gray-100 p-1 dark:bg-white/5">
+          <View className="flex-row rounded-2xl bg-gray-100 p-1 dark:bg-white/5">
             {[
               { label: "Buying", value: "buying" as const },
               { label: "Selling", value: "selling" as const },
@@ -213,7 +190,7 @@ export default function OrdersScreen() {
               <Pressable
                 key={mode.value}
                 onPress={() => setActiveMode(mode.value)}
-                className={`h-11 flex-1 items-center justify-center rounded-xl ${
+                className={`h-11 flex-1 items-center justify-center rounded-2xl ${
                   activeMode === mode.value ? "bg-white dark:bg-white/10" : ""
                 }`}
               >
@@ -275,7 +252,7 @@ export default function OrdersScreen() {
                 return (
                   <Pressable
                     key={order.id}
-                    className="mb-4 rounded-3xl border border-gray-100 bg-white p-4 dark:border-white/5 dark:bg-[#1A1A1A]"
+                    className="mb-4 rounded-2xl border border-gray-100 bg-white p-4 dark:border-white/5 dark:bg-[#1A1A1A]"
                   >
                     <View className="flex-row">
                       <Image
@@ -299,7 +276,7 @@ export default function OrdersScreen() {
                             />
                             <Text
                               variant="none"
-                              className={`text-[10px] font-black uppercase ${tone.text}`}
+                              className={`text-[10px] font-semibold uppercase ${tone.text}`}
                             >
                               {order.statusText}
                             </Text>
@@ -322,7 +299,7 @@ export default function OrdersScreen() {
                         <Text className="text-xs text-gray-500 dark:text-gray-400">
                           Total
                         </Text>
-                        <Text className="mt-1 text-lg font-black text-gray-950 dark:text-white">
+                        <Text className="mt-1 text-lg font-semibold text-gray-950 dark:text-white">
                           {formatPrice(order.totalAmount)}
                         </Text>
                       </View>

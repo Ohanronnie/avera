@@ -98,7 +98,7 @@ export function BioStep({ bio, isDark }: BioStepProps) {
         Bio
       </Text>
       <Input
-        className="h-28 rounded-xl border-gray-200 bg-gray-50 dark:border-white/10 dark:bg-[#1A1A1A]"
+        className="h-28 rounded-2xl border-gray-200 bg-gray-50 dark:border-white/10 dark:bg-[#1A1A1A]"
         variant="outline"
         size="xl"
         style={{
@@ -150,7 +150,7 @@ export function PhoneStep({ countryCode, phone, isDark }: PhoneStepProps) {
         Phone Number
       </Text>
       <Input
-        className="h-14 rounded-xl bg-gray-50 p-0 dark:bg-[#1A1A1A]"
+        className="h-14 rounded-2xl bg-gray-50 p-0 dark:bg-[#1A1A1A]"
         variant="outline"
         size="xl"
         style={{

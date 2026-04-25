@@ -37,7 +37,7 @@ export function PasswordResetMailStep({
           Enter your email address
         </Text>
         <Input
-          className="h-14 rounded-xl border-gray-200 bg-gray-50 dark:border-white/10 dark:bg-[#1A1A1A]"
+          className="h-14 rounded-2xl border-gray-200 bg-gray-50 dark:border-white/10 dark:bg-[#1A1A1A]"
           variant="outline"
           size="xl"
         >

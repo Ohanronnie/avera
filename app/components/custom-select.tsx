@@ -133,7 +133,7 @@ export function CustomSelect({
                   onChangeText={setSearchQuery}
                   placeholder={searchPlaceholder}
                   placeholderTextColor="#6B7280"
-                  className="h-10 rounded-xl border border-gray-100 bg-gray-50 px-3 text-sm text-black dark:border-white/10 dark:bg-white/5 dark:text-white"
+                  className="h-10 rounded-2xl border border-gray-100 bg-gray-50 px-3 text-sm text-black dark:border-white/10 dark:bg-white/5 dark:text-white"
                 />
               </View>
             )}

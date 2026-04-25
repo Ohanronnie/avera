@@ -365,7 +365,7 @@ const SuggestionsScreen = ({
               onPress={() => {
                 onSearchTerm(item);
               }}
-              className="mb-2 flex-row items-center justify-between rounded-xl  px-3 py-2"
+              className="mb-2 flex-row items-center justify-between rounded-2xl  px-3 py-2"
             >
               <Text className="text-lg font-medium">{item}</Text>
               <Feather name="search" size={18} color="#888" />
@@ -393,7 +393,7 @@ const SuggestionsScreen = ({
               {recentSearches.map((item, index) => (
                 <View
                   key={item}
-                  className="mr-2 mt-2 flex-row items-center justify-between rounded-xl  bg-gray-100 px-3 py-2 dark:bg-white/5"
+                  className="mr-2 mt-2 flex-row items-center justify-between rounded-2xl  bg-gray-100 px-3 py-2 dark:bg-white/5"
                 >
                   <Pressable onPress={() => onSearchTerm(item)} className="">
                     <Text className="mr-1 text-sm">{item}</Text>
@@ -420,7 +420,7 @@ const SuggestionsScreen = ({
               {trendingSearches.map((item) => (
                 <View
                   key={`trending-${item}`}
-                  className="mb-2 flex-row items-center justify-between rounded-xl  px-3 py-2  bg-gray-100 px-3 py-2 dark:bg-white/5"
+                  className="mb-2 flex-row items-center justify-between rounded-2xl  px-3 py-2  bg-gray-100 px-3 py-2 dark:bg-white/5"
                 >
                   <Pressable onPress={() => onSearchTerm(item)} className="">
                     <Text className="text-lg font-medium">{item}</Text>
@@ -824,7 +824,7 @@ export default function SearchScreen() {
             <View className="absolute -right-1 -top-1 h-5 w-5 items-center justify-center rounded-full bg-brand">
               <Text
                 variant="none"
-                className="text-[10px] font-black text-white"
+                className="text-[10px] font-semibold text-white"
               >
                 {activeFilterCount}
               </Text>

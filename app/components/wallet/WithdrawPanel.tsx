@@ -14,7 +14,7 @@ export function WithdrawPanel({
   onCancel: () => void;
 }) {
   return (
-    <View className="mt-4 rounded-3xl border border-gray-100 bg-gray-50 p-4 dark:border-white/5 dark:bg-[#121214]">
+    <View className="mt-4 rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-white/5 dark:bg-[#121214]">
       <Text className="text-base font-semibold text-gray-950 dark:text-white">
         Withdraw to Bank
       </Text>

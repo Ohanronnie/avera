@@ -8,18 +8,17 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { JwtService } from '@nestjs/jwt';
+import { OnEvent } from '@nestjs/event-emitter';
 import { Server, Socket } from 'socket.io';
+import { Prisma } from 'src/generated/prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { OrdersService } from 'src/orders/orders.service';
 import { WalletService } from 'src/wallet/wallet.service';
 import { ChatService } from './chat.service';
+import { BadRequestException, Logger } from '@nestjs/common';
+import { OfferStatus } from 'src/generated/prisma/enums';
 
-type AuthenticatedSocket = Socket & {
-  data: {
-    userId?: number;
-  };
-};
-
+type AuthenticatedSocket = Socket & { userId: number; email: string };
 @WebSocketGateway({
   namespace: 'chat',
   cors: {
@@ -31,7 +30,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   server: Server;
 
   private onlineUsers = new Map<number, Set<string>>();
-
   constructor(
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
@@ -40,451 +38,413 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly walletService: WalletService,
   ) {}
 
-  private getToken(socket: Socket) {
-    const authToken = socket.handshake.auth?.token;
-    if (typeof authToken === 'string') return authToken;
-
-    const authorization = socket.handshake.headers.authorization;
-    if (typeof authorization === 'string') {
-      return authorization.replace(/^Bearer\s+/i, '');
+  private parsePriceValue(
+    value?: Prisma.Decimal | number | string | null,
+  ): number | never {
+    if (value instanceof Prisma.Decimal) {
+      return value.toNumber();
     }
-
-    return null;
+    if (typeof value === 'number') {
+      return value;
+    }
+    if (typeof value === 'string') {
+      const parsed = parseFloat(value);
+      if (!isNaN(parsed)) {
+        return parsed;
+      }
+    }
+    throw new BadRequestException('Invalid price value');
   }
 
-  async handleConnection(socket: AuthenticatedSocket) {
-    try {
-      const token = this.getToken(socket);
-      if (!token) return socket.disconnect(true);
+  private emitInboxUpdate(
+    userIds: number[],
+    payload: {
+      conversationId: number;
+      senderId: number;
+      content?: string | null;
+      imageUrl?: string | null;
+      createdAt: Date;
+    },
+  ) {
+    const socketIds = [
+      ...new Set(
+        userIds.flatMap((userId) => [...(this.onlineUsers.get(userId) || [])]),
+      ),
+    ];
 
-      const payload = await this.jwtService.verifyAsync(token);
-      const user = await this.prisma.user.findUnique({
-        where: { id: payload.sub },
-        select: { id: true, accountVerified: true },
-      });
-
-      if (!user?.accountVerified) return socket.disconnect(true);
-      socket.data.userId = user.id;
-      await socket.join(`user:${user.id}`);
-
-      const userSockets = this.onlineUsers.get(user.id) ?? new Set<string>();
-      userSockets.add(socket.id);
-      this.onlineUsers.set(user.id, userSockets);
-
-      this.server.emit('presence:update', {
-        userId: user.id,
-        online: true,
-      });
-    } catch {
-      socket.disconnect(true);
-    }
-  }
-
-  handleDisconnect(socket: AuthenticatedSocket) {
-    const userId = socket.data.userId;
-    if (!userId) return;
-
-    const userSockets = this.onlineUsers.get(userId);
-    if (!userSockets) return;
-
-    userSockets.delete(socket.id);
-    if (userSockets.size > 0) return;
-
-    this.onlineUsers.delete(userId);
-    this.server.emit('presence:update', {
-      userId,
-      online: false,
+    socketIds.forEach((socketId) => {
+      this.server.to(socketId).emit('inbox:emit', payload);
     });
   }
 
-  isUserOnline(userId: number) {
-    return this.onlineUsers.has(userId);
+  private emitUnreadConversationCountToUser(userId: number, count: number) {
+    const socketIds = [...(this.onlineUsers.get(userId) || [])];
+
+    socketIds.forEach((socketId) => {
+      this.server.to(socketId).emit('conversation:unread-count', { count });
+    });
+  }
+
+  private async emitUnreadConversationCounts(userIds: number[]) {
+    const uniqueUserIds = [...new Set(userIds)];
+    const unreadCounts = await Promise.all(
+      uniqueUserIds.map(async (userId) => ({
+        userId,
+        count: await this.chatService.getUnreadConversationCount(userId),
+      })),
+    );
+
+    unreadCounts.forEach(({ userId, count }) => {
+      this.emitUnreadConversationCountToUser(userId, count);
+    });
+  }
+
+  @OnEvent('chat.message.created')
+  handleRealtimeMessageCreated(payload: {
+    id: number;
+    conversationId: number;
+    senderId: number;
+    content: string;
+    createdAt: Date;
+    buyerId: number;
+    sellerId: number;
+  }) {
+    this.server
+      .to(`conversation:${payload.conversationId}`)
+      .emit('conversation:newMessage', {
+        messageId: payload.id,
+        conversationId: payload.conversationId,
+        senderId: payload.senderId,
+        content: payload.content,
+        createdAt: payload.createdAt,
+      });
+
+    this.emitInboxUpdate([payload.buyerId, payload.sellerId], {
+      conversationId: payload.conversationId,
+      senderId: payload.senderId,
+      content: payload.content,
+      createdAt: payload.createdAt,
+    });
+
+    void this.emitUnreadConversationCounts([payload.buyerId, payload.sellerId]);
+  }
+
+  @OnEvent('order.updated')
+  handleRealtimeOrderUpdated(payload: {
+    orderId: number;
+    buyerId: number;
+    sellerId: number;
+  }) {
+    const socketIds = [
+      ...new Set([
+        ...(this.onlineUsers.get(payload.buyerId) || []),
+        ...(this.onlineUsers.get(payload.sellerId) || []),
+      ]),
+    ];
+
+    socketIds.forEach((socketId) => {
+      this.server.to(socketId).emit('order:updated', {
+        orderId: payload.orderId,
+      });
+    });
+  }
+
+  async handleConnection(@ConnectedSocket() socket: AuthenticatedSocket) {
+    try {
+      const token = socket.handshake.auth?.token;
+      if (!token) {
+        Logger.warn('[chat] Missing token on websocket handshake');
+        socket.disconnect();
+        return;
+      }
+      const payload = await this.jwtService.verifyAsync(token);
+      const userId = payload.userId ?? payload.sub;
+      const email = payload.email;
+      if (!userId) {
+        Logger.warn('[chat] Websocket token missing user identifier', {
+          email,
+          payloadKeys: Object.keys(payload || {}),
+        });
+        socket.disconnect();
+        return;
+      }
+      socket.userId = userId;
+      socket.email = email;
+      if (!this.onlineUsers.has(userId)) {
+        this.onlineUsers.set(userId, new Set());
+      }
+      this.onlineUsers.get(userId)?.add(socket.id);
+      Logger.log(
+        `[chat] User ${email} (${userId}) connected with socket ID ${socket.id}`,
+      );
+      const unreadCount =
+        await this.chatService.getUnreadConversationCount(userId);
+      this.emitUnreadConversationCountToUser(userId, unreadCount);
+    } catch (error) {
+      Logger.error('WebSocket connection error:', error);
+      socket.disconnect();
+    }
+  }
+  async handleDisconnect(@ConnectedSocket() socket: AuthenticatedSocket) {
+    const userId = socket.userId;
+    const email = socket.email;
+    if (this.onlineUsers.has(userId)) {
+      this.onlineUsers.get(userId)?.delete(socket.id);
+      if (this.onlineUsers.get(userId)?.size === 0) {
+        this.onlineUsers.delete(userId);
+      }
+    }
+    Logger.log(`User ${email} disconnected from socket ID ${socket.id}`);
   }
 
   @SubscribeMessage('conversation:join')
-  async joinConversation(
+  async handleJoinConversation(
     @ConnectedSocket() socket: AuthenticatedSocket,
-    @MessageBody() body: { conversationId?: number },
+    @MessageBody() data: { conversationId: number },
   ) {
-    try {
-      const userId = socket.data.userId;
-      const conversationId = Number(body?.conversationId);
-      if (!userId || !conversationId) return;
-
-      await this.chatService.ensureParticipant(conversationId, userId);
-      await socket.join(`conversation:${conversationId}`);
-      socket.emit('conversation:joined', { conversationId });
-      socket.emit('presence:snapshot', {
-        onlineUserIds: Array.from(this.onlineUsers.keys()),
-      });
-    } catch (error: any) {
-      socket.emit('chat:error', {
-        message: error?.message || 'Unable to join conversation',
-      });
-    }
-  }
-
-  @SubscribeMessage('conversation:read')
-  async markConversationRead(
-    @ConnectedSocket() socket: AuthenticatedSocket,
-    @MessageBody() body: { conversationId?: number },
-  ) {
-    try {
-      const userId = socket.data.userId;
-      const conversationId = Number(body?.conversationId);
-      if (!userId || !conversationId) return;
-
-      const readState = await this.chatService.markConversationRead(
-        conversationId,
-        userId,
+    const userId = socket.userId;
+    Logger.log(
+      `[chat] conversation:join requested by user ${userId} for conversation ${data.conversationId}`,
+    );
+    const conversation = await this.prisma.conversation.findFirst({
+      where: {
+        id: data.conversationId,
+        OR: [{ buyerId: userId }, { sellerId: userId }],
+      },
+    });
+    if (!conversation) {
+      Logger.warn(
+        `[chat] conversation:join denied for user ${userId} on conversation ${data.conversationId}`,
       );
-      this.emitConversationRead(conversationId, {
-        ...readState,
-        readerId: userId,
-      });
-      await this.emitUnreadCount(userId);
-    } catch (error: any) {
-      socket.emit('chat:error', {
-        message: error?.message || 'Unable to mark messages read',
-      });
+      socket.emit('error', 'Conversation not found');
+      return;
     }
+    socket.join(`conversation:${data.conversationId}`);
+    Logger.log(
+      `[chat] User ${socket.email} joined conversation ${data.conversationId}`,
+    );
+    return {
+      conversationId: conversation.id,
+      success: true,
+    };
+  }
+  @SubscribeMessage('conversations:get')
+  async handleGetConversations(
+    @ConnectedSocket() socket: AuthenticatedSocket,
+    @MessageBody() data: { conversationId: number },
+  ) {
+    const userId = socket.userId;
+    Logger.log(
+      `[chat] conversations:get requested by user ${userId} for conversation ${data.conversationId}`,
+    );
+    const conversation = await this.chatService.getConversationMessages(
+      userId,
+      data.conversationId,
+    );
+    void this.emitUnreadConversationCounts([userId]);
+    return conversation;
   }
 
-  @SubscribeMessage('message:send')
-  async sendMessage(
+  @SubscribeMessage('conversations:getAll')
+  async handleGetAllConversations(
+    @ConnectedSocket() socket: AuthenticatedSocket,
+  ) {
+    const userId = socket.userId;
+    Logger.log(`[chat] conversations:getAll requested by user ${userId}`);
+    return this.chatService.getAllConversations(userId);
+  }
+
+  @SubscribeMessage('conversation:message')
+  async handleSendMessage(
     @ConnectedSocket() socket: AuthenticatedSocket,
     @MessageBody()
-    body: {
-      clientRequestId?: string;
-      conversationId?: number;
-      content?: string;
-      imageUrl?: string;
-      offerAmount?: number;
+    data: { conversationId: number; content: string; imageUrl?: string },
+  ) {
+    const userId = socket.userId;
+    const conversation = await this.prisma.conversation.findFirst({
+      where: {
+        id: data.conversationId,
+        OR: [{ buyerId: userId }, { sellerId: userId }],
+      },
+    });
+    if (!conversation) {
+      socket.emit('error', 'Conversation not found');
+      return;
+    }
+    const message = await this.prisma.message.create({
+      data: {
+        conversationId: data.conversationId,
+        senderId: userId,
+        content: data.content,
+        imageUrl: data.imageUrl,
+      },
+    });
+    this.server
+      .to(`conversation:${data.conversationId}`)
+      .emit('conversation:newMessage', {
+        messageId: message.id,
+        conversationId: data.conversationId,
+        senderId: userId,
+        content: data.content,
+        imageUrl: data.imageUrl,
+        createdAt: message.createdAt,
+      });
+    this.emitInboxUpdate([conversation.buyerId, conversation.sellerId], {
+      conversationId: data.conversationId,
+      senderId: userId,
+      content: data.content,
+      imageUrl: data.imageUrl,
+      createdAt: message.createdAt,
+    });
+    void this.emitUnreadConversationCounts([
+      conversation.buyerId,
+      conversation.sellerId,
+    ]);
+    return {
+      messageId: message.id,
+      conversationId: data.conversationId,
+      senderId: userId,
+      content: data.content,
+      imageUrl: data.imageUrl,
+      createdAt: message.createdAt,
+    };
+  }
+  @SubscribeMessage('conversation:offer')
+  async handleMakeOffer(
+    @ConnectedSocket() socket: AuthenticatedSocket,
+    @MessageBody()
+    data: {
+      conversationId: number;
+      offerAmount: number;
       offerQuantity?: number;
     },
   ) {
-    try {
-      const userId = socket.data.userId;
-      const conversationId = Number(body?.conversationId);
-      if (!userId || !conversationId || (!body?.content && !body?.imageUrl)) {
-        socket.emit('message:sent', {
-          clientRequestId: body?.clientRequestId,
-          ok: false,
-          message: 'Message content is required',
-        });
-        return;
-      }
-
-      const message = await this.chatService.sendMessage(
-        conversationId,
-        userId,
-        {
-          content: body.content,
-          imageUrl: body.imageUrl,
-          offerAmount: body.offerAmount,
-          offerQuantity: body.offerQuantity,
-        },
+    const userId = socket.userId;
+    const conversation = await this.prisma.conversation.findFirst({
+      where: {
+        id: data.conversationId,
+        OR: [{ buyerId: userId }],
+      },
+      include: {
+        product: true,
+      },
+    });
+    if (!conversation)
+      throw new BadRequestException(
+        'Conversation not found or user is not the buyer',
       );
+    const productPrice = this.parsePriceValue(conversation.product.price);
 
-      await this.emitNewMessage(conversationId, message);
-      socket.emit('message:sent', {
-        clientRequestId: body?.clientRequestId,
-        ok: true,
-        message,
-      });
-    } catch (error: any) {
-      socket.emit('message:sent', {
-        clientRequestId: body?.clientRequestId,
-        ok: false,
-        message: error?.message || 'Message not sent',
-      });
-      socket.emit('chat:error', {
-        message: error?.message || 'Message not sent',
-      });
+    if (
+      !(
+        data.offerAmount > productPrice * 0.8 &&
+        data.offerAmount <= productPrice
+      )
+    ) {
+      throw new BadRequestException('Unable to offer');
     }
-  }
-
-  @SubscribeMessage('offer:respond')
-  async respondToOffer(
-    @ConnectedSocket() socket: AuthenticatedSocket,
-    @MessageBody()
-    body: {
-      clientRequestId?: string;
-      conversationId?: number;
-      offerMessageId?: number;
-      accepted?: boolean;
-    },
-  ) {
-    try {
-      const userId = socket.data.userId;
-      const conversationId = Number(body?.conversationId);
-      const offerMessageId = Number(body?.offerMessageId);
-      if (!userId || !conversationId || !offerMessageId) {
-        socket.emit('offer:responded', {
-          clientRequestId: body?.clientRequestId,
-          ok: false,
-          message: 'Offer unavailable',
-        });
-        return;
-      }
-
-      const result = await this.chatService.respondToOffer(
-        conversationId,
-        userId,
-        offerMessageId,
-        Boolean(body.accepted),
-      );
-
-      this.emitOfferUpdated(conversationId, result.offer);
-      await this.emitNewMessage(conversationId, result.message);
-      socket.emit('offer:responded', {
-        clientRequestId: body?.clientRequestId,
-        ok: true,
-        ...result,
-      });
-    } catch (error: any) {
-      socket.emit('offer:responded', {
-        clientRequestId: body?.clientRequestId,
-        ok: false,
-        message: error?.message || 'Offer response not sent',
-      });
-      socket.emit('chat:error', {
-        message: error?.message || 'Offer response not sent',
-      });
-    }
-  }
-
-  @SubscribeMessage('checkout:get-current')
-  async getCurrentCheckout(
-    @ConnectedSocket() socket: AuthenticatedSocket,
-    @MessageBody()
-    body: {
-      clientRequestId?: string;
-      productId?: number;
-      conversationId?: number;
-      offerMessageId?: number;
-      source?: string;
-    },
-  ) {
-    try {
-      const userId = socket.data.userId;
-      if (!userId) return;
-
-      const data = await this.ordersService.getCurrentCheckout(userId, {
-        productId: Number(body?.productId),
-        conversationId: body?.conversationId
-          ? Number(body.conversationId)
-          : undefined,
-        offerMessageId: body?.offerMessageId
-          ? Number(body.offerMessageId)
-          : undefined,
-        source: body?.source,
-      });
-
-      socket.emit('checkout:current', {
-        clientRequestId: body?.clientRequestId,
-        ok: true,
-        ...data,
-      });
-    } catch (error: any) {
-      socket.emit('checkout:current', {
-        clientRequestId: body?.clientRequestId,
-        ok: false,
-        message: error?.message || 'Checkout unavailable',
-      });
-      socket.emit('chat:error', {
-        message: error?.message || 'Checkout unavailable',
-      });
-    }
-  }
-
-  @SubscribeMessage('order:create')
-  async createOrder(
-    @ConnectedSocket() socket: AuthenticatedSocket,
-    @MessageBody() body: any,
-  ) {
-    try {
-      const userId = socket.data.userId;
-      if (!userId) return;
-
-      const data = await this.ordersService.createOrder(userId, body);
-      await this.emitOrderUpdated(data.order.id);
-      socket.emit('order:created', {
-        clientRequestId: body?.clientRequestId,
-        ok: true,
-        ...data,
-      });
-    } catch (error: any) {
-      socket.emit('order:created', {
-        clientRequestId: body?.clientRequestId,
-        ok: false,
-        message: error?.message || 'Order unavailable',
-      });
-      socket.emit('chat:error', {
-        message: error?.message || 'Order unavailable',
-      });
-    }
-  }
-
-  @SubscribeMessage('order:get')
-  async getOrder(
-    @ConnectedSocket() socket: AuthenticatedSocket,
-    @MessageBody() body: { clientRequestId?: string; orderId?: number },
-  ) {
-    try {
-      const userId = socket.data.userId;
-      const orderId = Number(body?.orderId);
-      if (!userId || !orderId) return;
-
-      const order = await this.ordersService.getOrder(orderId, userId);
-      socket.emit('order:loaded', {
-        clientRequestId: body?.clientRequestId,
-        ok: true,
-        order,
-      });
-    } catch (error: any) {
-      socket.emit('order:loaded', {
-        clientRequestId: body?.clientRequestId,
-        ok: false,
-        message: error?.message || 'Order unavailable',
-      });
-      socket.emit('chat:error', {
-        message: error?.message || 'Order unavailable',
-      });
-    }
-  }
-
-  @SubscribeMessage('order:status:update')
-  async updateOrderStatus(
-    @ConnectedSocket() socket: AuthenticatedSocket,
-    @MessageBody()
-    body: {
-      clientRequestId?: string;
-      orderId?: number;
-      action?: string;
-    },
-  ) {
-    try {
-      const userId = socket.data.userId;
-      const orderId = Number(body?.orderId);
-      if (!userId || !orderId) return;
-
-      const order = await this.ordersService.updateOrderStatus(
-        orderId,
-        userId,
-        body?.action,
-      );
-      await this.emitOrderUpdated(order.id);
-      socket.emit('order:status:updated', {
-        clientRequestId: body?.clientRequestId,
-        ok: true,
-        order,
-      });
-    } catch (error: any) {
-      socket.emit('order:status:updated', {
-        clientRequestId: body?.clientRequestId,
-        ok: false,
-        message: error?.message || 'Order update failed',
-      });
-      socket.emit('chat:error', {
-        message: error?.message || 'Order update failed',
-      });
-    }
-  }
-
-  @SubscribeMessage('payment:mock-transfer')
-  async confirmMockTransfer(
-    @ConnectedSocket() socket: AuthenticatedSocket,
-    @MessageBody()
-    body: {
-      clientRequestId?: string;
-      accountNumber?: string;
-      amount?: number;
-      reference?: string;
-    },
-  ) {
-    try {
-      const result = await this.walletService.sendMoneyToAccount(
-        String(body?.accountNumber || ''),
-        Number(body?.amount),
-        body?.reference,
-      );
-
-      if (result.orderId) {
-        await this.emitOrderUpdated(result.orderId);
-      }
-
-      const order =
-        result.orderId && socket.data.userId
-          ? await this.ordersService.getOrder(
-              result.orderId,
-              socket.data.userId,
-            )
-          : null;
-
-      socket.emit('payment:mock-transfer:confirmed', {
-        clientRequestId: body?.clientRequestId,
-        ok: true,
-        order,
-        ...result,
-      });
-    } catch (error: any) {
-      socket.emit('payment:mock-transfer:confirmed', {
-        clientRequestId: body?.clientRequestId,
-        ok: false,
-        message: error?.message || 'Payment failed',
-      });
-      socket.emit('chat:error', {
-        message: error?.message || 'Payment failed',
-      });
-    }
-  }
-
-  async emitNewMessage(conversationId: number, message: any) {
-    const participantIds =
-      await this.chatService.getConversationParticipantIds(conversationId);
-    const rooms = [
-      `conversation:${conversationId}`,
-      ...participantIds.map((userId) => `user:${userId}`),
-    ];
-
-    this.server.to(rooms).emit('message:new', message);
-    await this.emitUnreadCounts(participantIds);
-  }
-
-  emitConversationRead(conversationId: number, readState: any) {
+    const offerMessage = await this.prisma.message.create({
+      data: {
+        conversationId: data.conversationId,
+        senderId: userId,
+        content: `I would like to offer ₦${data.offerAmount.toLocaleString()} x ${data.offerQuantity || 1} for this item.`,
+        offerAmount: data.offerAmount,
+        offerQuantity: data.offerQuantity || 1,
+        offerStatus: OfferStatus.PENDING,
+      },
+    });
     this.server
-      .to(`conversation:${conversationId}`)
-      .emit('conversation:read', readState);
-  }
-
-  emitOfferUpdated(conversationId: number, offer: any) {
-    this.server.to(`conversation:${conversationId}`).emit('offer:updated', {
-      conversationId,
-      offer,
+      .to(`conversation:${data.conversationId}`)
+      .emit('conversation:newOffer', {
+        messageId: offerMessage.id,
+        conversationId: data.conversationId,
+        senderId: userId,
+        content: offerMessage.content,
+        offerAmount: this.parsePriceValue(
+          offerMessage.offerAmount ?? data.offerAmount,
+        ),
+        offerQuantity: offerMessage.offerQuantity,
+        createdAt: offerMessage.createdAt,
+        offerStatus: offerMessage.offerStatus,
+      });
+    this.emitInboxUpdate([conversation.buyerId, conversation.sellerId], {
+      conversationId: data.conversationId,
+      senderId: userId,
+      content: offerMessage.content,
+      createdAt: offerMessage.createdAt,
     });
+    void this.emitUnreadConversationCounts([
+      conversation.buyerId,
+      conversation.sellerId,
+    ]);
   }
 
-  async emitOrderUpdated(orderId: number) {
-    const participantIds =
-      await this.ordersService.getOrderParticipantIds(orderId);
-
-    await Promise.all(
-      participantIds.map(async (userId) => {
-        const order = await this.ordersService.getOrder(orderId, userId);
-        this.server.to(`user:${userId}`).emit('order:updated', order);
-      }),
-    );
-  }
-
-  private async emitUnreadCount(userId: number) {
-    const count = await this.chatService.getUnreadCount(userId);
-    this.server.to(`user:${userId}`).emit('conversation:unread-count', {
-      count,
+  @SubscribeMessage('conversation:offerResponse')
+  async handleOfferResponse(
+    @ConnectedSocket() socket: AuthenticatedSocket,
+    @MessageBody()
+    data: {
+      conversationId: number;
+      offerId: number;
+      response: 'accept' | 'reject';
+    },
+  ) {
+    const userId = socket.userId;
+    const conversation = await this.prisma.conversation.findFirst({
+      where: {
+        id: data.conversationId,
+        OR: [{ sellerId: userId }],
+      },
     });
-  }
+    if (!conversation)
+      throw new BadRequestException(
+        'Conversation not found or user is not the seller',
+      );
+    const offerMessage = await this.prisma.message.findFirst({
+      where: { id: data.offerId, conversationId: data.conversationId },
+    });
+    if (!offerMessage) throw new BadRequestException('Offer message not found');
 
-  private async emitUnreadCounts(userIds: number[]) {
-    await Promise.all(userIds.map((userId) => this.emitUnreadCount(userId)));
+    const updatedOffer = await this.prisma.message.update({
+      where: { id: data.offerId },
+      data: {
+        offerStatus:
+          data.response === 'accept'
+            ? OfferStatus.ACCEPTED
+            : OfferStatus.REJECTED,
+      },
+    });
+    if (data.response === 'accept') {
+      await this.prisma.conversation.update({
+        where: {
+          id: data.conversationId,
+        },
+        data: {
+          offeredPrice: offerMessage.offerAmount,
+        },
+      });
+    }
+    socket
+      .to(`conversation:${data.conversationId}`)
+      .emit('conversation:offerResponse', {
+        messageId: data.offerId,
+        conversationId: data.conversationId,
+        senderId: updatedOffer.senderId,
+        content: updatedOffer.content,
+        offerAmount: this.parsePriceValue(updatedOffer.offerAmount),
+        offerQuantity: updatedOffer.offerQuantity,
+        offerStatus: updatedOffer.offerStatus,
+        createdAt: updatedOffer.createdAt,
+      });
+    this.emitInboxUpdate([conversation.buyerId, conversation.sellerId], {
+      conversationId: data.conversationId,
+      senderId: updatedOffer.senderId,
+      content: updatedOffer.content,
+      createdAt: updatedOffer.createdAt,
+    });
+    void this.emitUnreadConversationCounts([
+      conversation.buyerId,
+      conversation.sellerId,
+    ]);
   }
 }

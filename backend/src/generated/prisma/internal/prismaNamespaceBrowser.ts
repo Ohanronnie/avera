@@ -228,7 +228,7 @@ export const ConversationScalarFieldEnum = {
   buyerId: 'buyerId',
   sellerId: 'sellerId',
   productId: 'productId',
-  lastMessageAt: 'lastMessageAt',
+  offeredPrice: 'offeredPrice',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
@@ -242,7 +242,6 @@ export const OrderScalarFieldEnum = {
   sellerId: 'sellerId',
   productId: 'productId',
   conversationId: 'conversationId',
-  offerMessageId: 'offerMessageId',
   source: 'source',
   status: 'status',
   quantity: 'quantity',
@@ -258,7 +257,8 @@ export const OrderScalarFieldEnum = {
   deliveryCountry: 'deliveryCountry',
   paidAt: 'paidAt',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  updatedAt: 'updatedAt',
+  paymentReference: 'paymentReference'
 } as const
 
 export type OrderScalarFieldEnum = (typeof OrderScalarFieldEnum)[keyof typeof OrderScalarFieldEnum]

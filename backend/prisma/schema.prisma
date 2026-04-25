@@ -190,11 +190,12 @@ model Conversation {
   product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
   messages      Message[]
   orders        Order[]
-  lastMessageAt DateTime?
+  offeredPrice       Decimal?  @db.Decimal(10, 2) 
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+ 
 
-  @@unique([buyerId, sellerId, productId])
+  @@unique(name: "conversation_unique", [buyerId, sellerId, productId]) // ensure one conversation per buyer/seller/product
   @@index([buyerId, updatedAt])
   @@index([sellerId, updatedAt])
   @@index([productId])
@@ -208,9 +209,8 @@ model Order {
   seller          User          @relation("SellerOrders", fields: [sellerId], references: [id], onDelete: Cascade)
   productId       Int
   product         Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
-  conversationId  Int?
-  conversation    Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
-  offerMessageId  Int?
+  conversationId  Int
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   source          OrderSource   @default(BUY_NOW)
   status          OrderStatus   @default(PENDING_TRANSFER)
   quantity        Int
@@ -218,16 +218,16 @@ model Order {
   subtotal        Decimal       @db.Decimal(14, 2)
   escrowFee       Decimal       @db.Decimal(14, 2)
   totalAmount     Decimal       @db.Decimal(14, 2)
-  deliveryName    String?
-  deliveryPhone   String?
-  deliveryAddress String?
-  deliveryCity    String?
-  deliveryState   String?
-  deliveryCountry String?
+  deliveryName    String
+  deliveryPhone   String
+  deliveryAddress String
+  deliveryCity    String
+  deliveryState   String
+  deliveryCountry String
   paidAt          DateTime?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
-
+  paymentReference String       @unique
   @@index([buyerId, updatedAt])
   @@index([sellerId, updatedAt])
   @@index([productId])

@@ -6,11 +6,11 @@ import {
   ParseIntPipe,
   Post,
   Query,
-  Req,
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { WalletService } from './wallet.service';
+import { CurrentUser } from 'src/auth/current-user.decorator';
 
 @Controller()
 export class WalletController {
@@ -31,14 +31,14 @@ export class WalletController {
 
   @Get('wallet')
   @UseGuards(AuthGuard('jwt'))
-  getWallet(@Req() req: any) {
-    return this.walletService.getWalletForUser(req.user.userId);
+  getWallet(@CurrentUser('userId') userId: number) {
+    return this.walletService.getWalletForUser(userId);
   }
 
   @Get('wallet/me')
   @UseGuards(AuthGuard('jwt'))
-  getCurrentWallet(@Req() req: any) {
-    return this.walletService.getWalletForUser(req.user.userId);
+  getCurrentWallet(@CurrentUser('userId') userId: number) {
+    return this.walletService.getWalletForUser(userId);
   }
 
   @Get('wallet/users/:userId/account')
@@ -49,13 +49,16 @@ export class WalletController {
 
   @Get('wallet/transactions')
   @UseGuards(AuthGuard('jwt'))
-  getTransactions(@Req() req: any) {
-    return this.walletService.listTransactions(req.user.userId);
+  getTransactions(@CurrentUser('userId') userId: number) {
+    return this.walletService.listTransactions(userId);
   }
 
   @Post('wallet/withdraw')
   @UseGuards(AuthGuard('jwt'))
-  withdraw(@Req() req: any, @Body() body: { amount?: number }) {
-    return this.walletService.withdraw(req.user.userId, Number(body.amount));
+  withdraw(
+    @CurrentUser('userId') userId: number,
+    @Body() body: { amount?: number },
+  ) {
+    return this.walletService.withdraw(userId, Number(body.amount));
   }
 }

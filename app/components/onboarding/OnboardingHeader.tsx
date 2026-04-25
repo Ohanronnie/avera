@@ -32,7 +32,7 @@ export function OnboardingHeader({
         <View className="h-10 w-10" />
       )}
 
-      <Text className="text-3xl font-extrabold leading-8 tracking-tight text-brand">
+      <Text className="text-xl font-extrabold leading-8 tracking-tight text-brand">
         Avera
       </Text>
 

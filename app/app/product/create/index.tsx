@@ -40,7 +40,7 @@ export default function CreateIntroScreen() {
             <Ionicons name="storefront-outline" size={80} color="#2563EB" />
           </View>
 
-          <Text className="text-3xl font-bold text-black dark:text-white text-center">
+          <Text className="text-xl font-bold text-black dark:text-white text-center">
             Ready to make some money?
           </Text>
           <Text className="text-gray-500 dark:text-gray-400 text-center mt-3 text-base px-4">
@@ -54,7 +54,7 @@ export default function CreateIntroScreen() {
               key={i}
               className="flex-row items-center bg-gray-50/50 dark:bg-[#0D0D0D] p-4 rounded-2xl border border-gray-100 dark:border-white/[0.03] mb-4"
             >
-              <View className="w-12 h-12 bg-white dark:bg-white/5 rounded-xl items-center justify-center border border-gray-100 dark:border-white/10">
+              <View className="w-12 h-12 bg-white dark:bg-white/5 rounded-2xl items-center justify-center border border-gray-100 dark:border-white/10">
                 <Ionicons
                   name={feature.icon as any}
                   size={24}

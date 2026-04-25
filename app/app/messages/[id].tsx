@@ -1,30 +1,37 @@
 import { Ionicons } from "@expo/vector-icons";
+import { StatusBar } from "expo-status-bar";
 import * as ImagePicker from "expo-image-picker";
-import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { VideoView, useVideoPlayer } from "expo-video";
+import { router, useLocalSearchParams } from "expo-router";
 import { useColorScheme } from "nativewind";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/contexts/ToastContext";
 import Gallery from "react-native-awesome-gallery";
+import { connectSocket } from "@/utils/socket";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Image,
-  Keyboard,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   TextInput,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  KeyboardChatScrollView,
+  KeyboardStickyView,
+} from "react-native-keyboard-controller";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+import type { Socket } from "socket.io-client";
 
-import { AveraLoader } from "@/components/brand/AveraLoader";
+import { MessageThread } from "@/components/messages/message-thread";
 import { Text } from "@/components/themed/theme";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
-import { useAuth } from "@/contexts/AuthContext";
-import { useToast } from "@/contexts/ToastContext";
-import { BASE_URL, axiosInstance } from "@/utils/axios";
-import { connectSocket } from "@/utils/socket";
-import { emitSocketAck } from "@/utils/socket-events";
+import { axiosInstance } from "@/utils/axios";
 
 const quickReplies = [
   "Is this still available?",
@@ -33,223 +40,341 @@ const quickReplies = [
   "Can we use escrow?",
 ];
 
-const MIN_OFFER_PERCENT = 80;
-const MAX_CHAT_IMAGES = 5;
+const MAX_CHAT_IMAGES = 8;
+const VIDEO_EXTENSIONS = /\.(mp4|mov|m4v|webm|3gp|mkv)(\?.*)?$/i;
 
-type ChatMessage = {
+type PendingMediaItem = {
+  uri: string;
+  type: "image" | "video";
+  mimeType?: string | null;
+  fileName?: string | null;
+};
+
+const parsePriceValue = (value?: number | string | null) => {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  if (typeof value === "string") {
+    const parsedValue = parseFloat(value.replace(/,/g, "").trim());
+    return Number.isFinite(parsedValue) ? parsedValue : 0;
+  }
+
+  return 0;
+};
+
+const sanitizePriceInput = (value: string) => {
+  const sanitizedValue = value.replace(/[^0-9.]/g, "");
+  const [wholePart = "", ...decimalParts] = sanitizedValue.split(".");
+
+  if (!decimalParts.length) return sanitizedValue;
+
+  return `${wholePart}.${decimalParts.join("")}`;
+};
+
+const isVideoUrl = (url?: string) => Boolean(url && VIDEO_EXTENSIONS.test(url));
+
+function FullscreenVideoPlayer({ url }: { url: string }) {
+  const player = useVideoPlayer(url, (videoPlayer) => {
+    videoPlayer.play();
+  });
+
+  return (
+    <VideoView
+      player={player}
+      nativeControls
+      contentFit="contain"
+      style={{ flex: 1, backgroundColor: "black" }}
+    />
+  );
+}
+
+type RawConversationPayload = {
+  conversationId: number;
+  buyerId: number;
+  sellerId: number;
+  messages: RawMessagePayload[];
+  counterparty: {
+    id: number;
+    username: string;
+    firstName: string;
+    lastName: string;
+    avatarUrl: string;
+  };
+  product: {
+    id: number;
+    name: string;
+    price: number;
+    quantity: number;
+    sellerId: number;
+    images: Array<{ url: string }>;
+  };
+  sellerName: string;
+};
+
+type RawMessagePayload = {
+  id: number;
+  messageId: number;
+  conversationId: number;
+  senderId: number;
+  senderName: string;
+  content?: string;
+  imageUrl: string;
+  offerAmount?: number;
+  offerQuantity: number;
+  offerStatus: "PENDING" | "ACCEPTED" | "REJECTED";
+  createdAt: string | Date;
+  readAt?: string | Date;
+};
+
+type MessageItem = {
   id: number;
   conversationId: number;
   senderId: number;
-  senderName?: string;
-  content: string;
-  imageUrl?: string | null;
-  offerAmount?: number | null;
-  offerQuantity?: number | null;
-  offerStatus?: "PENDING" | "ACCEPTED" | "REJECTED" | null;
-  readAt?: string | null;
-  deliveredAt?: string | null;
-  createdAt: string;
-  localStatus?: "sending" | "failed";
-};
-
-type ChatConversation = {
-  id: number;
-  buyerId?: number;
-  sellerId?: number;
-  productId: number;
-  product?: {
-    id?: number;
-    name?: string;
-    price?: number;
-    quantity?: number;
-    imageUrl?: string | null;
-  };
-  counterpart?: {
-    id: number;
-    name: string;
-    avatarUrl?: string | null;
-  };
-};
-
-type SendChatMessageInput = {
-  content: string;
+  fromMe: boolean;
+  text?: string;
+  time: string;
+  status: string;
   imageUrl?: string;
   offerAmount?: number;
   offerQuantity?: number;
+  offerStatus?: "PENDING" | "ACCEPTED" | "REJECTED";
+  createdAt: string;
+  deliveredAt?: string;
+  readAt?: string | Date;
+  localStatus?: "sending" | "failed";
 };
 
-const toNumericId = (value?: number | string | null) => {
-  const numericValue = Number(value);
-  return Number.isFinite(numericValue) && numericValue > 0
-    ? numericValue
-    : null;
-};
-
-const isSameUserId = (
-  first?: number | string | null,
-  second?: number | string | null,
-) => {
-  const firstId = toNumericId(first);
-  const secondId = toNumericId(second);
-  return Boolean(firstId && secondId && firstId === secondId);
+type CheckoutOrder = {
+  id: number;
+  code: string;
+  status: string;
+  statusText: string;
+  quantity: number;
+  totalAmount?: number;
+  paymentReference?: string;
 };
 
 const formatPrice = (value?: number | string | null) =>
-  `₦${Number(value || 0).toLocaleString()}`;
+  `₦${parsePriceValue(value).toLocaleString()}`;
 
-const actionItems = [
-  {
-    icon: "cube-outline",
-    title: "View product",
-    description: "Open the listing attached to this chat.",
-    tone: "default",
-    action: (id: string) => {
-      router.push({
-        pathname: "/product-details/[id]",
-        params: { id },
-      });
-    },
-  },
-  {
-    icon: "notifications-outline",
-    title: "Mute conversation",
-    description: "Pause message alerts from this seller.",
-    tone: "default",
-  },
-  {
-    icon: "flag-outline",
-    title: "Report seller",
-    description: "Tell us if something feels suspicious.",
-    tone: "warning",
-  },
-  {
-    icon: "trash-outline",
-    title: "Delete conversation",
-    description: "Remove this chat from your inbox.",
-    tone: "danger",
-  },
-];
+const formatMessageTime = (value?: string | Date) => {
+  const date = value ? new Date(value) : new Date();
+  return date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+const getProductImageUrl = (images: Array<{ url: string }>) => images[0].url;
+
+const getLatestCheckoutStatus = (items: MessageItem[]) =>
+  items
+    .slice()
+    .reverse()
+    .find((item) => item.text?.startsWith("Checkout status:"))
+    ?.text?.replace("Checkout status:", "")
+    .trim() || null;
+
+const getLiveCheckoutStatus = (
+  checkoutOrder: CheckoutOrder | null,
+  latestCheckoutStatus: string | null,
+) => {
+  const code = checkoutOrder?.code || "this order";
+
+  if (checkoutOrder?.status === "PENDING_TRANSFER") {
+    return `Buyer is paying for ${code}.`;
+  }
+  if (checkoutOrder?.status === "PAID_IN_ESCROW") {
+    return `Payment confirmed for ${code}.`;
+  }
+  if (checkoutOrder?.status === "SELLER_PREPARING") {
+    return `${code} is being prepared.`;
+  }
+  if (checkoutOrder?.status === "SHIPPED") {
+    return `${code} has shipped.`;
+  }
+  if (checkoutOrder?.status === "DELIVERED") {
+    return `${code} is waiting for buyer confirmation.`;
+  }
+  if (checkoutOrder?.status === "COMPLETED") {
+    return `${code} is complete.`;
+  }
+
+  return latestCheckoutStatus;
+};
+
+const getMessageStatus = (message: {
+  localStatus?: "sending" | "failed";
+  readAt?: string | Date;
+  deliveredAt?: string | Date;
+  createdAt?: string;
+}) => {
+  if (message.localStatus === "failed") return "Failed";
+  if (message.localStatus === "sending") return "Sending";
+  if (message.readAt) return "Seen";
+  if (message.deliveredAt || message.createdAt) return "Delivered";
+  return "Sent";
+};
+
+const buildMessage = ({
+  payload,
+  conversationId,
+  currentUserId,
+}: {
+  payload: RawMessagePayload;
+  conversationId: number;
+  currentUserId?: number | null;
+}): MessageItem => {
+  const createdAt = new Date(payload.createdAt).toISOString();
+  const deliveredAt = createdAt;
+  const senderId = payload.senderId;
+  const offerAmount = parsePriceValue(payload.offerAmount);
+
+  const offerQuantity = payload.offerQuantity;
+  const text =
+    offerAmount > 0
+      ? `I would like to offer ₦${offerAmount.toLocaleString()}${offerQuantity ? ` x ${offerQuantity}` : ""} for this item.`
+      : payload.content;
+  const readAt = payload.readAt ? new Date(payload.readAt) : undefined;
+
+  const nextMessage: MessageItem = {
+    id: payload.messageId ?? payload.id,
+    conversationId,
+    senderId,
+    fromMe: Boolean(currentUserId && senderId === currentUserId),
+    text,
+    time: formatMessageTime(createdAt),
+    status: "Sent",
+    imageUrl: payload.imageUrl,
+    offerAmount,
+    offerQuantity,
+    offerStatus: payload.offerStatus,
+    createdAt,
+    deliveredAt,
+    readAt,
+  };
+  nextMessage.status = getMessageStatus(nextMessage);
+  return nextMessage;
+};
+
+const createOptimisticMessage = ({
+  conversationId,
+  currentUserId,
+  text,
+  imageUrl,
+  offerAmount,
+  offerQuantity,
+}: {
+  conversationId: number;
+  currentUserId: number;
+  text: string;
+  imageUrl?: string;
+  offerAmount?: number;
+  offerQuantity?: number;
+}): MessageItem => {
+  const createdAt = new Date().toISOString();
+  const nextMessage: MessageItem = {
+    id: -Date.now() - Math.round(Math.random() * 1000),
+    conversationId,
+    senderId: currentUserId,
+    fromMe: true,
+    text,
+    time: formatMessageTime(createdAt),
+    status: "Sending",
+    imageUrl,
+    offerAmount: offerAmount,
+    offerQuantity: offerQuantity,
+    offerStatus: offerAmount ? "PENDING" : undefined,
+    createdAt,
+    localStatus: "sending",
+  };
+  nextMessage.status = getMessageStatus(nextMessage);
+  return nextMessage;
+};
+
+const emitWithAck = <TResponse,>(
+  socket: Socket,
+  event: string,
+  payload: Record<string, unknown>,
+) =>
+  new Promise<TResponse>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error("Socket request timed out"));
+    }, 8000);
+
+    socket.emit(event, payload, (response: TResponse) => {
+      clearTimeout(timeout);
+      resolve(response);
+    });
+  });
 
 export default function MessageDetailsScreen() {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const toast = useToast();
-  const scrollViewRef = useRef<ScrollView>(null);
-  const messageInputRef = useRef<TextInput>(null);
-  const offerAmountInputRef = useRef<TextInput>(null);
+  const scrollViewRef = useRef<any>(null);
   const [message, setMessage] = useState("");
   const [actionsOpen, setActionsOpen] = useState(false);
   const [offerOpen, setOfferOpen] = useState(false);
   const [buyNowOpen, setBuyNowOpen] = useState(false);
   const [offerAmount, setOfferAmount] = useState("");
-  const [offerQuantity, setOfferQuantity] = useState(1);
   const [buyQuantity, setBuyQuantity] = useState(1);
-  const [conversation, setConversation] = useState<ChatConversation | null>(
+  const [composerHeight, setComposerHeight] = useState(0);
+  const [messages, setMessages] = useState<MessageItem[]>([]);
+  const [checkoutOrder, setCheckoutOrder] = useState<CheckoutOrder | null>(
     null,
   );
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [loadingConversation, setLoadingConversation] = useState(true);
+  const [pendingMedia, setPendingMedia] = useState<PendingMediaItem[]>([]);
   const [sending, setSending] = useState(false);
-  const [sendingImage, setSendingImage] = useState(false);
-  const [pendingImageUris, setPendingImageUris] = useState<string[]>([]);
   const [viewingImageUrls, setViewingImageUrls] = useState<string[]>([]);
   const [viewingImageIndex, setViewingImageIndex] = useState(0);
-  const [counterpartOnline, setCounterpartOnline] = useState(false);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [checkoutOrder, setCheckoutOrder] = useState<{
-    id?: number;
-    code?: string;
-    status?: string;
-    statusText?: string;
-    quantity?: number;
-    unitPrice?: number;
+  const [viewingVideoUrl, setViewingVideoUrl] = useState<string | null>(null);
+  const [conversationMeta, setConversationMeta] = useState<{
+    counterpartyId: number | null;
+    productId: number;
+    sellerName: string;
+    sellerId: number | null;
+    productName: string;
+    productPrice: number;
+    productQuantity: number;
+    productImage: string | null;
   } | null>(null);
   const params = useLocalSearchParams<{
     id?: string;
   }>();
+  const currentUserId = user!.id;
+  const conversationId = Number(params.id);
 
-  const counterpartName = conversation?.counterpart?.name || "Avera user";
-  const sellerName = counterpartName;
-  const productName = conversation?.product?.name || "Product listing";
-  const productPrice = conversation?.product
-    ? formatPrice(conversation.product.price)
-    : "Price available";
-  const productImage = conversation?.product?.imageUrl || null;
-  const productId = conversation?.productId;
-  const counterpartInitial = counterpartName.slice(0, 1).toUpperCase();
-  const currentUserId = toNumericId(user?.id);
-  const conversationId = toNumericId(params.id);
-  const counterpartId = toNumericId(conversation?.counterpart?.id);
-  const sellerId = toNumericId(conversation?.sellerId);
-  const isSeller =
-    Boolean(currentUserId) &&
-    isSameUserId(conversation?.sellerId, currentUserId);
-  const isOwnProduct = isSeller;
-  const productNumericPrice =
-    Number(String(productPrice).replace(/[^0-9.]/g, "")) || 0;
-  const availableQuantity = Math.max(
-    1,
-    Number(conversation?.product?.quantity || 1),
+  const sellerName = conversationMeta?.sellerName || "Avera Seller";
+  const productName = conversationMeta?.productName || "Product listing";
+  const productPrice = conversationMeta?.productPrice;
+  const sellerInitial = sellerName.slice(0, 1).toUpperCase();
+  const productNumericPrice = parsePriceValue(conversationMeta?.productPrice);
+  const isSeller = Boolean(
+    currentUserId &&
+    conversationMeta?.sellerId &&
+    Number(currentUserId) === Number(conversationMeta.sellerId),
   );
-  const hasPendingImages = pendingImageUris.length > 0;
-  const numericOfferAmount = Number(offerAmount.replace(/[^0-9.]/g, "")) || 0;
-  const offerTotal = numericOfferAmount * offerQuantity;
-  const buyTotal = productNumericPrice * buyQuantity;
-  const offerPercent =
-    productNumericPrice > 0 && numericOfferAmount > 0
-      ? Math.round((numericOfferAmount / productNumericPrice) * 100)
-      : null;
-  const minimumOfferAmount =
-    productNumericPrice > 0
-      ? Math.ceil(productNumericPrice * (MIN_OFFER_PERCENT / 100))
-      : 0;
-  const isOfferTooLow =
-    minimumOfferAmount > 0 &&
-    numericOfferAmount > 0 &&
-    numericOfferAmount < minimumOfferAmount;
-  const suggestedOffers = useMemo(() => {
-    if (!productNumericPrice) return [];
+  const canCancelOrder =
+    !isSeller && checkoutOrder?.status === "PENDING_TRANSFER";
 
-    return [0.9, 0.85, 0.8].map((multiplier) =>
-      Math.round(productNumericPrice * multiplier),
-    );
-  }, [productNumericPrice]);
+  const latestAcceptedOffer = useMemo(
+    () =>
+      messages
+        .slice()
+        .reverse()
+        .find(
+          (item) =>
+            Boolean(item.offerAmount) && item.offerStatus === "ACCEPTED",
+        ) || null,
+    [messages],
+  );
 
-  const decrementOfferQuantity = () => {
-    setOfferQuantity((current) => Math.max(1, current - 1));
-  };
-
-  const incrementOfferQuantity = () => {
-    setOfferQuantity((current) => Math.min(availableQuantity, current + 1));
-  };
-
-  const closeOfferSheet = () => {
-    offerAmountInputRef.current?.blur();
-    Keyboard.dismiss();
-    setOfferOpen(false);
-  };
-
-  const decrementBuyQuantity = () => {
-    setBuyQuantity((current) => Math.max(1, current - 1));
-  };
-
-  const incrementBuyQuantity = () => {
-    setBuyQuantity((current) => Math.min(availableQuantity, current + 1));
-  };
   const latestIncomingOffer = useMemo(() => {
-    return messages
-      .slice()
-      .reverse()
-      .find(
-        (item) =>
-          Boolean(item.offerAmount) &&
-          !isSameUserId(item.senderId, currentUserId) &&
-          (item.offerStatus || "PENDING") === "PENDING",
-      );
-  }, [currentUserId, messages]);
-  const acceptedOfferForCheckout = useMemo(() => {
-    if (isSeller) return null;
+    if (latestAcceptedOffer) return null;
 
     return (
       messages
@@ -258,139 +383,70 @@ export default function MessageDetailsScreen() {
         .find(
           (item) =>
             Boolean(item.offerAmount) &&
-            isSameUserId(item.senderId, currentUserId) &&
-            item.offerStatus === "ACCEPTED",
+            !item.fromMe &&
+            item.offerStatus === "PENDING",
         ) || null
     );
-  }, [currentUserId, isSeller, messages]);
-  const acceptedOfferQuantity = Number(
-    acceptedOfferForCheckout?.offerQuantity || 1,
-  );
-  const acceptedOfferUnitPrice = Number(
-    acceptedOfferForCheckout?.offerAmount || 0,
-  );
-  const acceptedOfferTotal = acceptedOfferUnitPrice * acceptedOfferQuantity;
-  const latestCheckoutStatus = useMemo(() => {
-    const statusMessage = messages
-      .slice()
-      .reverse()
-      .find((item) => item.content.startsWith("Checkout status:"));
+  }, [latestAcceptedOffer, messages]);
 
-    return (
-      statusMessage?.content.replace("Checkout status:", "").trim() || null
+  const visibleMessages = useMemo(() => {
+    if (!latestAcceptedOffer) return messages;
+
+    return messages.filter(
+      (item) => !item.offerAmount || item.id === latestAcceptedOffer.id,
     );
-  }, [messages]);
-  const liveCheckoutStatus = useMemo(() => {
-    const code = checkoutOrder?.code || "this order";
-
-    if (checkoutOrder?.status === "PENDING_TRANSFER") {
-      return `Buyer is paying for ${code}.`;
-    }
-    if (checkoutOrder?.status === "PAID_IN_ESCROW") {
-      return `Payment confirmed for ${code}.`;
-    }
-    if (checkoutOrder?.status === "SELLER_PREPARING") {
-      return `${code} is being prepared.`;
-    }
-    if (checkoutOrder?.status === "SHIPPED") {
-      return `${code} has shipped.`;
-    }
-    if (checkoutOrder?.status === "DELIVERED") {
-      return `${code} is waiting for buyer confirmation.`;
-    }
-    if (checkoutOrder?.status === "COMPLETED") {
-      return `${code} is complete.`;
-    }
-
-    return latestCheckoutStatus;
-  }, [checkoutOrder?.code, checkoutOrder?.status, latestCheckoutStatus]);
+  }, [latestAcceptedOffer, messages]);
+  const hasPendingMedia = pendingMedia.length > 0;
+  const availableQuantity = Math.max(
+    1,
+    Number(conversationMeta?.productQuantity || 1),
+  );
+  const checkoutUnitPrice = latestAcceptedOffer?.offerAmount
+    ? parsePriceValue(latestAcceptedOffer.offerAmount)
+    : productNumericPrice;
+  const buyTotal = checkoutUnitPrice * buyQuantity;
+  const latestCheckoutStatus = useMemo(
+    () => getLatestCheckoutStatus(messages),
+    [messages],
+  );
+  const liveCheckoutStatus = useMemo(
+    () => getLiveCheckoutStatus(checkoutOrder, latestCheckoutStatus),
+    [checkoutOrder, latestCheckoutStatus],
+  );
   const buyerCheckoutStatus = useMemo(() => {
     if (!liveCheckoutStatus) return null;
-
     return liveCheckoutStatus
       .replace(/^Buyer is /i, "You are ")
       .replace(/^Buyer /i, "You ");
   }, [liveCheckoutStatus]);
   const acceptedOfferPaid =
-    Boolean(acceptedOfferForCheckout) &&
-    (/payment confirmed/i.test(liveCheckoutStatus || "") ||
-      [
-        "PAID_IN_ESCROW",
-        "SELLER_PREPARING",
-        "SHIPPED",
-        "DELIVERED",
-        "COMPLETED",
-      ].includes(checkoutOrder?.status || "") ||
-      checkoutOrder?.statusText === "Paid in escrow");
-  const directCheckoutActive =
-    !isSeller &&
-    !acceptedOfferForCheckout &&
-    Boolean(checkoutOrder || buyerCheckoutStatus);
+    Boolean(latestAcceptedOffer) &&
+    (checkoutOrder?.status === "PAID_IN_ESCROW" ||
+      checkoutOrder?.status === "SELLER_PREPARING" ||
+      checkoutOrder?.status === "SHIPPED" ||
+      checkoutOrder?.status === "DELIVERED" ||
+      checkoutOrder?.status === "COMPLETED");
+  const directCheckoutActive = !latestAcceptedOffer && Boolean(checkoutOrder);
   const directCheckoutPending = checkoutOrder?.status === "PENDING_TRANSFER";
   const directCheckoutPaid =
-    [
-      "PAID_IN_ESCROW",
-      "SELLER_PREPARING",
-      "SHIPPED",
-      "DELIVERED",
-      "COMPLETED",
-    ].includes(checkoutOrder?.status || "") ||
-    checkoutOrder?.statusText === "Paid in escrow";
-  const directBuyLabel = isOwnProduct
+    checkoutOrder?.status === "PAID_IN_ESCROW" ||
+    checkoutOrder?.status === "SELLER_PREPARING" ||
+    checkoutOrder?.status === "SHIPPED" ||
+    checkoutOrder?.status === "DELIVERED" ||
+    checkoutOrder?.status === "COMPLETED";
+  const directBuyLabel = isSeller
     ? "Your listing"
     : directCheckoutPending
-      ? "Continue checkout"
-      : directCheckoutActive
-        ? "View active order"
+      ? "Continue paying"
+      : directCheckoutPaid
+        ? "View order"
         : "Buy now";
 
-  const appendMessage = useCallback((nextMessage: ChatMessage) => {
-    setMessages((current) => {
-      if (current.some((item) => item.id === nextMessage.id)) return current;
-      return [...current, nextMessage];
-    });
-  }, []);
-
-  const replaceMessage = useCallback(
-    (targetId: number, nextMessage: ChatMessage) => {
-      setMessages((current) => {
-        if (current.some((item) => item.id === nextMessage.id)) {
-          return current.filter((item) => item.id !== targetId);
-        }
-
-        return current.map((item) =>
-          item.id === targetId ? nextMessage : item,
-        );
-      });
-    },
-    [],
-  );
-
-  const updateMessage = useCallback((nextMessage: ChatMessage) => {
-    setMessages((current) =>
-      current.map((item) => (item.id === nextMessage.id ? nextMessage : item)),
+  useEffect(() => {
+    setBuyQuantity((current) =>
+      Math.min(Math.max(current, 1), availableQuantity),
     );
-  }, []);
-
-  const getMediaUrl = (path?: string | null) => {
-    if (!path) return null;
-    if (/^https?:\/\//i.test(path)) return path;
-    return `${BASE_URL}/media/${path}`;
-  };
-
-  const formatMessageTime = (createdAt: string) =>
-    new Date(createdAt).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-  const getMessageStatus = (item: ChatMessage) => {
-    if (item.localStatus === "failed") return "Failed";
-    if (item.localStatus === "sending") return "Sending";
-    if (item.readAt) return "Seen";
-    if (item.deliveredAt || item.createdAt) return "Delivered";
-    return "Sent";
-  };
+  }, [availableQuantity]);
 
   const scrollToBottom = useCallback((animated = true) => {
     requestAnimationFrame(() => {
@@ -398,462 +454,455 @@ export default function MessageDetailsScreen() {
     });
   }, []);
 
+  const appendMessage = useCallback((nextMessage: MessageItem) => {
+    setMessages((current) => {
+      if (current.some((item) => item.id === nextMessage.id)) return current;
+      return [...current, nextMessage];
+    });
+  }, []);
+
+  const reconcileMessage = useCallback((nextMessage: MessageItem) => {
+    setMessages((current) => {
+      const exactIndex = current.findIndex(
+        (item) => item.id === nextMessage.id,
+      );
+      if (exactIndex >= 0) {
+        const updated = [...current];
+        updated[exactIndex] = {
+          ...updated[exactIndex],
+          ...nextMessage,
+          status: getMessageStatus(nextMessage),
+        };
+        return updated;
+      }
+
+      const optimisticIndex = current.findIndex(
+        (item) =>
+          item.localStatus === "sending" &&
+          item.senderId === nextMessage.senderId &&
+          item.conversationId === nextMessage.conversationId &&
+          (item.offerAmount || null) === (nextMessage.offerAmount || null) &&
+          (item.imageUrl || null) === (nextMessage.imageUrl || null) &&
+          (item.text || "") === (nextMessage.text || ""),
+      );
+
+      if (optimisticIndex === -1) return [...current, nextMessage];
+
+      const updated = [...current];
+      updated[optimisticIndex] = {
+        ...nextMessage,
+        status: getMessageStatus(nextMessage),
+      };
+      return updated;
+    });
+  }, []);
+
+  const markMessageFailed = useCallback((messageId: number) => {
+    setMessages((current) =>
+      current.map((item) => {
+        if (item.id !== messageId) return item;
+        const failedMessage = {
+          ...item,
+          localStatus: "failed" as const,
+        };
+        return {
+          ...failedMessage,
+          status: getMessageStatus(failedMessage),
+        };
+      }),
+    );
+  }, []);
+
   useEffect(() => {
-    if (!loadingConversation && messages.length > 0) {
-      scrollToBottom();
+    if (!messages.length) return;
+    scrollToBottom(false);
+  }, [messages, scrollToBottom]);
+
+  useEffect(() => {
+    if (!conversationId) {
+      toast.show({
+        title: "Chat unavailable",
+        description: "This conversation is missing an ID.",
+        variant: "error",
+      });
+      return;
     }
-  }, [loadingConversation, messages.length, scrollToBottom]);
 
-  useEffect(() => {
-    const showEvent =
-      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent =
-      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const socket = connectSocket();
+    let active = true;
 
-    const showSubscription = Keyboard.addListener(showEvent, () => {
-      setKeyboardVisible(true);
-      setTimeout(() => scrollToBottom(), 80);
-      setTimeout(() => scrollToBottom(), 260);
-    });
-    const hideSubscription = Keyboard.addListener(hideEvent, () => {
-      setKeyboardVisible(false);
-    });
-
-    return () => {
-      showSubscription.remove();
-      hideSubscription.remove();
+    const handleIncoming = (payload: RawMessagePayload) => {
+      if (payload.conversationId !== conversationId) return;
+      reconcileMessage(
+        buildMessage({
+          payload,
+          conversationId,
+          currentUserId: Number(currentUserId),
+        }),
+      );
     };
-  }, [scrollToBottom]);
 
-  useEffect(() => {
-    let isMounted = true;
-    let activeConversationId: number | null = null;
-
-    const setupConversation = async () => {
+    const loadConversation = async () => {
       try {
-        setLoadingConversation(true);
-
-        if (!conversationId) {
-          throw new Error("Conversation not available");
-        }
-
-        activeConversationId = conversationId;
-
-        const { data: loadedConversation } = await axiosInstance.get(
-          `/chat/conversations/${conversationId}`,
-        );
-        const loadedCounterpartId = toNumericId(
-          loadedConversation?.counterpart?.id,
+        await emitWithAck<{ conversationId: number; success: boolean }>(
+          socket,
+          "conversation:join",
+          { conversationId },
         );
 
-        const { data: loadedMessages } = await axiosInstance.get(
-          `/chat/conversations/${conversationId}/messages`,
+        const payload = await emitWithAck<RawConversationPayload>(
+          socket,
+          "conversations:get",
+          { conversationId },
         );
 
-        if (!isMounted) return;
-        setConversation(loadedConversation);
-        setMessages(loadedMessages);
+        if (!active) return;
 
-        const socket = connectSocket();
-        const handleNewMessage = (nextMessage: ChatMessage) => {
-          if (nextMessage.conversationId !== activeConversationId) return;
-          if (isSameUserId(nextMessage.senderId, currentUserId)) return;
-          appendMessage(nextMessage);
+        setConversationMeta({
+          counterpartyId: payload.counterparty.id,
+          sellerName:
+            [payload.counterparty.firstName, payload.counterparty.lastName]
+              .filter(Boolean)
+              .join(" ") || payload.sellerName,
+          sellerId: payload.sellerId,
+          productId: payload.product.id,
+          productName: payload.product.name,
+          productPrice: payload.product.price,
+          productQuantity: payload.product.quantity,
 
-          socket.emit("conversation:read", { conversationId });
-        };
-        const handlePresenceSnapshot = (payload: {
-          onlineUserIds?: number[];
-        }) => {
-          setCounterpartOnline(
-            Boolean(
-              loadedCounterpartId &&
-              payload.onlineUserIds?.some((userId) =>
-                isSameUserId(userId, loadedCounterpartId),
-              ),
-            ),
-          );
-        };
-        const handlePresenceUpdate = (payload: {
-          userId?: number;
-          online?: boolean;
-        }) => {
-          if (isSameUserId(payload.userId, loadedCounterpartId)) {
-            setCounterpartOnline(Boolean(payload.online));
-          }
-        };
-        const handleReadState = (payload: {
-          conversationId?: number;
-          readerId?: number;
-          readAt?: string;
-        }) => {
-          if (Number(payload.conversationId) !== activeConversationId) return;
-          const readAt = payload.readAt || new Date().toISOString();
-          setMessages((current) =>
-            current.map((item) =>
-              !isSameUserId(item.senderId, payload.readerId) && !item.readAt
-                ? { ...item, readAt }
-                : item,
-            ),
-          );
-        };
-        const handleOfferUpdated = (payload: {
-          conversationId?: number;
-          offer?: ChatMessage;
-        }) => {
-          if (Number(payload.conversationId) !== activeConversationId) return;
-          if (!payload.offer) return;
-          updateMessage(payload.offer);
-        };
-
-        socket.emit("conversation:join", { conversationId });
-        socket.emit("conversation:read", { conversationId });
-        socket.on("message:new", handleNewMessage);
-        socket.on("presence:snapshot", handlePresenceSnapshot);
-        socket.on("presence:update", handlePresenceUpdate);
-        socket.on("conversation:read", handleReadState);
-        socket.on("offer:updated", handleOfferUpdated);
-
-        return () => {
-          socket.off("message:new", handleNewMessage);
-          socket.off("presence:snapshot", handlePresenceSnapshot);
-          socket.off("presence:update", handlePresenceUpdate);
-          socket.off("conversation:read", handleReadState);
-          socket.off("offer:updated", handleOfferUpdated);
-        };
+          productImage: getProductImageUrl(payload.product.images),
+        });
+        setMessages(
+          (payload.messages || []).map((item) =>
+            buildMessage({
+              payload: item,
+              conversationId,
+              currentUserId: Number(currentUserId),
+            }),
+          ),
+        );
       } catch (error: any) {
+        if (!active) return;
         toast.show({
           title: "Chat unavailable",
           description:
             error?.response?.data?.message ||
+            error?.message ||
             "We couldn't open this conversation right now.",
           variant: "error",
         });
-      } finally {
-        if (isMounted) setLoadingConversation(false);
       }
     };
 
-    let cleanupSocket: (() => void) | undefined;
-    setupConversation().then((cleanup) => {
-      cleanupSocket = cleanup;
-    });
+    socket.on("conversation:newMessage", handleIncoming);
+    socket.on("conversation:newOffer", handleIncoming);
+    socket.on("conversation:offerResponse", handleIncoming);
+
+    loadConversation();
 
     return () => {
-      isMounted = false;
-      cleanupSocket?.();
+      active = false;
+      socket.off("conversation:newMessage", handleIncoming);
+      socket.off("conversation:newOffer", handleIncoming);
+      socket.off("conversation:offerResponse", handleIncoming);
     };
-  }, [appendMessage, conversationId, currentUserId, toast, updateMessage]);
+  }, [conversationId, currentUserId, reconcileMessage, toast]);
 
   const refreshConversationCheckout = useCallback(async () => {
-    if (!conversationId || !productId) {
+    if (!conversationId || !conversationMeta?.productId) {
       setCheckoutOrder(null);
       return;
     }
 
     try {
-      const data = await emitSocketAck<{
-        ok?: boolean;
-        message?: string;
-        order?: any;
-      }>("checkout:get-current", "checkout:current", {
-        productId,
-        conversationId,
-        offerMessageId: acceptedOfferForCheckout?.id,
-        source: acceptedOfferForCheckout ? "offer" : "buy_now",
-      });
-
-      if (!data.ok) {
-        throw new Error(data.message || "Checkout unavailable");
-      }
-      console.log("Checkout status refreshed", JSON.stringify(data));
-      setCheckoutOrder(data.order || null);
+      const { data } = await axiosInstance.get<CheckoutOrder | null>(
+        "/orders/current",
+        {
+          params: {
+            conversationId,
+            productId: conversationMeta.productId,
+            source: latestAcceptedOffer ? "OFFER" : "BUY_NOW",
+          },
+        },
+      );
+      setCheckoutOrder(data);
     } catch {
       setCheckoutOrder(null);
     }
-  }, [acceptedOfferForCheckout?.id, conversationId, productId]);
+  }, [conversationId, conversationMeta?.productId, latestAcceptedOffer]);
 
-  useFocusEffect(
-    useCallback(() => {
-      refreshConversationCheckout();
-    }, [refreshConversationCheckout]),
-  );
+  useEffect(() => {
+    refreshConversationCheckout();
+  }, [refreshConversationCheckout, messages.length]);
 
-  const openCounterpartProfile = () => {
-    const profileId = isSeller ? counterpartId : sellerId;
-    if (!profileId) return;
-
+  const openSellerProfile = () => {
+    if (!conversationMeta?.counterpartyId) return;
     router.push({
       pathname: "/seller/[id]",
       params: {
-        id: String(profileId),
-        sellerName: counterpartName,
-        productName,
-        productPrice,
-        profileKind: isSeller ? "profile" : "seller",
-        ...(productImage ? { productImage } : {}),
+        id: String(conversationMeta.counterpartyId),
+        profileKind: isSeller ? "buyer" : "seller",
       },
     });
   };
 
-  const useQuickReply = (reply: string) => {
-    setMessage(reply);
-    requestAnimationFrame(() => {
-      messageInputRef.current?.focus();
-      scrollToBottom();
+  const openProductDetails = () => {
+    if (!conversationMeta?.productId) return;
+
+    setActionsOpen(false);
+    router.push({
+      pathname: "/product-details/[id]",
+      params: { id: String(conversationMeta.productId) },
     });
   };
 
-  const sendChatMessage = async (
-    input: SendChatMessageInput,
-  ): Promise<ChatMessage> => {
-    if (!conversation?.id) throw new Error("Conversation not available");
+  const cancelPendingOrder = async () => {
+    if (!checkoutOrder?.id || !canCancelOrder) return;
 
-    const payload = {
-      conversationId: conversation.id,
-      ...input,
-    };
-
-    const response = await emitSocketAck<{
-      ok?: boolean;
-      message?: ChatMessage | string;
-    }>("message:send", "message:sent", payload);
-
-    if (
-      !response?.ok ||
-      typeof response.message === "string" ||
-      !response.message
-    ) {
-      throw new Error(
-        typeof response?.message === "string"
-          ? response.message
-          : "Message not sent",
-      );
+    try {
+      await axiosInstance.post(`/orders/${checkoutOrder.id}/cancel`);
+      setActionsOpen(false);
+      await refreshConversationCheckout();
+      toast.show({
+        title: "Order cancelled",
+        description: "The pending order was cancelled successfully.",
+        variant: "success",
+      });
+    } catch (error: any) {
+      toast.show({
+        title: "Unable to cancel order",
+        description:
+          error?.response?.data?.message ||
+          error?.message ||
+          "This order can't be cancelled right now.",
+        variant: "error",
+      });
     }
-
-    return response.message;
   };
 
-  const respondToOfferRequest = async (
-    offerMessageId: number,
-    accepted: boolean,
-  ): Promise<{ offer: ChatMessage; message: ChatMessage }> => {
-    if (!conversation?.id) throw new Error("Conversation not available");
-
-    const response = await emitSocketAck<{
-      ok?: boolean;
-      offer?: ChatMessage;
-      message?: ChatMessage | string;
-    }>("offer:respond", "offer:responded", {
-      conversationId: conversation.id,
-      offerMessageId,
-      accepted,
-    });
-
-    if (
-      !response?.ok ||
-      !response.offer ||
-      typeof response.message === "string" ||
-      !response.message
-    ) {
-      throw new Error(
-        typeof response?.message === "string"
-          ? response.message
-          : "Offer response not sent",
-      );
-    }
-
-    return { offer: response.offer, message: response.message };
-  };
-
-  const createOptimisticMessage = (
-    input: SendChatMessageInput,
-  ): ChatMessage => ({
-    id: -Date.now() - Math.round(Math.random() * 10000),
-    conversationId: Number(conversation?.id || 0),
-    senderId: Number(currentUserId || 0),
-    senderName: (user as any)?.username || (user as any)?.firstName || "You",
-    content: input.content,
-    imageUrl: input.imageUrl,
-    offerAmount: input.offerAmount || null,
-    offerQuantity: input.offerQuantity || null,
-    offerStatus: input.offerAmount ? "PENDING" : null,
-    createdAt: new Date().toISOString(),
-    localStatus: "sending",
-  });
-
-  const markOptimisticMessageFailed = (messageId: number) => {
-    setMessages((current) =>
-      current.map((item) =>
-        item.id === messageId ? { ...item, localStatus: "failed" } : item,
-      ),
-    );
-  };
-
-  const getMessageSenderName = (item: ChatMessage) => {
-    if (isSameUserId(item.senderId, currentUserId)) return "You";
-    if (item.senderName) return item.senderName;
-    if (isSameUserId(item.senderId, counterpartId)) return counterpartName;
-    if (isSameUserId(item.senderId, sellerId)) return sellerName;
-    return "Avera user";
-  };
-
-  const openCheckoutReview = ({
-    quantity,
-    source,
-    unitPrice,
-    offerMessageId,
-  }: {
-    quantity: number;
-    source: "buy_now" | "offer";
-    unitPrice: number;
-    offerMessageId?: number;
-  }) => {
-    if (!productId) return;
-
-    if (source === "buy_now" && !offerMessageId && checkoutOrder?.id) {
-      setBuyNowOpen(false);
-
-      if (directCheckoutPending) {
-        router.push({
-          pathname: "/checkout/review",
-          params: {
-            productId: String(productId),
-            productName,
-            sellerName,
-            sellerId: String(sellerId || ""),
-            unitPrice: String(checkoutOrder.unitPrice || unitPrice),
-            quantity: String(checkoutOrder.quantity || quantity),
-            availableQuantity: String(availableQuantity),
-            source,
-            ...(conversation?.id
-              ? { conversationId: String(conversation.id) }
-              : {}),
-            ...(productImage ? { productImage } : {}),
-            checkoutStatusNotified: "true",
+  const actionItems = [
+    {
+      icon: "cube-outline",
+      title: "View product",
+      description: "Open the listing attached to this chat.",
+      tone: "default" as const,
+      onPress: openProductDetails,
+    },
+    {
+      icon: "notifications-outline",
+      title: "Mute conversation",
+      description: "Pause message alerts from this seller.",
+      tone: "default" as const,
+      onPress: () => {
+        setActionsOpen(false);
+        toast.show({
+          title: "Not available yet",
+          description: "Mute conversation will be available soon.",
+          variant: "info",
+        });
+      },
+    },
+    {
+      icon: "flag-outline",
+      title: "Report seller",
+      description: "Tell us if something feels suspicious.",
+      tone: "warning" as const,
+      onPress: () => {
+        setActionsOpen(false);
+        toast.show({
+          title: "Not available yet",
+          description: "Reporting from chat will be available soon.",
+          variant: "info",
+        });
+      },
+    },
+    ...(canCancelOrder
+      ? [
+          {
+            icon: "close-circle-outline",
+            title: "Cancel order",
+            description:
+              "Cancel this unpaid order and return the reserved quantity.",
+            tone: "danger" as const,
+            onPress: cancelPendingOrder,
           },
+        ]
+      : []),
+  ];
+
+  const openCheckoutReview = () => {
+    if (!conversationId) {
+      return;
+    }
+
+    setBuyNowOpen(false);
+
+    if (checkoutOrder?.id) {
+      if (directCheckoutPaid || acceptedOfferPaid) {
+        router.push({
+          pathname: "/order/[id]",
+          params: { id: String(checkoutOrder.id) },
         });
         return;
       }
 
       router.push({
-        pathname: "/order/[id]",
-        params: { id: String(checkoutOrder.id) },
+        pathname: "/checkout/pay",
+        params: {
+          orderId: String(checkoutOrder.id),
+          conversationId: String(conversationId),
+          quantity: String(checkoutOrder.quantity || buyQuantity),
+        },
       });
       return;
     }
 
-    setBuyNowOpen(false);
     router.push({
       pathname: "/checkout/review",
       params: {
-        productId: String(productId),
-        productName,
-        sellerName,
-        sellerId: String(sellerId || ""),
-        unitPrice: String(unitPrice),
-        quantity: String(quantity),
-        availableQuantity: String(availableQuantity),
-        source,
-        ...(conversation?.id
-          ? { conversationId: String(conversation.id) }
-          : {}),
-        ...(offerMessageId ? { offerMessageId: String(offerMessageId) } : {}),
-        ...(productImage ? { productImage } : {}),
+        quantity: String(latestAcceptedOffer?.offerQuantity || buyQuantity),
+        conversationId: String(conversationId),
       },
     });
   };
 
+  const openOrder = (id: number) => {
+    if (!id) return;
+    router.push({
+      pathname: "/order/[id]",
+      params: { id: String(id) },
+    });
+  };
+
+  const incrementBuyQuantity = () => {
+    setBuyQuantity((current) => Math.min(availableQuantity, current + 1));
+  };
+
+  const decrementBuyQuantity = () => {
+    setBuyQuantity((current) => Math.max(1, current - 1));
+  };
+
+  const respondToOffer = async (response: "accept" | "reject") => {
+    if (!latestIncomingOffer || !conversationId) return;
+
+    reconcileMessage({
+      ...latestIncomingOffer,
+      offerStatus: response === "accept" ? "ACCEPTED" : "REJECTED",
+    });
+
+    try {
+      connectSocket().emit("conversation:offerResponse", {
+        conversationId,
+        offerId: latestIncomingOffer.id,
+        response,
+      });
+    } catch (error: any) {
+      reconcileMessage(latestIncomingOffer);
+      toast.show({
+        title:
+          response === "accept" ? "Offer not accepted" : "Offer not rejected",
+        description:
+          error?.response?.data?.message ||
+          error?.message ||
+          "Please check your connection and try again.",
+        variant: "error",
+      });
+    }
+  };
+
   const sendMessage = async () => {
     const trimmed = message.trim();
-    if ((!trimmed && !hasPendingImages) || !conversation?.id || sending) return;
+    if ((!trimmed && !hasPendingMedia) || !conversationId || sending) return;
 
-    const imageUris = pendingImageUris;
+    const selectedMedia = pendingMedia;
 
     try {
       setSending(true);
-      if (imageUris.length) setSendingImage(true);
       setMessage("");
-      setPendingImageUris([]);
 
-      const imageUrls = imageUris.length
-        ? await uploadChatImages(imageUris)
+      const mediaUrls = selectedMedia.length
+        ? await uploadChatMedia(selectedMedia)
         : [];
-      if (imageUris.length && imageUrls.length !== imageUris.length) {
-        throw new Error("Image upload failed");
+      if (selectedMedia.length && mediaUrls.length !== selectedMedia.length) {
+        throw new Error("Media upload failed");
       }
 
-      if (imageUrls.length) {
-        for (let index = 0; index < imageUrls.length; index += 1) {
-          const payload = {
-            content: index === 0 ? trimmed : "",
-            imageUrl: imageUrls[index],
-          };
-          const optimisticMessage = createOptimisticMessage(payload);
-          appendMessage(optimisticMessage);
-          try {
-            const data = await sendChatMessage(payload);
-            replaceMessage(optimisticMessage.id, data);
-          } catch (error) {
-            markOptimisticMessageFailed(optimisticMessage.id);
-            throw error;
-          }
-        }
-      } else {
-        const payload = { content: trimmed };
-        const optimisticMessage = createOptimisticMessage(payload);
+      const payloads =
+        mediaUrls.length > 0
+          ? mediaUrls.map((imageUrl, index) => ({
+              content: index === 0 ? trimmed : "",
+              imageUrl,
+            }))
+          : [{ content: trimmed, imageUrl: undefined }];
+
+      for (const payload of payloads) {
+        const optimisticMessage = createOptimisticMessage({
+          conversationId,
+          currentUserId: Number(currentUserId),
+          text: payload.content,
+          imageUrl: payload.imageUrl,
+        });
+
         appendMessage(optimisticMessage);
+
         try {
-          const data = await sendChatMessage(payload);
-          replaceMessage(optimisticMessage.id, data);
+          connectSocket().emit("conversation:message", {
+            conversationId,
+            content: payload.content,
+            imageUrl: payload.imageUrl,
+          });
         } catch (error) {
-          markOptimisticMessageFailed(optimisticMessage.id);
+          markMessageFailed(optimisticMessage.id);
           throw error;
         }
       }
+
+      setPendingMedia([]);
     } catch (error: any) {
       setMessage(trimmed);
-      setPendingImageUris(imageUris);
+      setPendingMedia(selectedMedia);
       toast.show({
         title: "Message not sent",
         description:
           error?.response?.data?.message ||
+          error?.message ||
           "Please check your connection and try again.",
         variant: "error",
       });
     } finally {
       setSending(false);
-      setSendingImage(false);
     }
   };
 
-  const uploadChatImages = async (uris: string[]) => {
+  const uploadChatMedia = useCallback(async (items: PendingMediaItem[]) => {
     const formData = new FormData();
-    uris.forEach((uri, index) => {
+    items.forEach((item, index) => {
       formData.append("images", {
-        uri,
-        name: uri.split("/").pop() || `chat-image-${index + 1}.jpg`,
-        type: "image/jpeg",
-      } as unknown as Blob);
+        uri: item.uri,
+        name:
+          item.fileName ||
+          item.uri.split("/").pop() ||
+          `chat-media-${index + 1}.${item.type === "video" ? "mp4" : "jpg"}`,
+        type:
+          item.mimeType || (item.type === "video" ? "video/mp4" : "image/jpeg"),
+      } as any);
     });
 
     const { data } = await axiosInstance.post<{
       files: Array<{ path: string }>;
     }>("/uploads/images", formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
+      headers: { "Content-Type": "multipart/form-data" },
     });
 
     return data.files.map((file) => file.path).filter(Boolean);
-  };
+  }, []);
 
-  const pickImageMessage = async () => {
-    if (!conversation?.id || sendingImage) return;
-    if (pendingImageUris.length >= MAX_CHAT_IMAGES) {
+  const pickMediaMessage = useCallback(async () => {
+    if (sending) return;
+    if (pendingMedia.length >= MAX_CHAT_IMAGES) {
       toast.show({
-        title: "Image limit reached",
-        description: `You can send up to ${MAX_CHAT_IMAGES} images at once.`,
+        title: "Media limit reached",
+        description: `You can send up to ${MAX_CHAT_IMAGES} items at once.`,
         variant: "error",
       });
       return;
@@ -862,158 +911,199 @@ export default function MessageDetailsScreen() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
       toast.show({
-        title: "Photos unavailable",
-        description: "Allow photo access to send images in chat.",
+        title: "Media unavailable",
+        description: "Allow photo and video access to send media in chat.",
         variant: "error",
       });
       return;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      quality: 0.8,
+      mediaTypes: ["images", "videos"],
       allowsMultipleSelection: true,
-      selectionLimit: Math.max(1, MAX_CHAT_IMAGES - pendingImageUris.length),
+      quality: 0.8,
+      selectionLimit: Math.max(1, MAX_CHAT_IMAGES - pendingMedia.length),
     });
 
     if (result.canceled) return;
 
-    const pickedUris = result.assets
-      .map((asset) => asset.uri)
-      .filter(Boolean)
-      .slice(0, MAX_CHAT_IMAGES - pendingImageUris.length);
-    if (!pickedUris.length) return;
+    const pickedMedia = result.assets
+      .filter((asset) => asset.uri)
+      .slice(0, MAX_CHAT_IMAGES - pendingMedia.length)
+      .map(
+        (asset) =>
+          ({
+            uri: asset.uri,
+            type: asset.type === "video" ? "video" : "image",
+            mimeType: asset.mimeType,
+            fileName: asset.fileName,
+          }) satisfies PendingMediaItem,
+      );
 
-    setPendingImageUris((current) =>
-      [...current, ...pickedUris].slice(0, MAX_CHAT_IMAGES),
+    if (!pickedMedia.length) return;
+
+    setPendingMedia((current) =>
+      [...current, ...pickedMedia].slice(0, MAX_CHAT_IMAGES),
     );
     setTimeout(() => scrollToBottom(), 80);
-  };
+  }, [pendingMedia.length, scrollToBottom, sending, toast]);
 
-  const removePendingImage = (index: number) => {
-    setPendingImageUris((current) =>
-      current.filter((_, itemIndex) => itemIndex !== index),
-    );
-  };
+  const openImageViewer = useCallback((urls: string[], index = 0) => {
+    if (!urls.length) return;
+    setViewingImageUrls(urls);
+    setViewingImageIndex(Math.min(Math.max(index, 0), urls.length - 1));
+  }, []);
 
-  const closeImageViewer = () => {
-    setViewingImageUrls([]);
-    setViewingImageIndex(0);
-  };
-
-  const openImageViewer = (urls: Array<string | null>, index = 0) => {
-    const safeUrls = urls.filter(Boolean) as string[];
-    if (!safeUrls.length) return;
-
-    const safeIndex = Math.min(Math.max(index, 0), safeUrls.length - 1);
-    setViewingImageUrls(safeUrls);
-    setViewingImageIndex(safeIndex);
-  };
-
-  const formatOfferInput = (value: string) => {
-    const numericValue = value.replace(/[^0-9]/g, "");
-    setOfferAmount(numericValue);
-  };
+  const openVideoViewer = useCallback((url: string) => {
+    if (!url) return;
+    setViewingVideoUrl(url);
+  }, []);
 
   const submitOffer = async () => {
-    const amount = numericOfferAmount;
-    if (!amount || !conversation?.id || sending) return;
+    const amount = parsePriceValue(offerAmount);
+    if (!amount || !conversationId) return;
 
-    if (isOfferTooLow) {
-      toast.show({
-        title: "Offer too low",
-        description: `Offer must be at least ${MIN_OFFER_PERCENT}% of the listed price.`,
-        variant: "error",
-      });
-      return;
-    }
+    const optimisticMessage = createOptimisticMessage({
+      conversationId,
+      currentUserId: Number(currentUserId),
+      text: `I would like to offer ₦${amount.toLocaleString()} x 1 for this item.`,
+      offerAmount: amount,
+      offerQuantity: 1,
+    });
+
+    appendMessage(optimisticMessage);
+    setOfferAmount("");
+    setOfferOpen(false);
 
     try {
-      setSending(true);
-      offerAmountInputRef.current?.blur();
-      Keyboard.dismiss();
-      const payload = {
-        content: `I would like to offer ₦${amount.toLocaleString()} x ${offerQuantity} for this item.`,
+      connectSocket().emit("conversation:offer", {
+        conversationId,
         offerAmount: amount,
-        offerQuantity,
-      };
-      const optimisticMessage = createOptimisticMessage(payload);
-      appendMessage(optimisticMessage);
-      setOfferAmount("");
-      setOfferQuantity(1);
-      setOfferOpen(false);
-      try {
-        const data = await sendChatMessage(payload);
-        replaceMessage(optimisticMessage.id, data);
-      } catch (error) {
-        markOptimisticMessageFailed(optimisticMessage.id);
-        throw error;
-      }
+        offerQuantity: 1,
+      });
     } catch (error: any) {
+      markMessageFailed(optimisticMessage.id);
       toast.show({
         title: "Offer not sent",
         description:
-          error?.response?.data?.message || "Please check your connection.",
+          error?.response?.data?.message ||
+          error?.message ||
+          "Please check your connection and try again.",
         variant: "error",
       });
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const respondToOffer = async (accepted: boolean) => {
-    if (!latestIncomingOffer?.offerAmount || !conversation?.id || sending) {
-      return;
-    }
-
-    const amount = Number(latestIncomingOffer.offerAmount);
-    const quantity = Number(latestIncomingOffer.offerQuantity || 1);
-    const total = amount * quantity;
-    const content = accepted
-      ? `Offer accepted: ₦${amount.toLocaleString()} x ${quantity} = ₦${total.toLocaleString()}.`
-      : `Offer rejected: ₦${amount.toLocaleString()} x ${quantity}.`;
-
-    try {
-      setSending(true);
-      const optimisticOffer = {
-        ...latestIncomingOffer,
-        offerStatus: accepted ? ("ACCEPTED" as const) : ("REJECTED" as const),
-      };
-      updateMessage(optimisticOffer);
-      const optimisticMessage = createOptimisticMessage({ content });
-      appendMessage(optimisticMessage);
-      try {
-        const data = await respondToOfferRequest(
-          latestIncomingOffer.id,
-          accepted,
-        );
-        updateMessage(data.offer);
-        replaceMessage(optimisticMessage.id, data.message);
-      } catch (error) {
-        updateMessage(latestIncomingOffer);
-        markOptimisticMessageFailed(optimisticMessage.id);
-        throw error;
-      }
-    } catch (error: any) {
-      toast.show({
-        title: accepted ? "Offer not accepted" : "Offer not rejected",
-        description:
-          error?.response?.data?.message || "Please check your connection.",
-        variant: "error",
-      });
-    } finally {
-      setSending(false);
     }
   };
 
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-[#0A0A0A]" edges={["top"]}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        className="flex-1"
+      <Modal
+        visible={Boolean(viewingImageUrls.length)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setViewingImageUrls([]);
+          setViewingImageIndex(0);
+        }}
       >
+        <View className="flex-1 bg-black">
+          <StatusBar style="light" translucent backgroundColor="transparent" />
+          <View className="flex-1 bg-black">
+            <View
+              className="bg-black px-4 pb-3"
+              style={{ paddingTop: Math.max(insets.top, 16) }}
+            >
+              <View className="flex-row items-center justify-between">
+                <Pressable
+                  onPress={() => {
+                    setViewingImageUrls([]);
+                    setViewingImageIndex(0);
+                  }}
+                  className="h-11 min-w-20 items-start justify-center"
+                >
+                  <Text variant="none" className="text-lg font-bold text-white">
+                    Close
+                  </Text>
+                </Pressable>
+                <Text variant="none" className="text-lg font-bold text-white">
+                  {viewingImageUrls.length > 1
+                    ? `${viewingImageIndex + 1}/${viewingImageUrls.length}`
+                    : "Image"}
+                </Text>
+                <View className="h-11 min-w-20" />
+              </View>
+            </View>
+            <View className="flex-1 bg-black">
+              {viewingImageUrls.length ? (
+                <Gallery
+                  key={viewingImageUrls.join("|")}
+                  data={viewingImageUrls}
+                  initialIndex={viewingImageIndex}
+                  onIndexChange={setViewingImageIndex}
+                  onSwipeToClose={() => {
+                    setViewingImageUrls([]);
+                    setViewingImageIndex(0);
+                  }}
+                  onTap={() => {
+                    setViewingImageUrls([]);
+                    setViewingImageIndex(0);
+                  }}
+                  disableSwipeUp
+                  style={{ flex: 1, backgroundColor: "black" }}
+                />
+              ) : null}
+            </View>
+            <View
+              className="bg-black"
+              style={{ height: Math.max(insets.bottom, 16) + 16 }}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={Boolean(viewingVideoUrl)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setViewingVideoUrl(null)}
+      >
+        <View className="flex-1 bg-black">
+          <StatusBar style="light" translucent backgroundColor="transparent" />
+          <View className="flex-1 bg-black">
+            <View
+              className="bg-black px-4 pb-3"
+              style={{ paddingTop: Math.max(insets.top, 16) }}
+            >
+              <View className="flex-row items-center justify-between">
+                <Pressable
+                  onPress={() => setViewingVideoUrl(null)}
+                  className="h-11 min-w-20 items-start justify-center"
+                >
+                  <Text variant="none" className="text-lg font-bold text-white">
+                    Close
+                  </Text>
+                </Pressable>
+                <Text variant="none" className="text-lg font-bold text-white">
+                  Video
+                </Text>
+                <View className="h-11 min-w-20" />
+              </View>
+            </View>
+            <View className="flex-1 bg-black">
+              {viewingVideoUrl ? (
+                <FullscreenVideoPlayer url={viewingVideoUrl} />
+              ) : null}
+            </View>
+            <View
+              className="bg-black"
+              style={{ height: Math.max(insets.bottom, 16) + 16 }}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      <View className="flex-1">
         <View className="border-b border-gray-100 bg-white px-4 pb-3 pt-3 dark:border-white/5 dark:bg-[#0A0A0A]">
-          <View className="flex-row items-center">
+          <View className="flex-row items-center border-b border-gray-100 bg-white px-4 pb-3 pt-3 dark:border-white/5 dark:bg-[#0A0A0A]">
             <Pressable
               onPress={() => router.back()}
               className="h-11 w-11 items-center justify-center rounded-full border border-gray-100 bg-gray-50 dark:border-white/10 dark:bg-white/5"
@@ -1026,40 +1116,27 @@ export default function MessageDetailsScreen() {
             </Pressable>
 
             <Pressable
-              onPress={openCounterpartProfile}
+              onPress={openSellerProfile}
               className="ml-3 flex-1 flex-row items-center"
             >
               <View className="relative h-12 w-12 items-center justify-center rounded-2xl bg-brand/10">
                 <Text
                   variant="none"
-                  className="text-base font-black text-brand"
+                  className="text-base font-semibold text-brand"
                 >
-                  {counterpartInitial}
+                  {sellerInitial}
                 </Text>
-                <View
-                  className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white dark:border-[#0A0A0A] ${
-                    counterpartOnline ? "bg-emerald-500" : "bg-gray-300"
-                  }`}
-                />
+                <View className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white bg-emerald-500 dark:border-[#0A0A0A]" />
               </View>
               <View className="ml-3 flex-1">
                 <Text className="text-base font-bold text-gray-950 dark:text-white">
-                  {counterpartName}
+                  {sellerName}
                 </Text>
                 <Text className="mt-0.5 text-xs font-medium text-gray-500 dark:text-gray-400">
-                  {counterpartOnline ? "Online" : "Offline"} • usually replies
-                  fast
+                  Online • usually replies fast
                 </Text>
               </View>
             </Pressable>
-
-            {/* <Pressable className="mr-2 h-11 w-11 items-center justify-center rounded-full bg-gray-50 dark:bg-white/5">
-              <Ionicons
-                name="call-outline"
-                size={20}
-                color={isDark ? "white" : "#111827"}
-              />
-            </Pressable> */}
 
             <Pressable
               onPress={() => setActionsOpen(true)}
@@ -1072,24 +1149,11 @@ export default function MessageDetailsScreen() {
               />
             </Pressable>
           </View>
-        </View>
-
-        <ScrollView
-          ref={scrollViewRef}
-          className="flex-1"
-          contentContainerClassName="px-4 pb-6 pt-4"
-          contentContainerStyle={{
-            paddingBottom: keyboardVisible ? 18 : 24,
-          }}
-          onContentSizeChange={() => scrollToBottom()}
-          keyboardShouldPersistTaps="always"
-          showsVerticalScrollIndicator={false}
-        >
-          <Pressable className="mb-3 flex-row rounded-[28px] border border-gray-100 bg-gray-50 p-3 dark:border-white/5 dark:bg-white/5">
-            {productImage ? (
+          <Pressable className="mb-1 mt-4 flex-row rounded-2xl border border-gray-100 bg-gray-50 p-3 dark:border-white/5 dark:bg-white/5">
+            {conversationMeta?.productImage ? (
               <Image
-                source={{ uri: productImage }}
-                className="h-20 w-20 rounded-2xl bg-gray-200 dark:bg-white/10"
+                source={{ uri: conversationMeta?.productImage }}
+                className="h-12 w-12 rounded-2xl bg-gray-200 dark:bg-white/10"
               />
             ) : (
               <View className="h-20 w-20 items-center justify-center rounded-2xl bg-brand/10">
@@ -1103,338 +1167,76 @@ export default function MessageDetailsScreen() {
               >
                 {productName}
               </Text>
+
               <View className="mt-1 flex-row items-center">
-                <Text className="text-sm font-black text-brand">
-                  {productPrice}
-                </Text>
-                <View className="ml-2 flex-row items-center rounded-full bg-brand/10 px-2 py-0.5">
-                  <Ionicons
-                    name="shield-checkmark-outline"
-                    size={12}
-                    color="#2563EB"
-                  />
-                  <Text
-                    variant="none"
-                    className="ml-1 text-[10px] font-bold text-brand"
-                  >
-                    Escrow
+                {latestAcceptedOffer?.offerAmount ? (
+                  <>
+                    <Text className="text-sm font-semibold text-gray-400 line-through dark:text-gray-500">
+                      {formatPrice(productPrice)}
+                    </Text>
+                    <Text className="ml-2 text-sm font-semibold text-brand">
+                      {formatPrice(latestAcceptedOffer.offerAmount)}
+                    </Text>
+                  </>
+                ) : (
+                  <Text className="text-sm font-semibold text-brand">
+                    {formatPrice(productPrice)}
                   </Text>
-                </View>
+                )}
               </View>
             </View>
             <View className="self-center">
               <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
             </View>
           </Pressable>
-
-          <View className="mb-5 flex-row items-center justify-center px-2">
+          <View className="mt-1 flex-row items-center justify-center px-2">
             <Ionicons
               name="information-circle-outline"
               size={15}
               color="#9CA3AF"
             />
             <Text className="ml-1.5 text-center text-xs leading-5 text-gray-500 dark:text-gray-400">
-              Buy through Avera. Payment is protected by escrow.
+              Avoid sending money outside Avera.
+            </Text>
+          </View>
+        </View>
+
+        <KeyboardChatScrollView
+          ref={scrollViewRef}
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            paddingHorizontal: 16,
+            paddingTop: 16,
+            paddingBottom: composerHeight + 24,
+          }}
+          keyboardLiftBehavior="always"
+          offset={composerHeight}
+          showsVerticalScrollIndicator={false}
+          onContentSizeChange={() => scrollToBottom(false)}
+        >
+          <View className="mb-5 items-center">
+            <Text className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-500 dark:bg-white/5 dark:text-gray-400">
+              Today
             </Text>
           </View>
 
-          {loadingConversation ? (
-            <View className="items-center justify-center py-16">
-              <AveraLoader label="Opening chat" />
-            </View>
-          ) : messages.length === 0 ? (
-            <View className="items-center justify-center py-16">
-              <View className="h-16 w-16 items-center justify-center rounded-full bg-brand/10">
-                <Ionicons
-                  name="chatbubble-ellipses-outline"
-                  size={24}
-                  color="#2563EB"
-                />
-              </View>
-              <Text className="mt-4 text-base font-bold text-gray-950 dark:text-white">
-                Start the conversation
-              </Text>
-              <Text className="mt-1 text-center text-sm text-gray-500 dark:text-gray-400">
-                Ask about the item, delivery, condition, or make an offer.
-              </Text>
-            </View>
-          ) : (
-            <View className="mb-5 items-center">
-              <Text className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-500 dark:bg-white/5 dark:text-gray-400">
-                Today
-              </Text>
-            </View>
-          )}
-
-          {messages.map((item, index) => {
-            const previous = messages[index - 1];
-            const itemFromMe = isSameUserId(item.senderId, currentUserId);
-            const isCheckoutStatusMessage =
-              item.content.startsWith("Checkout status:");
-            const isImageOnly = Boolean(item.imageUrl) && !item.content;
-            const isImageBatchContinuation =
-              isImageOnly &&
-              isSameUserId(previous?.senderId, item.senderId) &&
-              Boolean(previous.imageUrl) &&
-              !previous.content;
-
-            if (isCheckoutStatusMessage) return null;
-            if (isImageBatchContinuation) return null;
-
-            const imageBatch: ChatMessage[] = [];
-            if (isImageOnly) {
-              for (
-                let batchIndex = index;
-                batchIndex < messages.length;
-                batchIndex += 1
-              ) {
-                const batchItem = messages[batchIndex];
-                if (
-                  !isSameUserId(batchItem.senderId, item.senderId) ||
-                  !batchItem.imageUrl ||
-                  batchItem.content
-                ) {
-                  break;
-                }
-                imageBatch.push(batchItem);
-              }
-            } else {
-              imageBatch.push(item);
-            }
-            const imageBatchUrls = imageBatch.map((batchItem) =>
-              getMediaUrl(batchItem.imageUrl),
-            );
-            const next = messages[index + imageBatch.length];
-            const groupedBefore =
-              previous && isSameUserId(previous.senderId, item.senderId);
-            const groupedAfter =
-              next && isSameUserId(next.senderId, item.senderId);
-            const hasImage = Boolean(item.imageUrl);
-            const hasText = Boolean(item.content);
-            const isImageBatch = imageBatch.length > 1 && !hasText;
-            const groupPosition =
-              !groupedBefore && !groupedAfter
-                ? "single"
-                : !groupedBefore
-                  ? "first"
-                  : groupedAfter
-                    ? "middle"
-                    : "last";
-            const bubbleRadius = itemFromMe
-              ? {
-                  single: "rounded-[24px] rounded-br-md",
-                  first: "rounded-[24px] rounded-br-md",
-                  middle: "rounded-[24px] rounded-r-md",
-                  last: "rounded-[24px] rounded-tr-md",
-                }[groupPosition]
-              : {
-                  single: "rounded-[24px] rounded-bl-md",
-                  first: "rounded-[24px] rounded-bl-md",
-                  middle: "rounded-[24px] rounded-l-md",
-                  last: "rounded-[24px] rounded-tl-md",
-                }[groupPosition];
-            const imageRadius = hasText
-              ? "rounded-[20px] rounded-b"
-              : itemFromMe
-                ? {
-                    single: "rounded-[20px] rounded-br",
-                    first: "rounded-[20px] rounded-br",
-                    middle: "rounded-[20px] rounded-r",
-                    last: "rounded-[20px] rounded-tr",
-                  }[groupPosition]
-                : {
-                    single: "rounded-[20px] rounded-bl",
-                    first: "rounded-[20px] rounded-bl",
-                    middle: "rounded-[20px] rounded-l",
-                    last: "rounded-[20px] rounded-tl",
-                  }[groupPosition];
-
-            return (
-              <View
-                key={item.id}
-                className={`mb-2 ${
-                  isImageBatch ? "max-w-[92%]" : "max-w-[84%]"
-                } ${
-                  itemFromMe ? "self-end items-end" : "self-start items-start"
-                } ${groupedBefore ? "mt-0" : "mt-3"}`}
-              >
-                {!itemFromMe && !groupedBefore && (
-                  <Text className="mb-1 ml-1 text-xs font-semibold text-gray-400">
-                    {getMessageSenderName(item)}
-                  </Text>
-                )}
-                <View
-                  className={`${bubbleRadius} ${
-                    hasImage ? "p-1" : "px-4 py-3"
-                  } ${
-                    itemFromMe ? "bg-brand" : "bg-gray-100 dark:bg-white/10"
-                  }`}
-                >
-                  {item.imageUrl ? (
-                    isImageBatch ? (
-                      <View className="w-[244px] flex-row flex-wrap">
-                        {imageBatch.slice(0, 4).map((batchItem, batchIndex) => {
-                          const mediaUrl = imageBatchUrls[batchIndex];
-                          const hiddenCount = imageBatch.length - 4;
-
-                          return (
-                            <Pressable
-                              key={batchItem.id}
-                              onPress={() =>
-                                openImageViewer(imageBatchUrls, batchIndex)
-                              }
-                              className="relative"
-                            >
-                              <Image
-                                source={{ uri: mediaUrl || undefined }}
-                                className={`h-[120px] w-[120px] bg-gray-200 dark:bg-white/10 ${
-                                  batchIndex % 2 === 0 ? "mr-1" : ""
-                                } ${batchIndex < 2 ? "mb-1" : ""} ${
-                                  batchIndex === 0 ? "rounded-tl-[20px]" : ""
-                                } ${
-                                  batchIndex === 1 ||
-                                  (imageBatch.length === 1 && batchIndex === 0)
-                                    ? "rounded-tr-[20px]"
-                                    : ""
-                                } ${
-                                  batchIndex === 2 ||
-                                  (imageBatch.length === 2 && batchIndex === 0)
-                                    ? "rounded-bl-[20px]"
-                                    : ""
-                                } ${
-                                  batchIndex === 3 ||
-                                  (imageBatch.length <= 3 &&
-                                    batchIndex === imageBatch.length - 1)
-                                    ? "rounded-br-[20px]"
-                                    : ""
-                                }`}
-                                resizeMode="cover"
-                              />
-                              {batchIndex === 3 && hiddenCount > 0 ? (
-                                <View className="absolute inset-0 items-center justify-center rounded-br-[20px] bg-black/45">
-                                  <Text
-                                    variant="none"
-                                    className="text-lg font-black text-white"
-                                  >
-                                    +{hiddenCount}
-                                  </Text>
-                                </View>
-                              ) : null}
-                            </Pressable>
-                          );
-                        })}
-                      </View>
-                    ) : (
-                      <Pressable
-                        onPress={() =>
-                          openImageViewer([getMediaUrl(item.imageUrl)])
-                        }
-                      >
-                        <Image
-                          source={{
-                            uri: getMediaUrl(item.imageUrl) || undefined,
-                          }}
-                          className={`h-48 w-56 ${imageRadius} bg-gray-200 dark:bg-white/10 ${
-                            hasText ? "mb-2" : ""
-                          }`}
-                          resizeMode="cover"
-                        />
-                      </Pressable>
-                    )
-                  ) : null}
-                  {hasText ? (
-                    <Text
-                      variant="none"
-                      className={`text-sm leading-5 ${
-                        hasImage ? "px-3 pb-2 pt-1" : ""
-                      } ${
-                        itemFromMe
-                          ? "text-white"
-                          : "text-gray-900 dark:text-white"
-                      }`}
-                    >
-                      {item.content}
-                    </Text>
-                  ) : null}
-                  {item.offerAmount ? (
-                    <View className="mx-3 mt-2">
-                      <View
-                        className={`self-start rounded-full px-2.5 py-1 ${
-                          item.offerStatus === "ACCEPTED"
-                            ? "bg-emerald-500/15"
-                            : item.offerStatus === "REJECTED"
-                              ? "bg-red-500/15"
-                              : itemFromMe
-                                ? "bg-white/15"
-                                : "bg-brand/10"
-                        }`}
-                      >
-                        <Text
-                          variant="none"
-                          className={`text-[10px] font-black uppercase ${
-                            item.offerStatus === "ACCEPTED"
-                              ? "text-emerald-500"
-                              : item.offerStatus === "REJECTED"
-                                ? "text-red-500"
-                                : itemFromMe
-                                  ? "text-white"
-                                  : "text-brand"
-                          }`}
-                        >
-                          {item.offerStatus === "ACCEPTED"
-                            ? "Accepted"
-                            : item.offerStatus === "REJECTED"
-                              ? "Rejected"
-                              : "Pending offer"}
-                        </Text>
-                      </View>
-                    </View>
-                  ) : null}
-                </View>
-                {!groupedAfter && (
-                  <View
-                    className={`mt-1 flex-row items-center ${
-                      itemFromMe ? "justify-end" : "justify-start"
-                    }`}
-                  >
-                    <Text className="text-[11px] text-gray-400">
-                      {formatMessageTime(item.createdAt)}
-                    </Text>
-                    {itemFromMe && (
-                      <>
-                        <Text className="mx-1 text-[11px] text-gray-400">
-                          •
-                        </Text>
-                        <Ionicons
-                          name="checkmark-done"
-                          size={13}
-                          color="#9CA3AF"
-                        />
-                        <Text className="ml-1 text-[11px] text-gray-400">
-                          {getMessageStatus(item)}
-                        </Text>
-                      </>
-                    )}
-                  </View>
-                )}
-              </View>
-            );
-          })}
+          <MessageThread
+            items={visibleMessages}
+            sellerName={sellerName}
+            onOpenImageViewer={openImageViewer}
+            onOpenVideoViewer={openVideoViewer}
+          />
 
           <View className="mt-8">
             <Text className="mb-2 text-xs font-bold uppercase tracking-widest text-gray-400">
               Quick replies
             </Text>
-            <ScrollView
-              horizontal
-              keyboardShouldPersistTaps="always"
-              showsHorizontalScrollIndicator={false}
-            >
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View className="flex-row pr-4">
                 {quickReplies.map((reply) => (
                   <Pressable
                     key={reply}
-                    onPress={() => useQuickReply(reply)}
+                    onPress={() => setMessage(reply)}
                     className="mr-2 rounded-full border border-gray-100 bg-gray-50 px-4 py-2 dark:border-white/10 dark:bg-white/5"
                   >
                     <Text className="text-xs font-semibold text-gray-700 dark:text-gray-300">
@@ -1445,381 +1247,223 @@ export default function MessageDetailsScreen() {
               </View>
             </ScrollView>
           </View>
-        </ScrollView>
+        </KeyboardChatScrollView>
 
-        <View className="border-t border-gray-100 bg-white px-4 pb-4 pt-3 dark:border-white/5 dark:bg-[#0A0A0A]">
+        <KeyboardStickyView
+          offset={{ closed: 0, opened: -8 }}
+          className="border-t border-gray-100 bg-white px-4 pb-4 pt-3 dark:border-white/5 dark:bg-[#0A0A0A]"
+          onLayout={(event) => {
+            const nextHeight = Math.ceil(event.nativeEvent.layout.height);
+            setComposerHeight((current) =>
+              current === nextHeight ? current : nextHeight,
+            );
+          }}
+        >
           {isSeller && liveCheckoutStatus ? (
-            <View className="mb-3 rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-              <View className="flex-row items-center">
-                <View className="h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/15">
-                  <Ionicons name="receipt-outline" size={20} color="#10B981" />
-                </View>
-                <View className="ml-3 flex-1">
-                  <Text
-                    variant="none"
-                    className="text-xs font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400"
-                  >
-                    Checkout status
-                  </Text>
-                  <Text className="mt-1 text-sm font-bold text-gray-950 dark:text-white">
-                    {liveCheckoutStatus}
-                  </Text>
-                </View>
-              </View>
+            <View className="mb-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-3 dark:border-emerald-400/20 dark:bg-emerald-400/10">
+              <Text className="text-xs font-bold uppercase text-emerald-700 dark:text-emerald-300">
+                Checkout status
+              </Text>
+              <Text className="mt-1 text-sm font-semibold text-gray-950 dark:text-white">
+                {liveCheckoutStatus}
+              </Text>
               {checkoutOrder?.id ? (
                 <Pressable
-                  onPress={() =>
-                    router.push({
-                      pathname: "/order/[id]",
-                      params: { id: String(checkoutOrder.id) },
-                    })
-                  }
-                  className="mt-4 h-10 flex-row items-center justify-center rounded-2xl bg-emerald-500"
+                  onPress={() => openOrder(checkoutOrder.id)}
+                  className="mt-3 h-10 items-center justify-center rounded-2xl bg-emerald-500"
                 >
-                  <Ionicons name="receipt-outline" size={16} color="white" />
-                  <Text
-                    variant="none"
-                    className="ml-2 text-sm font-black text-white"
-                  >
+                  <Text variant="none" className="text-sm font-bold text-white">
                     View order
                   </Text>
                 </Pressable>
               ) : null}
             </View>
           ) : null}
-          {acceptedOfferForCheckout ? (
-            <View className="mb-3 rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-              <View className="flex-row items-start">
-                <View className="h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/15">
-                  <Ionicons
-                    name={
-                      acceptedOfferPaid
-                        ? "shield-checkmark-outline"
-                        : "card-outline"
-                    }
-                    size={20}
-                    color="#10B981"
-                  />
-                </View>
-                <View className="ml-3 flex-1">
-                  <Text
-                    variant="none"
-                    className="text-xs font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400"
-                  >
-                    {acceptedOfferPaid ? "Payment secured" : "Offer accepted"}
-                  </Text>
-                  <Text className="mt-1 text-2xl font-black text-gray-950 dark:text-white">
-                    ₦{acceptedOfferTotal.toLocaleString()}
-                  </Text>
-                  <Text className="mt-1 text-sm font-bold text-gray-700 dark:text-gray-200">
-                    {acceptedOfferPaid
-                      ? `${checkoutOrder?.code || "Order"} is held in escrow`
-                      : `Qty ${acceptedOfferQuantity} • ₦${acceptedOfferUnitPrice.toLocaleString()} each`}
-                  </Text>
-                </View>
-              </View>
+
+          {!isSeller && latestAcceptedOffer ? (
+            <View className="mb-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-3 dark:border-emerald-400/20 dark:bg-emerald-400/10">
+              <Text className="text-xs font-bold uppercase text-emerald-700 dark:text-emerald-300">
+                {acceptedOfferPaid ? "Payment secured" : "Offer accepted"}
+              </Text>
+              <Text className="mt-1 text-sm font-semibold text-gray-950 dark:text-white">
+                {acceptedOfferPaid
+                  ? `${checkoutOrder?.code || "Order"} is held in escrow.`
+                  : buyerCheckoutStatus ||
+                    "Continue to complete payment for this offer."}
+              </Text>
               <Pressable
-                onPress={() =>
-                  acceptedOfferPaid
-                    ? checkoutOrder?.id
-                      ? router.push({
-                          pathname: "/order/[id]",
-                          params: { id: String(checkoutOrder.id) },
-                        })
-                      : router.push("/(tabs)/orders")
-                    : openCheckoutReview({
-                        source: "offer",
-                        unitPrice: acceptedOfferUnitPrice,
-                        quantity: acceptedOfferQuantity,
-                        offerMessageId: acceptedOfferForCheckout.id,
-                      })
-                }
-                className="mt-4 h-11 flex-row items-center justify-center rounded-2xl bg-emerald-500"
+                onPress={openCheckoutReview}
+                className="mt-3 h-10 items-center justify-center rounded-2xl bg-emerald-500"
               >
-                <Ionicons
-                  name={
-                    acceptedOfferPaid
-                      ? "receipt-outline"
-                      : "lock-closed-outline"
-                  }
-                  size={16}
-                  color="white"
-                />
-                <Text
-                  variant="none"
-                  className="ml-2 text-sm font-black text-white"
-                >
-                  {acceptedOfferPaid ? "View order" : "Checkout accepted offer"}
+                <Text variant="none" className="text-sm font-bold text-white">
+                  {acceptedOfferPaid
+                    ? "View order"
+                    : checkoutOrder?.id
+                      ? "Continue paying"
+                      : "Checkout offer"}
                 </Text>
               </Pressable>
             </View>
-          ) : directCheckoutActive ? (
-            <View className="mb-3 rounded-3xl border border-brand/20 bg-brand/10 p-4">
-              <View className="flex-row items-start">
-                <View className="h-10 w-10 items-center justify-center rounded-2xl bg-brand/10">
-                  <Ionicons
-                    name={
-                      directCheckoutPaid
-                        ? "shield-checkmark-outline"
-                        : "card-outline"
-                    }
-                    size={20}
-                    color="#2563EB"
-                  />
-                </View>
-                <View className="ml-3 flex-1">
-                  <Text
-                    variant="none"
-                    className="text-xs font-bold uppercase tracking-widest text-brand"
-                  >
-                    {directCheckoutPaid ? "Payment secured" : "Checkout active"}
-                  </Text>
-                  <Text className="mt-1 text-sm font-bold text-gray-950 dark:text-white">
-                    {buyerCheckoutStatus ||
-                      `${checkoutOrder?.code || "Order"} is in progress.`}
-                  </Text>
-                  <Text className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    {directCheckoutPaid
-                      ? "Your payment is held in escrow."
-                      : "Continue when you're ready to complete payment."}
-                  </Text>
-                </View>
-              </View>
-              <Pressable
-                onPress={() =>
-                  directCheckoutPaid && checkoutOrder?.id
-                    ? router.push({
-                        pathname: "/order/[id]",
-                        params: { id: String(checkoutOrder.id) },
-                      })
-                    : openCheckoutReview({
-                        source: "buy_now",
-                        unitPrice: productNumericPrice,
-                        quantity: buyQuantity,
-                      })
-                }
-                className="mt-4 h-11 flex-row items-center justify-center rounded-2xl bg-brand"
+          ) : null}
+
+          {!isSeller && !latestAcceptedOffer && directCheckoutActive ? (
+            <View className="mb-3 rounded-2xl border border-brand/20 bg-brand/10 p-3">
+              <Text
+                variant="none"
+                className="text-xs font-bold uppercase text-brand"
               >
-                <Ionicons
-                  name={directCheckoutPaid ? "receipt-outline" : "card-outline"}
-                  size={16}
-                  color="white"
-                />
-                <Text
-                  variant="none"
-                  className="ml-2 text-sm font-black text-white"
-                >
-                  {directCheckoutPaid ? "View order" : "Continue checkout"}
+                {directCheckoutPaid ? "Payment secured" : "Checkout active"}
+              </Text>
+              <Text className="mt-1 text-sm font-semibold text-gray-950 dark:text-white">
+                {buyerCheckoutStatus ||
+                  `${checkoutOrder?.code || "Order"} is in progress.`}
+              </Text>
+              <Pressable
+                onPress={openCheckoutReview}
+                className="mt-3 h-10 items-center justify-center rounded-2xl bg-brand"
+              >
+                <Text variant="none" className="text-sm font-bold text-white">
+                  {directCheckoutPaid ? "View order" : "Continue paying"}
                 </Text>
               </Pressable>
             </View>
-          ) : isSeller ? (
-            latestIncomingOffer?.offerAmount ? (
-              <View className="mb-3 rounded-3xl border border-brand/20 bg-brand/10 p-4">
-                <View className="flex-row items-start">
-                  <View className="h-10 w-10 items-center justify-center rounded-2xl bg-brand/10">
-                    <Ionicons
-                      name="pricetag-outline"
-                      size={20}
-                      color="#2563EB"
-                    />
-                  </View>
-                  <View className="ml-3 flex-1">
-                    <Text
-                      variant="none"
-                      className="text-xs font-bold uppercase tracking-widest text-brand"
-                    >
-                      Buyer offer
-                    </Text>
-                    <Text className="mt-1 text-2xl font-black text-gray-950 dark:text-white">
-                      ₦
-                      {Number(latestIncomingOffer.offerAmount).toLocaleString()}
-                    </Text>
-                    <Text className="mt-1 text-sm font-bold text-gray-700 dark:text-gray-200">
-                      Qty {latestIncomingOffer.offerQuantity || 1} • Total ₦
-                      {(
-                        Number(latestIncomingOffer.offerAmount) *
-                        Number(latestIncomingOffer.offerQuantity || 1)
-                      ).toLocaleString()}
-                    </Text>
-                    <Text className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      Accepting unlocks checkout for the buyer.
-                    </Text>
-                  </View>
-                </View>
-                <View className="mt-4 flex-row gap-3">
-                  <Pressable
-                    onPress={() => respondToOffer(false)}
-                    disabled={sending}
-                    className="h-8 flex-1 flex-row items-center justify-center rounded-lg border border-red-500/20 bg-red-500/10"
-                  >
-                    <Ionicons name="close" size={14} color="#EF4444" />
-                    <Text
-                      variant="none"
-                      className="ml-2 font-bold text-sm text-red-500"
-                    >
-                      Reject
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => respondToOffer(true)}
-                    disabled={sending}
-                    className="h-8 flex-1 flex-row items-center justify-center rounded-lg bg-emerald-500"
-                  >
-                    <Ionicons name="checkmark" size={14} color="white" />
-                    <Text
-                      variant="none"
-                      className="ml-2 text-sm font-bold text-white"
-                    >
-                      Accept
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
-            ) : null
-          ) : (
+          ) : null}
+
+          {!isSeller && !directCheckoutActive && !latestAcceptedOffer ? (
             <View className="mb-3 flex-row gap-2">
               <Pressable
                 onPress={() => setOfferOpen(true)}
-                disabled={!conversation?.id || loadingConversation}
-                className={`flex-1 items-center justify-center rounded-2xl py-3 ${
-                  conversation?.id && !loadingConversation
-                    ? "bg-gray-50 dark:bg-white/5"
-                    : "bg-gray-100 opacity-60 dark:bg-white/5"
-                }`}
+                className="flex-1 items-center justify-center rounded-2xl bg-gray-50 py-3 dark:bg-white/5"
               >
                 <Text className="text-xs font-bold text-gray-600 dark:text-gray-300">
                   Offer price
                 </Text>
               </Pressable>
               <Pressable
-                onPress={() => {
-                  if (isOwnProduct) return;
-
-                  if (directCheckoutPending) {
-                    openCheckoutReview({
-                      source: "buy_now",
-                      unitPrice: productNumericPrice,
-                      quantity: buyQuantity,
-                    });
-                    return;
-                  }
-
-                  if (directCheckoutActive && checkoutOrder?.id) {
-                    router.push({
-                      pathname: "/order/[id]",
-                      params: { id: String(checkoutOrder.id) },
-                    });
-                    return;
-                  }
-
-                  setBuyNowOpen(true);
-                }}
-                disabled={isOwnProduct}
-                className={`flex-1 items-center justify-center rounded-2xl py-3 ${
-                  isOwnProduct ? "bg-gray-100 dark:bg-white/5" : "bg-brand/10"
-                }`}
+                onPress={() => setBuyNowOpen(true)}
+                className="flex-1 items-center justify-center rounded-2xl bg-brand py-3"
               >
-                <Text
-                  variant="none"
-                  className={`text-xs font-bold ${
-                    isOwnProduct
-                      ? "text-gray-500 dark:text-gray-400"
-                      : "text-brand"
-                  }`}
-                >
+                <Text variant="none" className="text-xs font-bold text-white">
                   {directBuyLabel}
                 </Text>
               </Pressable>
             </View>
-          )}
+          ) : null}
 
-          {hasPendingImages ? (
-            <View className="mb-3 rounded-3xl border border-gray-100 bg-gray-50 p-3 dark:border-white/10 dark:bg-white/5">
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View className="flex-row gap-3 pr-4">
-                  {pendingImageUris.map((uri, index) => (
-                    <Pressable
-                      key={`${uri}-${index}`}
-                      onPress={() => openImageViewer(pendingImageUris, index)}
-                      className="relative"
-                    >
-                      <Image
-                        source={{ uri }}
-                        className="h-20 w-20 rounded-2xl bg-gray-200 dark:bg-white/10"
-                        resizeMode="cover"
-                      />
-                      <Pressable
-                        onPress={() => removePendingImage(index)}
-                        disabled={sendingImage}
-                        className="absolute right-1 top-1 h-7 w-7 items-center justify-center rounded-full bg-black/70"
-                      >
-                        <Ionicons name="close" size={15} color="white" />
-                      </Pressable>
-                    </Pressable>
-                  ))}
-                  {pendingImageUris.length < MAX_CHAT_IMAGES ? (
-                    <Pressable
-                      onPress={pickImageMessage}
-                      disabled={sendingImage}
-                      className="h-20 w-20 items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-white dark:border-white/20 dark:bg-white/10"
-                    >
-                      <Ionicons
-                        name="add"
-                        size={22}
-                        color={isDark ? "white" : "#111827"}
-                      />
-                    </Pressable>
-                  ) : null}
-                </View>
-              </ScrollView>
-              <View className="mt-3 flex-row items-center justify-between">
-                <Text className="text-xs font-semibold text-gray-500 dark:text-gray-400">
-                  {pendingImageUris.length}/{MAX_CHAT_IMAGES} selected
-                </Text>
-                <Pressable
-                  onPress={() => setPendingImageUris([])}
-                  disabled={sendingImage}
-                >
-                  <Text
-                    variant="none"
-                    className="text-xs font-bold text-red-500"
-                  >
-                    Clear
+          {isSeller && latestIncomingOffer?.offerAmount ? (
+            <View className="mb-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-3 dark:border-emerald-400/20 dark:bg-emerald-400/10">
+              <View className="flex-row items-center justify-between">
+                <View className="flex-1 pr-3">
+                  <Text className="text-xs font-bold uppercase text-emerald-700 dark:text-emerald-300">
+                    Pending offer
                   </Text>
-                </Pressable>
+                  <Text className="mt-1 text-sm font-semibold text-gray-950 dark:text-white">
+                    {formatPrice(latestIncomingOffer.offerAmount)}
+                    {latestIncomingOffer.offerQuantity
+                      ? ` x ${latestIncomingOffer.offerQuantity}`
+                      : ""}
+                  </Text>
+                </View>
+                <View className="flex-row gap-2">
+                  <Pressable
+                    onPress={() => respondToOffer("reject")}
+                    className="rounded-full bg-white/80 px-4 py-2 dark:bg-white/10"
+                  >
+                    <Text className="text-xs font-bold text-gray-700 dark:text-gray-200">
+                      Reject
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => respondToOffer("accept")}
+                    className="rounded-full bg-brand px-4 py-2"
+                  >
+                    <Text
+                      variant="none"
+                      className="text-xs font-bold text-white"
+                    >
+                      Accept
+                    </Text>
+                  </Pressable>
+                </View>
               </View>
+            </View>
+          ) : null}
+
+          {hasPendingMedia ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              className="mb-3"
+              contentContainerStyle={{ paddingRight: 8 }}
+            >
+              {pendingMedia.map((item, index) => (
+                <View key={`${item.uri}-${index}`} className="mr-2">
+                  {item.type === "video" ? (
+                    <View
+                      className={`h-16 w-16 items-center justify-center rounded-2xl bg-black ${
+                        sending ? "opacity-70" : ""
+                      }`}
+                    >
+                      <Ionicons name="videocam" size={20} color="white" />
+                    </View>
+                  ) : (
+                    <Image
+                      source={{ uri: item.uri }}
+                      className={`h-16 w-16 rounded-2xl bg-gray-200 dark:bg-white/10 ${
+                        sending ? "opacity-70" : ""
+                      }`}
+                    />
+                  )}
+                  <Pressable
+                    disabled={sending}
+                    onPress={() =>
+                      setPendingMedia((current) =>
+                        current.filter((_, itemIndex) => itemIndex !== index),
+                      )
+                    }
+                    className={`absolute -right-1 -top-1 h-6 w-6 items-center justify-center rounded-full bg-black/70 ${
+                      sending ? "opacity-50" : ""
+                    }`}
+                  >
+                    <Ionicons name="close" size={14} color="white" />
+                  </Pressable>
+                </View>
+              ))}
+            </ScrollView>
+          ) : null}
+
+          {sending ? (
+            <View className="mb-3 flex-row items-center">
+              <ActivityIndicator size="small" color="#2563EB" />
+              <Text className="ml-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+                Sending{hasPendingMedia ? " media" : ""}...
+              </Text>
             </View>
           ) : null}
 
           <View className="flex-row items-end justify-center rounded-3xl border border-gray-100 bg-gray-50 px-3 py-2 dark:border-white/10 dark:bg-white/5">
             <Pressable
-              onPress={pickImageMessage}
-              disabled={!conversation?.id || sendingImage}
-              className={`mb-1 h-10 w-10 items-center justify-center rounded-full ${
-                sendingImage
-                  ? "bg-gray-200 dark:bg-white/10"
-                  : "bg-white dark:bg-white/10"
+              onPress={pickMediaMessage}
+              disabled={sending || pendingMedia.length >= MAX_CHAT_IMAGES}
+              className={`mb-1 h-10 w-10 items-center justify-center rounded-full bg-white dark:bg-white/10 ${
+                sending || pendingMedia.length >= MAX_CHAT_IMAGES
+                  ? "opacity-50"
+                  : ""
               }`}
             >
-              {sendingImage ? (
-                <AveraLoader size={22} compact />
+              {sending && hasPendingMedia ? (
+                <ActivityIndicator color="#2563EB" />
               ) : (
                 <Ionicons
-                  name="add"
+                  name="attach"
                   size={22}
                   color={isDark ? "white" : "#111827"}
                 />
               )}
             </Pressable>
             <TextInput
-              ref={messageInputRef}
               value={message}
               onChangeText={setMessage}
-              onFocus={() => {
-                setTimeout(() => scrollToBottom(), 80);
-                setTimeout(() => scrollToBottom(), 260);
-              }}
               placeholder="Message seller..."
               placeholderTextColor="#888"
               multiline
@@ -1827,15 +1471,9 @@ export default function MessageDetailsScreen() {
             />
             <Pressable
               onPress={sendMessage}
-              disabled={
-                (!message.trim() && !hasPendingImages) ||
-                !conversation?.id ||
-                sending
-              }
+              disabled={sending || (!message.trim() && !hasPendingMedia)}
               className={`mb-1 h-10 w-10 items-center justify-center rounded-full ${
-                (message.trim() || hasPendingImages) &&
-                conversation?.id &&
-                !sending
+                message.trim() || hasPendingMedia
                   ? "bg-brand"
                   : "bg-gray-200 dark:bg-white/10"
               }`}
@@ -1844,9 +1482,7 @@ export default function MessageDetailsScreen() {
                 name="send"
                 size={18}
                 color={
-                  (message.trim() || hasPendingImages) &&
-                  conversation?.id &&
-                  !sending
+                  message.trim() || hasPendingMedia
                     ? "white"
                     : isDark
                       ? "#9CA3AF"
@@ -1855,250 +1491,132 @@ export default function MessageDetailsScreen() {
               />
             </Pressable>
           </View>
-        </View>
-      </KeyboardAvoidingView>
-
-      <Modal
-        visible={Boolean(viewingImageUrls.length)}
-        transparent
-        animationType="fade"
-        onRequestClose={closeImageViewer}
-      >
-        <View className="flex-1 bg-black">
-          <SafeAreaView className="flex-1 flex-col">
-            <View className="flex-row items-center justify-between px-4 py-3">
-              <Pressable
-                onPress={closeImageViewer}
-                className="h-11 min-w-20 items-start justify-center"
-              >
-                <Text variant="none" className="text-lg font-bold text-white">
-                  Close
-                </Text>
-              </Pressable>
-              <Text variant="none" className="text-lg font-bold text-white">
-                {viewingImageUrls.length > 1
-                  ? `${viewingImageIndex + 1}/${viewingImageUrls.length}`
-                  : "Image"}
-              </Text>
-              <View className="h-11 min-w-20" />
-            </View>
-            <View className="flex-1 pb-10">
-              {viewingImageUrls.length ? (
-                <Gallery
-                  key={viewingImageUrls.join("|")}
-                  data={viewingImageUrls}
-                  initialIndex={viewingImageIndex}
-                  onIndexChange={setViewingImageIndex}
-                  onSwipeToClose={closeImageViewer}
-                  onTap={closeImageViewer}
-                  disableSwipeUp
-                  style={{ flex: 1, backgroundColor: "black" }}
-                />
-              ) : null}
-            </View>
-          </SafeAreaView>
-        </View>
-      </Modal>
+        </KeyboardStickyView>
+      </View>
 
       <BottomSheet
         visible={actionsOpen}
         coverTabs
         title="Conversation actions"
-        subtitle={`Manage your chat with ${counterpartName}.`}
+        subtitle={`Manage your chat with ${sellerName}.`}
         onClose={() => setActionsOpen(false)}
       >
         <View className="gap-3">
           {actionItems.map((item) => (
             <Pressable
               key={item.title}
-              onPress={() => {
-                setActionsOpen(false);
-                item.action?.(String(productId || ""));
-              }}
-              className={`flex-row items-center rounded-3xl border p-4 ${
-                item.tone === "danger"
-                  ? "border-red-500/10 bg-red-500/5"
-                  : item.tone === "warning"
-                    ? "border-yellow-500/10 bg-yellow-500/5"
-                    : "border-gray-100 bg-gray-50 dark:border-white/10 dark:bg-white/5"
-              }`}
+              onPress={item.onPress}
+              className="flex-row items-center rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-white/5 dark:bg-white/5"
             >
               <View
                 className={`h-11 w-11 items-center justify-center rounded-2xl ${
                   item.tone === "danger"
                     ? "bg-red-500/10"
                     : item.tone === "warning"
-                      ? "bg-yellow-500/10"
-                      : "bg-white dark:bg-white/10"
+                      ? "bg-amber-500/10"
+                      : "bg-brand/10"
                 }`}
               >
                 <Ionicons
                   name={item.icon as any}
-                  size={21}
+                  size={20}
                   color={
                     item.tone === "danger"
                       ? "#EF4444"
                       : item.tone === "warning"
-                        ? "#D97706"
-                        : isDark
-                          ? "white"
-                          : "#111827"
+                        ? "#F59E0B"
+                        : "#2563EB"
                   }
                 />
               </View>
               <View className="ml-3 flex-1">
-                <Text className="font-bold text-gray-950 dark:text-white">
+                <Text
+                  className={`font-bold ${
+                    item.tone === "danger"
+                      ? "text-red-500"
+                      : "text-gray-950 dark:text-white"
+                  }`}
+                >
                   {item.title}
                 </Text>
-                <Text className="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">
+                <Text className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   {item.description}
                 </Text>
               </View>
+              <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
             </Pressable>
           ))}
         </View>
       </BottomSheet>
+
       <BottomSheet
         visible={offerOpen}
         coverTabs
         title="Make an offer"
         subtitle="Send a price offer to the seller. This does not create an order yet."
-        onClose={closeOfferSheet}
+        onClose={() => setOfferOpen(false)}
       >
         <View>
-          <View className="border-b border-gray-100 pb-4 dark:border-white/10">
-            <Text className="text-xs font-bold uppercase tracking-widest text-gray-400">
+          <View className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-white/5 dark:bg-white/5">
+            <Text className="text-xs font-bold uppercase  text-gray-400">
               Listed price
             </Text>
-            <Text className="mt-1 text-2xl font-black text-gray-950 dark:text-white">
-              {productPrice}
+            <Text className="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">
+              {formatPrice(productPrice)}
             </Text>
           </View>
-
-          <View className="mt-5">
+          <View className="flex-row  mt-4 items-start">
+            <Ionicons name="information-circle-outline" size={16} />
+            <Text className="ml-1 flex-1 text-xs leading-5 text-gray-600 dark:text-gray-300">
+              You can only offer more than 80% of the price.
+            </Text>
+          </View>
+          <View className="mt-1">
             <Text className="text-base font-bold text-gray-950 dark:text-white">
               Your offer
             </Text>
-            <View className="mt-3 flex-row items-center rounded-3xl border border-brand/20 bg-brand/10 px-4">
-              <Text variant="none" className="text-2xl font-black text-brand">
-                ₦
-              </Text>
+            <View className="mt-2 flex-row items-center rounded-2xl border border-gray-100 bg-gray-50 px-4 dark:border-white/10 dark:bg-white/5">
+              <Text className="text-xl font-semibold text-brand">₦</Text>
               <TextInput
-                ref={offerAmountInputRef}
                 value={offerAmount}
-                onChangeText={formatOfferInput}
-                keyboardType="numeric"
-                returnKeyType="done"
-                blurOnSubmit
-                onSubmitEditing={Keyboard.dismiss}
+                onChangeText={(text) =>
+                  setOfferAmount(sanitizePriceInput(text))
+                }
+                inputMode="decimal"
+                keyboardType="decimal-pad"
                 placeholder="Enter amount"
                 placeholderTextColor="#888"
-                className="h-16 flex-1 px-3 text-2xl font-black text-gray-950 dark:text-white"
+                className="h-16 pb-2 flex-1 px-3 text-xl font-bold text-gray-950 dark:text-white"
               />
-              <Pressable
-                onPress={() => {
-                  offerAmountInputRef.current?.blur();
-                  Keyboard.dismiss();
-                }}
-                className="h-9 items-center justify-center rounded-full bg-white px-4 dark:bg-white/10"
-              >
-                <Text variant="none" className="text-xs font-black text-brand">
-                  Done
-                </Text>
-              </Pressable>
             </View>
-            {offerPercent ? (
-              <Text
-                className={`mt-2 text-xs ${
-                  isOfferTooLow
-                    ? "text-red-500"
-                    : "text-gray-500 dark:text-gray-400"
-                }`}
-              >
-                {isOfferTooLow
-                  ? `Minimum offer is ₦${minimumOfferAmount.toLocaleString()} (${MIN_OFFER_PERCENT}% of listed price).`
-                  : `Your offer is about ${offerPercent}% of the listed price.`}
-              </Text>
-            ) : (
-              <Text className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                Minimum offer is{" "}
-                {minimumOfferAmount
-                  ? `₦${minimumOfferAmount.toLocaleString()}`
-                  : `${MIN_OFFER_PERCENT}% of the listed price`}
-                .
-              </Text>
-            )}
           </View>
 
-          {suggestedOffers.length > 0 && (
+          {parsePriceValue(productPrice) > 0 && (
             <View className="mt-4 flex-row flex-wrap">
-              {suggestedOffers.map((amount) => (
-                <Pressable
-                  key={amount}
-                  onPress={() => setOfferAmount(String(amount))}
-                  className="mb-2 mr-2 rounded-full bg-brand/10 px-4 py-2"
-                >
-                  <Text variant="none" className="text-xs font-bold text-brand">
-                    ₦{amount.toLocaleString()}
-                  </Text>
-                </Pressable>
-              ))}
+              {[0.9, 0.85, 0.81].map((multiplier) => {
+                const amount = (
+                  parsePriceValue(productPrice) * multiplier
+                ).toFixed(2);
+
+                return (
+                  <Pressable
+                    key={multiplier}
+                    onPress={() => setOfferAmount(String(amount))}
+                    className="mb-2 mr-2 rounded-full bg-brand/10 px-4 py-2"
+                  >
+                    <Text
+                      variant="none"
+                      className="text-xs font-bold text-brand"
+                    >
+                      ₦{amount.toLocaleString()}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
           )}
 
-          <View className="mt-5 rounded-3xl border border-gray-100 bg-gray-50 p-4 dark:border-white/5 dark:bg-white/5">
-            <View className="flex-row items-center justify-between">
-              <View className="flex-1 pr-4">
-                <Text className="text-base font-bold text-gray-950 dark:text-white">
-                  Quantity
-                </Text>
-                <Text className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  {availableQuantity} available
-                </Text>
-              </View>
-
-              <View className="flex-row items-center rounded-full border border-gray-100 bg-white p-1 dark:border-white/10 dark:bg-white/5">
-                <Pressable
-                  onPress={decrementOfferQuantity}
-                  disabled={offerQuantity <= 1}
-                  className={`h-10 w-10 items-center justify-center rounded-full ${
-                    offerQuantity <= 1 ? "opacity-40" : ""
-                  }`}
-                >
-                  <Ionicons
-                    name="remove"
-                    size={18}
-                    color={isDark ? "white" : "#111827"}
-                  />
-                </Pressable>
-                <Text className="min-w-10 text-center text-lg font-black text-gray-950 dark:text-white">
-                  {offerQuantity}
-                </Text>
-                <Pressable
-                  onPress={incrementOfferQuantity}
-                  disabled={offerQuantity >= availableQuantity}
-                  className={`h-10 w-10 items-center justify-center rounded-full bg-brand ${
-                    offerQuantity >= availableQuantity ? "opacity-40" : ""
-                  }`}
-                >
-                  <Ionicons name="add" size={18} color="white" />
-                </Pressable>
-              </View>
-            </View>
-
-            <View className="mt-4 border-t border-gray-100 pt-4 dark:border-white/10">
-              <View className="flex-row items-center justify-between">
-                <Text className="text-sm text-gray-500 dark:text-gray-400">
-                  Total offer
-                </Text>
-                <Text className="text-xl font-black text-brand">
-                  ₦{offerTotal.toLocaleString()}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          <View className="mt-5 rounded-3xl border border-amber-500/20 bg-amber-500/10 p-4">
+          <View className="mt-5 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
             <View className="flex-row items-start">
               <Ionicons
                 name="information-circle-outline"
@@ -2114,7 +1632,7 @@ export default function MessageDetailsScreen() {
 
           <View className="mt-6 flex-row gap-3">
             <Pressable
-              onPress={closeOfferSheet}
+              onPress={() => setOfferOpen(false)}
               className="h-14 flex-1 items-center justify-center rounded-2xl border border-gray-200 bg-gray-50 dark:border-white/10 dark:bg-white/5"
             >
               <Text className="font-bold text-gray-950 dark:text-white">
@@ -2123,20 +1641,20 @@ export default function MessageDetailsScreen() {
             </Pressable>
             <Pressable
               onPress={submitOffer}
-              disabled={
-                !numericOfferAmount ||
-                isOfferTooLow ||
-                !conversation?.id ||
-                sending
-              }
               className={`h-14 flex-1 items-center justify-center rounded-2xl ${
-                numericOfferAmount &&
-                !isOfferTooLow &&
-                conversation?.id &&
-                !sending
+                parsePriceValue(offerAmount) > 0 &&
+                parsePriceValue(offerAmount) > productPrice! * 0.8 &&
+                parsePriceValue(offerAmount) <= productPrice!
                   ? "bg-brand"
                   : "bg-gray-300 dark:bg-white/10"
               }`}
+              disabled={
+                !(
+                  parsePriceValue(offerAmount) > 0 &&
+                  parsePriceValue(offerAmount) > productPrice! * 0.8 &&
+                  parsePriceValue(offerAmount) <= productPrice!
+                )
+              }
             >
               <Text variant="none" className="font-bold text-white">
                 Send offer
@@ -2149,55 +1667,43 @@ export default function MessageDetailsScreen() {
       <BottomSheet
         visible={buyNowOpen}
         coverTabs
-        title="Buy now"
-        subtitle="Start checkout from this listing. Escrow protection is included."
+        title={latestAcceptedOffer ? "Checkout accepted offer" : "Buy now"}
+        subtitle="Choose quantity to continue to review order."
         onClose={() => setBuyNowOpen(false)}
       >
         <View>
-          <View className="flex-row border-b border-gray-100 pb-4 dark:border-white/10">
-            {productImage ? (
-              <Image
-                source={{ uri: productImage }}
-                className="h-16 w-16 rounded-2xl bg-gray-200 dark:bg-white/10"
-              />
-            ) : (
-              <View className="h-16 w-16 items-center justify-center rounded-2xl bg-brand/10">
-                <Ionicons name="cube-outline" size={22} color="#2563EB" />
-              </View>
-            )}
-            <View className="ml-3 flex-1 justify-center">
-              <Text
-                numberOfLines={2}
-                className="font-bold text-gray-950 dark:text-white"
-              >
-                {productName}
-              </Text>
-              <Text className="mt-1 text-sm font-black text-brand">
-                {productPrice}
-              </Text>
+          <View className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-white/5 dark:bg-white/5">
+            <Text className="text-xs font-bold uppercase text-gray-400">
+              Unit price
+            </Text>
+            <View className="mt-2 flex-row items-center">
+              {latestAcceptedOffer?.offerAmount ? (
+                <>
+                  <Text className="text-sm font-semibold text-gray-400 line-through dark:text-gray-500">
+                    {formatPrice(productNumericPrice)}
+                  </Text>
+                  <Text
+                    variant="none"
+                    className="ml-2 text-2xl font-semibold text-brand"
+                  >
+                    {formatPrice(checkoutUnitPrice)}
+                  </Text>
+                </>
+              ) : (
+                <Text
+                  variant="none"
+                  className="text-2xl font-semibold text-brand"
+                >
+                  {formatPrice(checkoutUnitPrice)}
+                </Text>
+              )}
             </View>
+            <Text className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {productName}
+            </Text>
           </View>
 
-          <View className="mt-5 flex-row items-start">
-            <View className="h-10 w-10 items-center justify-center rounded-2xl bg-brand/10">
-              <Ionicons
-                name="shield-checkmark-outline"
-                size={20}
-                color="#2563EB"
-              />
-            </View>
-            <View className="ml-3 flex-1">
-              <Text className="font-bold text-gray-950 dark:text-white">
-                Protected by escrow
-              </Text>
-              <Text className="mt-1 text-sm leading-5 text-gray-500 dark:text-gray-400">
-                Payment is held until the item is delivered or handed off and
-                confirmed.
-              </Text>
-            </View>
-          </View>
-
-          <View className="mt-5 rounded-3xl border border-gray-100 bg-gray-50 p-4 dark:border-white/5 dark:bg-white/5">
+          <View className="mt-5 rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-white/5 dark:bg-white/5">
             <View className="flex-row items-center justify-between">
               <View className="flex-1 pr-4">
                 <Text className="text-base font-bold text-gray-950 dark:text-white">
@@ -2207,7 +1713,6 @@ export default function MessageDetailsScreen() {
                   {availableQuantity} available
                 </Text>
               </View>
-
               <View className="flex-row items-center rounded-full border border-gray-100 bg-white p-1 dark:border-white/10 dark:bg-white/5">
                 <Pressable
                   onPress={decrementBuyQuantity}
@@ -2222,7 +1727,7 @@ export default function MessageDetailsScreen() {
                     color={isDark ? "white" : "#111827"}
                   />
                 </Pressable>
-                <Text className="min-w-10 text-center text-lg font-black text-gray-950 dark:text-white">
+                <Text className="min-w-10 text-center text-lg font-semibold text-gray-950 dark:text-white">
                   {buyQuantity}
                 </Text>
                 <Pressable
@@ -2242,8 +1747,11 @@ export default function MessageDetailsScreen() {
                 <Text className="text-sm text-gray-500 dark:text-gray-400">
                   Total
                 </Text>
-                <Text className="text-xl font-black text-brand">
-                  ₦{buyTotal.toLocaleString()}
+                <Text
+                  variant="none"
+                  className="text-xl font-semibold text-brand"
+                >
+                  {formatPrice(buyTotal)}
                 </Text>
               </View>
             </View>
@@ -2259,17 +1767,11 @@ export default function MessageDetailsScreen() {
               </Text>
             </Pressable>
             <Pressable
-              onPress={() => {
-                openCheckoutReview({
-                  source: "buy_now",
-                  unitPrice: productNumericPrice,
-                  quantity: buyQuantity,
-                });
-              }}
+              onPress={openCheckoutReview}
               className="h-14 flex-1 items-center justify-center rounded-2xl bg-brand"
             >
               <Text variant="none" className="font-bold text-white">
-                Continue
+                Review order
               </Text>
             </Pressable>
           </View>

@@ -59,7 +59,7 @@ export function TagsReview({
         <Text className="text-base font-medium mb-1 text-white">Condition</Text>
         <Pressable
           onPress={onOpenConditionModal}
-          className="border border-gray-300 rounded-xl h-14 flex-row items-center justify-between px-3"
+          className="border border-gray-300 rounded-2xl h-14 flex-row items-center justify-between px-3"
         >
           <Text className="text-white">{selectedCondition}</Text>
           <Ionicons name="chevron-down" size={20} color="gray" />
@@ -84,7 +84,7 @@ export function TagsReview({
           renderItem={({ item }) => (
             <Image
               source={{ uri: item }}
-              className="w-40 h-40 mr-3 rounded-xl bg-gray-100"
+              className="w-40 h-40 mr-3 rounded-2xl bg-gray-100"
             />
           )}
         />

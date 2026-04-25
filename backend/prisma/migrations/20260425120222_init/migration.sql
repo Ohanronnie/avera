@@ -159,7 +159,7 @@ CREATE TABLE "Conversation" (
     "buyerId" INTEGER NOT NULL,
     "sellerId" INTEGER NOT NULL,
     "productId" INTEGER NOT NULL,
-    "lastMessageAt" TIMESTAMP(3),
+    "offeredPrice" DECIMAL(10,2),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -172,8 +172,7 @@ CREATE TABLE "Order" (
     "buyerId" INTEGER NOT NULL,
     "sellerId" INTEGER NOT NULL,
     "productId" INTEGER NOT NULL,
-    "conversationId" INTEGER,
-    "offerMessageId" INTEGER,
+    "conversationId" INTEGER NOT NULL,
     "source" "OrderSource" NOT NULL DEFAULT 'BUY_NOW',
     "status" "OrderStatus" NOT NULL DEFAULT 'PENDING_TRANSFER',
     "quantity" INTEGER NOT NULL,
@@ -181,15 +180,16 @@ CREATE TABLE "Order" (
     "subtotal" DECIMAL(14,2) NOT NULL,
     "escrowFee" DECIMAL(14,2) NOT NULL,
     "totalAmount" DECIMAL(14,2) NOT NULL,
-    "deliveryName" TEXT,
-    "deliveryPhone" TEXT,
-    "deliveryAddress" TEXT,
-    "deliveryCity" TEXT,
-    "deliveryState" TEXT,
-    "deliveryCountry" TEXT,
+    "deliveryName" TEXT NOT NULL,
+    "deliveryPhone" TEXT NOT NULL,
+    "deliveryAddress" TEXT NOT NULL,
+    "deliveryCity" TEXT NOT NULL,
+    "deliveryState" TEXT NOT NULL,
+    "deliveryCountry" TEXT NOT NULL,
     "paidAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "paymentReference" TEXT NOT NULL,
 
     CONSTRAINT "Order_pkey" PRIMARY KEY ("id")
 );
@@ -284,6 +284,9 @@ CREATE INDEX "Conversation_productId_idx" ON "Conversation"("productId");
 CREATE UNIQUE INDEX "Conversation_buyerId_sellerId_productId_key" ON "Conversation"("buyerId", "sellerId", "productId");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "Order_paymentReference_key" ON "Order"("paymentReference");
+
+-- CreateIndex
 CREATE INDEX "Order_buyerId_updatedAt_idx" ON "Order"("buyerId", "updatedAt");
 
 -- CreateIndex
@@ -350,7 +353,7 @@ ALTER TABLE "Order" ADD CONSTRAINT "Order_sellerId_fkey" FOREIGN KEY ("sellerId"
 ALTER TABLE "Order" ADD CONSTRAINT "Order_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Order" ADD CONSTRAINT "Order_conversationId_fkey" FOREIGN KEY ("conversationId") REFERENCES "Conversation"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Order" ADD CONSTRAINT "Order_conversationId_fkey" FOREIGN KEY ("conversationId") REFERENCES "Conversation"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Message" ADD CONSTRAINT "Message_conversationId_fkey" FOREIGN KEY ("conversationId") REFERENCES "Conversation"("id") ON DELETE CASCADE ON UPDATE CASCADE;

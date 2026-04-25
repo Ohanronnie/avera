@@ -150,12 +150,12 @@ export default function SellerListingsScreen() {
           onEndReachedThreshold={0.45}
           ListHeaderComponent={
             <View className="mb-5 px-5">
-              <View className="rounded-3xl border border-gray-100 bg-gray-50 p-4 dark:border-white/5 dark:bg-white/5">
+              <View className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-white/5 dark:bg-white/5">
                 <View className="flex-row items-center">
                   <View className="h-12 w-12 items-center justify-center rounded-2xl bg-brand/10">
                     <Text
                       variant="none"
-                      className="text-lg font-black text-brand"
+                      className="text-lg font-semibold text-brand"
                     >
                       {sellerName.slice(0, 1).toUpperCase()}
                     </Text>

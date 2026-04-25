@@ -127,7 +127,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           return (
             <View
               key={toast.id}
-              className="mb-3 rounded-3xl border border-gray-100 bg-white px-4 py-4 shadow-lg shadow-black/10 dark:border-white/10 dark:bg-[#111214]"
+              className="mb-3 rounded-2xl border border-gray-100 bg-white px-4 py-4 shadow-lg shadow-black/10 dark:border-white/10 dark:bg-[#111214]"
             >
               <View className="flex-row items-start">
                 <View

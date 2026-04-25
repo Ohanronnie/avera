@@ -5,11 +5,11 @@ import {
   Param,
   ParseIntPipe,
   Post,
-  Req,
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { WishlistService } from './wishlist.service';
+import { CurrentUser } from 'src/auth/current-user.decorator';
 
 @Controller('wishlist')
 @UseGuards(AuthGuard('jwt'))
@@ -17,36 +17,36 @@ export class WishlistController {
   constructor(private readonly wishlistService: WishlistService) {}
 
   @Get()
-  getWishlist(@Req() req: any) {
-    return this.wishlistService.getWishlist(req.user.userId);
+  getWishlist(@CurrentUser('userId') userId: number) {
+    return this.wishlistService.getWishlist(userId);
   }
 
   @Get('ids')
-  getWishlistProductIds(@Req() req: any) {
-    return this.wishlistService.getWishlistProductIds(req.user.userId);
+  getWishlistProductIds(@CurrentUser('userId') userId: number) {
+    return this.wishlistService.getWishlistProductIds(userId);
   }
 
   @Get(':productId/status')
   getWishlistStatus(
-    @Req() req: any,
+    @CurrentUser('userId') userId: number,
     @Param('productId', ParseIntPipe) productId: number,
   ) {
-    return this.wishlistService.getWishlistStatus(req.user.userId, productId);
+    return this.wishlistService.getWishlistStatus(userId, productId);
   }
 
   @Post(':productId')
   addToWishlist(
-    @Req() req: any,
+    @CurrentUser('userId') userId: number,
     @Param('productId', ParseIntPipe) productId: number,
   ) {
-    return this.wishlistService.addToWishlist(req.user.userId, productId);
+    return this.wishlistService.addToWishlist(userId, productId);
   }
 
   @Delete(':productId')
   removeFromWishlist(
-    @Req() req: any,
+    @CurrentUser('userId') userId: number,
     @Param('productId', ParseIntPipe) productId: number,
   ) {
-    return this.wishlistService.removeFromWishlist(req.user.userId, productId);
+    return this.wishlistService.removeFromWishlist(userId, productId);
   }
 }

@@ -182,7 +182,7 @@ export default function InventoryScreen() {
           onEndReachedThreshold={0.45}
           ListHeaderComponent={
             <View className="mb-5 px-5">
-              <View className="rounded-3xl border border-gray-100 bg-gray-50 p-4 dark:border-white/5 dark:bg-white/5">
+              <View className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-white/5 dark:bg-white/5">
                 <View className="flex-row items-center">
                   <View className="h-12 w-12 items-center justify-center rounded-2xl bg-brand/10">
                     <Ionicons name="shirt-outline" size={22} color="#2563EB" />

@@ -4,7 +4,6 @@ import {
   Get,
   Post,
   Query,
-  Req,
   UseGuards,
 } from '@nestjs/common';
 import { ProductsService } from './products.service';
@@ -13,6 +12,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { CreateProductDto } from './dto/create-product.dto';
 import { OptionalJwtAuthGuard } from 'src/auth/optional-jwt-auth.guard';
 import { RecordSearchKeywordDto } from './dto/record-search-keyword.dto';
+import { CurrentUser } from 'src/auth/current-user.decorator';
 
 @Controller('products')
 export class ProductsController {
@@ -20,15 +20,20 @@ export class ProductsController {
 
   @UseGuards(AuthGuard('jwt'))
   @Post('/create')
-  createProduct(@Body() body: CreateProductDto, @Req() req: any) {
-    const user = req.user.userId;
-    return this.productsService.createProduct(user, body);
+  createProduct(
+    @Body() body: CreateProductDto,
+    @CurrentUser('userId') userId: number,
+  ) {
+    return this.productsService.createProduct(userId, body);
   }
 
   @UseGuards(OptionalJwtAuthGuard)
   @Get()
-  getProducts(@Query() query: GetProductsDto, @Req() req: any) {
-    return this.productsService.getProducts(query, req.user?.userId);
+  getProducts(
+    @Query() query: GetProductsDto,
+    @CurrentUser('userId') userId?: number,
+  ) {
+    return this.productsService.getProducts(query, userId);
   }
 
   @Get('/search/suggestions')

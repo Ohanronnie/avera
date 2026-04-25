@@ -21,14 +21,14 @@ export default function Index() {
         duration: 650,
         useNativeDriver: true,
       }),
-      Animated.sequence([
-        Animated.delay(360),
-        Animated.timing(wordmarkAnim, {
-          toValue: 1,
-          duration: 650,
-          useNativeDriver: true,
-        }),
-      ]),
+      // Animated.sequence([
+      //   Animated.delay(360),
+      //   Animated.timing(wordmarkAnim, {
+      //     toValue: 1,
+      //     duration: 650,
+      //     useNativeDriver: true,
+      //   }),
+      // ]),
     ]);
 
     const decideRoute = async () => {
@@ -125,15 +125,15 @@ const styles = StyleSheet.create({
   },
   wordmark: {
     color: "#2563EB",
-    fontSize: 36,
-    fontWeight: "800",
+    fontSize: 28,
+    fontWeight: "500",
     lineHeight: 44,
+    margin: 0
   },
   tagline: {
-    marginTop: 6,
     color: "#6B7280",
-    fontSize: 14,
-    fontWeight: "500",
+    fontSize: 10,
+    fontWeight: "300",
     lineHeight: 20,
   },
 });

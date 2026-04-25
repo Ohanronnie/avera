@@ -21,7 +21,7 @@ export function Navbar({ title, showBack = true, rightElement }: NavbarProps) {
         {showBack && (
           <Pressable
             onPress={() => router.back()}
-            className="p-2 rounded-xl active:bg-gray-100 dark:active:bg-white/5"
+            className="p-2 rounded-2xl active:bg-gray-100 dark:active:bg-white/5"
           >
             <Ionicons
               name="chevron-back"

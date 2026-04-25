@@ -20,7 +20,7 @@ import { axiosInstance } from "@/utils/axios";
 import { useToast } from "@/contexts/ToastContext";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { useAuth } from "@/contexts/AuthContext";
-import { emitSocketAck } from "@/utils/socket-events";
+import { connectSocket } from "@/utils/socket";
 import {
   useToggleWishlistMutation,
   useWishlistProductIds,
@@ -180,7 +180,7 @@ export default function ProductDetailsPage() {
     detailWishlistState ??
     (productId ? wishlistIds.includes(productId) : false);
   const subtotal = price * buyerQuantity;
-  const serviceFee = Math.round(subtotal * 0.015);
+  const serviceFee = Math.round(subtotal * 0.01);
   const total = subtotal + serviceFee;
   const currentUserId = user?.id ? Number(user.id) : null;
   const isOwnProduct =
@@ -195,7 +195,7 @@ export default function ProductDetailsPage() {
   const checkoutPrimaryLabel = isOwnProduct
     ? "Your listing"
     : canResumeCheckout
-      ? "Continue checkout"
+      ? "Continue paying"
       : hasActiveCheckout
         ? "View active order"
         : "Buy now";
@@ -205,15 +205,17 @@ export default function ProductDetailsPage() {
       productId,
     });
 
-    return data;
+    return {
+      id:
+        typeof data === "number"
+          ? data
+          : Number(data?.id || data?.conversationId || 0),
+    };
   };
 
   const notifySellerCheckoutStarted = async (conversationId: number) => {
     try {
-      await emitSocketAck<{
-        ok?: boolean;
-        message?: string | unknown;
-      }>("message:send", "message:sent", {
+      connectSocket().emit("conversation:message", {
         conversationId,
         content: `Checkout status: Buyer started checkout for ${product?.name || "this item"}.`,
       });
@@ -229,20 +231,17 @@ export default function ProductDetailsPage() {
     }
 
     try {
-      const data = await emitSocketAck<{
-        ok?: boolean;
-        message?: string;
-        order?: ActiveCheckoutOrder | null;
-      }>("checkout:get-current", "checkout:current", {
-        productId,
-        source: "buy_now",
-      });
+      const { data } = await axiosInstance.get<ActiveCheckoutOrder | null>(
+        "/orders/current",
+        {
+          params: {
+            productId,
+            source: "BUY_NOW",
+          },
+        },
+      );
 
-      if (!data.ok) {
-        throw new Error(data.message || "Checkout unavailable");
-      }
-
-      setActiveCheckoutOrder(data.order || null);
+      setActiveCheckoutOrder(data);
     } catch {
       setActiveCheckoutOrder(null);
     }
@@ -251,25 +250,24 @@ export default function ProductDetailsPage() {
   const openExistingCheckout = () => {
     if (!product || !activeCheckoutOrder) return;
 
+    if (activeCheckoutOrder.status === "PENDING_TRANSFER") {
+      router.push({
+        pathname: "/checkout/pay",
+        params: {
+          orderId: String(activeCheckoutOrder.id),
+          quantity: String(activeCheckoutOrder.quantity || 1),
+          ...(activeCheckoutOrder.conversationId
+            ? { conversationId: String(activeCheckoutOrder.conversationId) }
+            : {}),
+        },
+      });
+      return;
+    }
+
     router.push({
-      pathname: "/checkout/review",
+      pathname: "/order/[id]",
       params: {
-        productId: String(product.id),
-        productName: product.name,
-        sellerName,
-        sellerId: String(product.seller?.id || ""),
-        unitPrice: String(activeCheckoutOrder.unitPrice || price),
-        quantity: String(activeCheckoutOrder.quantity || 1),
-        availableQuantity: String(availableQuantity),
-        source: activeCheckoutOrder.source === "OFFER" ? "offer" : "buy_now",
-        ...(activeCheckoutOrder.conversationId
-          ? { conversationId: String(activeCheckoutOrder.conversationId) }
-          : {}),
-        ...(activeCheckoutOrder.offerMessageId
-          ? { offerMessageId: String(activeCheckoutOrder.offerMessageId) }
-          : {}),
-        checkoutStatusNotified: "true",
-        ...(productImageUrl ? { productImage: productImageUrl } : {}),
+        id: String(activeCheckoutOrder.id),
       },
     });
   };
@@ -511,7 +509,7 @@ export default function ProductDetailsPage() {
             {product.name}
           </Text>
           <View className="mt-2 flex-row items-baseline">
-            <Text className="text-2xl font-black text-brand">
+            <Text className="text-2xl font-semibold text-brand">
               {formatPrice(product.price)}
             </Text>
             {price > 0 && (
@@ -568,7 +566,7 @@ export default function ProductDetailsPage() {
             )}
           </View>
 
-          <View className="mt-8 rounded-3xl border border-gray-100 bg-gray-50/50 p-5 dark:border-white/5 dark:bg-white/5">
+          <View className="mt-8 rounded-2xl border border-gray-100 bg-gray-50/50 p-5 dark:border-white/5 dark:bg-white/5">
             <View className="flex-row items-center justify-between">
               <View className="flex-1 flex-row items-center pr-3">
                 {product.seller?.avatarUrl ? (
@@ -578,7 +576,7 @@ export default function ProductDetailsPage() {
                   />
                 ) : (
                   <View className="h-12 w-12 items-center justify-center rounded-2xl bg-brand/10">
-                    <Text className="text-base font-black uppercase text-brand">
+                    <Text className="text-base font-semibold uppercase text-brand">
                       {sellerName.slice(0, 1)}
                     </Text>
                   </View>
@@ -597,7 +595,7 @@ export default function ProductDetailsPage() {
               </View>
               <TouchableOpacity
                 onPress={() => router.push(`/seller/${product.seller?.id}`)}
-                className="rounded-xl border border-gray-100 bg-white px-4 py-2 dark:border-white/10 dark:bg-white/10"
+                className="rounded-2xl border border-gray-100 bg-white px-4 py-2 dark:border-white/10 dark:bg-white/10"
               >
                 <Text className="text-sm font-bold text-black dark:text-white">
                   Profile
@@ -616,7 +614,6 @@ export default function ProductDetailsPage() {
             try {
               setOpeningChat(true);
               const data = await openProductConversation();
-
               router.push({
                 pathname: "/messages/[id]",
                 params: { id: String(data.id) },
@@ -695,7 +692,7 @@ export default function ProductDetailsPage() {
         onClose={() => setCheckoutOpen(false)}
       >
         <View>
-          <View className="flex-row rounded-3xl border border-gray-100 bg-gray-50 p-3 dark:border-white/5 dark:bg-white/5">
+          <View className="flex-row rounded-2xl border border-gray-100 bg-gray-50 p-3 dark:border-white/5 dark:bg-white/5">
             {productImageUrl ? (
               <Image
                 source={{ uri: productImageUrl }}
@@ -713,7 +710,7 @@ export default function ProductDetailsPage() {
               >
                 {product.name}
               </Text>
-              <Text className="mt-1 text-sm font-black text-brand">
+              <Text className="mt-1 text-sm font-semibold text-brand">
                 {formatPrice(product.price)}
               </Text>
               <Text className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -722,7 +719,7 @@ export default function ProductDetailsPage() {
             </View>
           </View>
 
-          <View className="mt-5 rounded-3xl border border-brand/20 bg-brand/10 p-4">
+          <View className="mt-5 rounded-2xl border border-brand/20 bg-brand/10 p-4">
             <View className="flex-row items-start">
               <View className="h-10 w-10 items-center justify-center rounded-2xl bg-brand/10">
                 <Ionicons
@@ -742,7 +739,7 @@ export default function ProductDetailsPage() {
             </View>
           </View>
 
-          <View className="mt-5 rounded-3xl border border-gray-100 bg-white p-4 dark:border-white/5 dark:bg-white/5">
+          <View className="mt-5 rounded-2xl border border-gray-100 bg-white p-4 dark:border-white/5 dark:bg-white/5">
             <View className="flex-row items-center justify-between">
               <View className="flex-1 pr-4">
                 <Text className="text-base font-bold text-gray-950 dark:text-white">
@@ -767,7 +764,7 @@ export default function ProductDetailsPage() {
                     color={isDark ? "white" : "#111827"}
                   />
                 </Pressable>
-                <Text className="min-w-10 text-center text-lg font-black text-gray-950 dark:text-white">
+                <Text className="min-w-10 text-center text-lg font-semibold text-gray-950 dark:text-white">
                   {buyerQuantity}
                 </Text>
                 <Pressable
@@ -783,7 +780,7 @@ export default function ProductDetailsPage() {
             </View>
           </View>
 
-          <View className="mt-5 rounded-3xl border border-gray-100 bg-white p-4 dark:border-white/5 dark:bg-white/5">
+          <View className="mt-5 rounded-2xl border border-gray-100 bg-white p-4 dark:border-white/5 dark:bg-white/5">
             {[
               { label: "Item price", value: formatPrice(price) },
               { label: "Quantity", value: `x${buyerQuantity}` },
@@ -808,7 +805,7 @@ export default function ProductDetailsPage() {
                 <Text className="text-base font-bold text-gray-950 dark:text-white">
                   Total
                 </Text>
-                <Text className="text-xl font-black text-brand">
+                <Text className="text-xl font-semibold text-brand">
                   {formatPrice(total)}
                 </Text>
               </View>

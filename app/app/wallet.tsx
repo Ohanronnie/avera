@@ -161,7 +161,7 @@ export default function WalletScreen() {
           ) : (
             <>
               {needsProfileInfo ? (
-                <View className="mt-6 rounded-3xl border border-gray-100 bg-gray-50 p-5 dark:border-white/5 dark:bg-[#121214]">
+                <View className="mt-6 rounded-2xl border border-gray-100 bg-gray-50 p-5 dark:border-white/5 dark:bg-[#121214]">
                   <View className="h-14 w-14 items-center justify-center rounded-2xl bg-brand/10">
                     <Ionicons
                       name="person-circle-outline"
@@ -169,7 +169,7 @@ export default function WalletScreen() {
                       color="#2563EB"
                     />
                   </View>
-                  <Text className="mt-5 text-2xl font-black text-gray-950 dark:text-white">
+                  <Text className="mt-5 text-2xl font-semibold text-gray-950 dark:text-white">
                     Complete your profile
                   </Text>
                   <Text className="mt-2 text-sm leading-5 text-gray-500 dark:text-gray-400">
@@ -197,13 +197,13 @@ export default function WalletScreen() {
                     onReceive={() => setWalletSheet("naira-receive")}
                     onCopyAccount={handleCopyAccount}
                   />
-                  <View className="mt-5 rounded-3xl border border-gray-100 bg-gray-50 p-5 dark:border-white/5 dark:bg-[#101113]">
+                  <View className="mt-5 rounded-2xl border border-gray-100 bg-gray-50 p-5 dark:border-white/5 dark:bg-[#101113]">
                     <View className="flex-row items-center justify-between">
                       <View>
                         <Text className="text-xs font-bold uppercase tracking-widest text-gray-500">
                           Locked balance
                         </Text>
-                        <Text className="mt-2 text-2xl font-black text-gray-950 dark:text-white">
+                        <Text className="mt-2 text-2xl font-semibold text-gray-950 dark:text-white">
                           ₦
                           {Number(lockedBalance).toLocaleString(undefined, {
                             minimumFractionDigits: 2,
@@ -254,11 +254,11 @@ export default function WalletScreen() {
         onClose={() => setWalletSheet(null)}
       >
         <View>
-          <View className="rounded-3xl border border-gray-100 bg-gray-50 p-4 dark:border-white/5 dark:bg-white/5">
+          <View className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-white/5 dark:bg-white/5">
             <Text className="text-xs font-bold uppercase tracking-widest text-gray-500">
               Available balance
             </Text>
-            <Text className="mt-2 text-3xl font-black text-gray-950 dark:text-white">
+            <Text className="mt-2 text-xl font-semibold text-gray-950 dark:text-white">
               ₦
               {Number(nairaBalance).toLocaleString(undefined, {
                 minimumFractionDigits: 2,
@@ -272,7 +272,7 @@ export default function WalletScreen() {
               Amount
             </Text>
             <View className="flex-row items-center rounded-2xl border border-gray-200 bg-gray-50 px-4 dark:border-white/10 dark:bg-white/5">
-              <Text variant="none" className="text-xl font-black text-brand">
+              <Text variant="none" className="text-xl font-semibold text-brand">
                 ₦
               </Text>
               <TextInput
@@ -326,7 +326,7 @@ export default function WalletScreen() {
             />
           </View>
 
-          <View className="mt-5 rounded-3xl border border-brand/20 bg-brand/10 p-4">
+          <View className="mt-5 rounded-2xl border border-brand/20 bg-brand/10 p-4">
             <View className="flex-row items-start">
               <Ionicons
                 name="shield-checkmark-outline"
@@ -369,14 +369,14 @@ export default function WalletScreen() {
         onClose={() => setWalletSheet(null)}
       >
         <View>
-          <View className="items-center rounded-3xl border border-gray-100 bg-gray-50 p-5 dark:border-white/5 dark:bg-white/5">
-            <View className="h-16 w-16 items-center justify-center rounded-3xl bg-brand/10">
+          <View className="items-center rounded-2xl border border-gray-100 bg-gray-50 p-5 dark:border-white/5 dark:bg-white/5">
+            <View className="h-16 w-16 items-center justify-center rounded-2xl bg-brand/10">
               <Ionicons name="business-outline" size={28} color="#2563EB" />
             </View>
             <Text className="mt-4 text-sm font-bold uppercase tracking-widest text-gray-500">
               Wallet account
             </Text>
-            <Text className="mt-2 text-3xl font-black text-gray-950 dark:text-white">
+            <Text className="mt-2 text-xl font-semibold text-gray-950 dark:text-white">
               {accountNumber}
             </Text>
             <Pressable
@@ -393,7 +393,7 @@ export default function WalletScreen() {
             </Pressable>
           </View>
 
-          <View className="mt-5 rounded-3xl border border-gray-100 bg-gray-50 dark:border-white/5 dark:bg-white/5">
+          <View className="mt-5 rounded-2xl border border-gray-100 bg-gray-50 dark:border-white/5 dark:bg-white/5">
             {[
               { label: "Bank", value: bankName },
               { label: "Account name", value: accountName },
@@ -417,7 +417,7 @@ export default function WalletScreen() {
             ))}
           </View>
 
-          <View className="mt-5 rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+          <View className="mt-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
             <View className="flex-row items-start">
               <Ionicons name="time-outline" size={20} color="#34D399" />
               <Text className="ml-2 flex-1 text-sm leading-5 text-gray-600 dark:text-gray-300">

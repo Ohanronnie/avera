@@ -1,14 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { useColorScheme } from "nativewind";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Image, Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import type { Socket } from "socket.io-client";
 
 import { AveraLoader } from "@/components/brand/AveraLoader";
 import { Text } from "@/components/themed/theme";
+import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
-import { axiosInstance } from "@/utils/axios";
+import { connectSocket } from "@/utils/socket";
 
 type Conversation = {
   id: number;
@@ -33,9 +35,132 @@ type Conversation = {
     createdAt: string;
   } | null;
   unreadCount?: number;
-  lastMessageAt?: string | null;
   updatedAt: string;
 };
+
+type RawConversationPayload = {
+  id: number;
+  buyerId: number;
+  sellerId: number;
+  productId: number;
+  updatedAt: string;
+  unreadCount?: number;
+  product?: {
+    id: number;
+    name: string;
+    price: number | string;
+    quantity?: number;
+    sellerId?: number;
+    images?: Array<{ url?: string | null }>;
+  };
+  buyer?: {
+    id: number;
+    firstName?: string | null;
+    lastName?: string | null;
+    avatarUrl?: string | null;
+  };
+  seller?: {
+    id: number;
+    firstName?: string | null;
+    lastName?: string | null;
+    avatarUrl?: string | null;
+  };
+  messages?: Array<{
+    id: number;
+    senderId: number;
+    content?: string | null;
+    imageUrl?: string | null;
+    createdAt: string;
+    readAt?: string | null;
+  }>;
+};
+
+type IncomingConversationMessage = {
+  conversationId: number;
+  senderId: number;
+  content?: string | null;
+  imageUrl?: string | null;
+  createdAt: string | Date;
+};
+
+const emitWithAck = <TResponse,>(socket: Socket, event: string) =>
+  new Promise<TResponse>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error("Socket request timed out"));
+    }, 8000);
+
+    socket.emit(event, (response: TResponse) => {
+      clearTimeout(timeout);
+      resolve(response);
+    });
+  });
+
+const getDisplayName = (person?: {
+  firstName?: string | null;
+  lastName?: string | null;
+}) => {
+  const fullName = [person?.firstName, person?.lastName]
+    .filter(Boolean)
+    .join(" ");
+  return fullName || "Avera user";
+};
+
+const normalizeConversation = (
+  payload: RawConversationPayload,
+  currentUserId?: number | null,
+): Conversation => {
+  const isBuyer = payload.buyerId === currentUserId;
+  const counterpart = isBuyer ? payload.seller : payload.buyer;
+  const lastMessage = payload.messages?.[0];
+
+  return {
+    id: payload.id,
+    buyerId: payload.buyerId,
+    sellerId: payload.sellerId,
+    productId: payload.productId,
+    product: {
+      id: payload.product?.id || payload.productId,
+      name: payload.product?.name || "Product listing",
+      price: Number(payload.product?.price || 0),
+      quantity: payload.product?.quantity,
+      imageUrl: payload.product?.images?.[0]?.url || null,
+    },
+    counterpart: {
+      id: counterpart?.id || 0,
+      name: getDisplayName(counterpart),
+      avatarUrl: counterpart?.avatarUrl || null,
+    },
+    lastMessage: lastMessage
+      ? {
+          content: lastMessage.content || "",
+          imageUrl: lastMessage.imageUrl || null,
+          createdAt: lastMessage.createdAt,
+        }
+      : null,
+    unreadCount:
+      payload.unreadCount ||
+      payload.messages?.filter(
+        (message) => message.senderId !== currentUserId && !message.readAt,
+      ).length ||
+      0,
+    updatedAt: payload.updatedAt,
+  };
+};
+
+const getConversationLastMessageTime = (conversation: Conversation) =>
+  conversation.lastMessage?.createdAt || null;
+
+const sortConversationsByLastMessage = (items: Conversation[]) =>
+  [...items].sort((first, second) => {
+    const firstTime = getConversationLastMessageTime(first);
+    const secondTime = getConversationLastMessageTime(second);
+
+    if (!firstTime && !secondTime) return 0;
+    if (!firstTime) return 1;
+    if (!secondTime) return -1;
+
+    return new Date(secondTime).getTime() - new Date(firstTime).getTime();
+  });
 
 const formatPrice = (value: number) =>
   `₦${Number(value || 0).toLocaleString()}`;
@@ -62,6 +187,7 @@ const formatTimeAgo = (value?: string | null) => {
 export default function MessagesInboxScreen() {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
+  const { user } = useAuth();
   const toast = useToast();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,26 +195,73 @@ export default function MessagesInboxScreen() {
   const loadConversations = useCallback(async () => {
     try {
       setLoading(true);
-      const { data } = await axiosInstance.get("/chat/conversations");
-      setConversations(data);
+      const socket = connectSocket();
+      const payload = await emitWithAck<RawConversationPayload[]>(
+        socket,
+        "conversations:getAll",
+      );
+      setConversations(
+        sortConversationsByLastMessage(
+          (payload || []).map((conversation) =>
+            normalizeConversation(conversation, Number(user!.id)),
+          ),
+        ),
+      );
     } catch (error: any) {
       toast.show({
         title: "Messages unavailable",
         description:
           error?.response?.data?.message ||
+          error?.message ||
           "We couldn't load your conversations.",
         variant: "error",
       });
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, user?.id]);
 
   useFocusEffect(
     useCallback(() => {
       loadConversations();
     }, [loadConversations]),
   );
+
+  useEffect(() => {
+    const socket = connectSocket();
+
+    const handleInboxEmit = (payload: IncomingConversationMessage) => {
+      if (!payload?.conversationId) return;
+
+      setConversations((current) => {
+        const next = current.map((conversation) => {
+          if (conversation.id !== payload.conversationId) return conversation;
+
+          const isIncoming = payload.senderId !== user?.id;
+
+          return {
+            ...conversation,
+            lastMessage: {
+              content: payload.content || "",
+              imageUrl: payload.imageUrl || null,
+              createdAt: new Date(payload.createdAt).toISOString(),
+            },
+            unreadCount: isIncoming
+              ? (conversation.unreadCount || 0) + 1
+              : conversation.unreadCount || 0,
+          };
+        });
+
+        return sortConversationsByLastMessage(next);
+      });
+    };
+
+    socket.on("inbox:emit", handleInboxEmit);
+
+    return () => {
+      socket.off("inbox:emit", handleInboxEmit);
+    };
+  }, [user?.id]);
 
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-[#0A0A0A]" edges={["top"]}>
@@ -125,15 +298,22 @@ export default function MessagesInboxScreen() {
             {conversations.map((conversation) => (
               <Pressable
                 key={conversation.id}
-                onPress={() =>
+                onPress={() => {
+                  setConversations((current) =>
+                    current.map((item) =>
+                      item.id === conversation.id
+                        ? { ...item, unreadCount: 0 }
+                        : item,
+                    ),
+                  );
                   router.push({
                     pathname: "/messages/[id]",
                     params: {
                       id: String(conversation.id),
                     },
-                  })
-                }
-                className="mb-3 flex-row rounded-xl border border-gray-100 bg-gray-50 p-3 dark:border-white/5 dark:bg-white/5"
+                  });
+                }}
+                className="mb-3 flex-row rounded-2xl border border-gray-100 bg-gray-50 p-3 dark:border-white/5 dark:bg-white/5"
               >
                 {conversation.product.imageUrl ? (
                   <Image
@@ -156,9 +336,7 @@ export default function MessagesInboxScreen() {
                     </Text>
                     <Text className="text-xs font-semibold text-gray-400">
                       {formatTimeAgo(
-                        conversation.lastMessage?.createdAt ||
-                          conversation.lastMessageAt ||
-                          conversation.updatedAt,
+                        getConversationLastMessageTime(conversation),
                       )}
                     </Text>
                   </View>
@@ -167,13 +345,14 @@ export default function MessagesInboxScreen() {
                       className="flex-1 text-xs font-semibold text-brand"
                       numberOfLines={1}
                     >
-                      {conversation.product.name}
+                      {conversation.product.name} •{" "}
+                      {formatPrice(conversation.product.price)}
                     </Text>
                     {conversation.unreadCount ? (
                       <View className="ml-2 min-w-5 items-center justify-center rounded-full bg-brand px-1.5 py-0.5">
                         <Text
                           variant="none"
-                          className="text-[10px] font-black text-white"
+                          className="text-[10px] font-semibold text-white"
                         >
                           {conversation.unreadCount > 9
                             ? "9+"

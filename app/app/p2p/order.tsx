@@ -60,7 +60,7 @@ export default function P2POrderScreen() {
           <View className="h-16 w-16 items-center justify-center rounded-full bg-gray-50 dark:bg-white/5">
             <Ionicons name="alert-circle-outline" size={30} color="#6B7280" />
           </View>
-          <Text className="mt-5 text-xl font-black text-gray-950 dark:text-white">
+          <Text className="mt-5 text-xl font-semibold text-gray-950 dark:text-white">
             Offer not found
           </Text>
           <Text className="mt-2 text-center text-sm leading-6 text-gray-400">
@@ -117,8 +117,8 @@ export default function P2POrderScreen() {
           <Text className="text-sm font-bold uppercase tracking-widest text-gray-500">
             Amount you want to {side === "buy" ? "buy" : "sell"}
           </Text>
-          <View className="mt-4 flex-row items-center rounded-3xl border border-gray-200 bg-white px-4 dark:border-white/10 dark:bg-white/5">
-            <Text variant="none" className="text-2xl font-black text-brand">
+          <View className="mt-4 flex-row items-center rounded-2xl border border-gray-200 bg-white px-4 dark:border-white/10 dark:bg-white/5">
+            <Text variant="none" className="text-2xl font-semibold text-brand">
               ₦
             </Text>
             <TextInput
@@ -127,7 +127,7 @@ export default function P2POrderScreen() {
               keyboardType="numeric"
               placeholder="0"
               placeholderTextColor="#6B7280"
-              className="h-16 flex-1 px-3 py-0 text-3xl font-black leading-9 text-gray-950 dark:text-white"
+              className="h-16 flex-1 px-3 py-0 text-xl font-semibold leading-9 text-gray-950 dark:text-white"
               textAlignVertical="center"
             />
           </View>
@@ -136,7 +136,7 @@ export default function P2POrderScreen() {
             <Text className="text-xs font-bold uppercase tracking-widest text-gray-500">
               You will {side === "buy" ? "receive" : "send"}
             </Text>
-            <Text className="mt-2 text-3xl font-black text-gray-950 dark:text-white">
+            <Text className="mt-2 text-xl font-semibold text-gray-950 dark:text-white">
               {cryptoAmount.toFixed(listing.asset === "USDT" ? 2 : 6)}{" "}
               {listing.asset}
             </Text>
@@ -158,18 +158,21 @@ export default function P2POrderScreen() {
 
         <Pressable
           onPress={() => router.push(`/seller/${listing.id}`)}
-          className="mt-5 rounded-3xl border border-gray-100 bg-gray-50 p-5 dark:border-white/5 dark:bg-[#111214]"
+          className="mt-5 rounded-2xl border border-gray-100 bg-gray-50 p-5 dark:border-white/5 dark:bg-[#111214]"
         >
           <View className="flex-row items-center justify-between">
             <View className="flex-1 flex-row items-center pr-4">
               <View className="h-14 w-14 items-center justify-center rounded-2xl bg-brand/10">
-                <Text variant="none" className="text-xl font-black text-brand">
+                <Text
+                  variant="none"
+                  className="text-xl font-semibold text-brand"
+                >
                   {listing.seller.slice(0, 1)}
                 </Text>
               </View>
               <View className="ml-4 flex-1">
                 <View className="flex-row items-center">
-                  <Text className="text-base font-black text-gray-950 dark:text-white">
+                  <Text className="text-base font-semibold text-gray-950 dark:text-white">
                     {listing.seller}
                   </Text>
                   {listing.verified && (
@@ -190,7 +193,7 @@ export default function P2POrderScreen() {
           </View>
         </Pressable>
 
-        <View className="mt-5 rounded-3xl border border-gray-100 bg-gray-50 dark:border-white/5 dark:bg-[#111214]">
+        <View className="mt-5 rounded-2xl border border-gray-100 bg-gray-50 dark:border-white/5 dark:bg-[#111214]">
           {[
             { label: "Available", value: listing.available },
             { label: "Seller limit", value: listing.limit },
@@ -214,7 +217,7 @@ export default function P2POrderScreen() {
           ))}
         </View>
 
-        <View className="mt-5 rounded-3xl border border-brand/20 bg-brand/10 p-4">
+        <View className="mt-5 rounded-2xl border border-brand/20 bg-brand/10 p-4">
           <View className="flex-row items-start">
             <Ionicons
               name="shield-checkmark-outline"

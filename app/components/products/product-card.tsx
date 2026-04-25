@@ -69,7 +69,7 @@ export function ProductCard({ product }: { product: IProduct }) {
           params: { id: String(id) },
         })
       }
-      className="w-[48%] mb-6 bg-white dark:bg-[#1A1A1A] rounded-3xl overflow-hidden border border-gray-200 dark:border-white/5"
+      className="w-[48%] mb-6 bg-white dark:bg-[#1A1A1A] rounded-2xl overflow-hidden border border-gray-200 dark:border-white/5"
       android_ripple={{ color: "#f5f5f5" }}
     >
       {/* Image Section */}

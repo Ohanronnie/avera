@@ -41,7 +41,7 @@ export function ProfileTextInput({
         {label}
       </Text>
       <Input
-        className={`rounded-xl border-gray-200 bg-gray-50 dark:border-white/10 dark:bg-[#1A1A1A] ${
+        className={`rounded-2xl border-gray-200 bg-gray-50 dark:border-white/10 dark:bg-[#1A1A1A] ${
           isTall ? "h-28" : "h-14"
         }`}
         variant="outline"

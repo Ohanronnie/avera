@@ -132,7 +132,7 @@ export default function WalletAssetScreen() {
               />
             </View>
 
-            <Text className="mt-5 text-3xl font-bold text-white">
+            <Text className="mt-5 text-xl font-bold text-white">
               {asset.name}
             </Text>
             <Text className="mt-2 text-sm text-gray-400">{asset.amount}</Text>
@@ -181,7 +181,7 @@ export default function WalletAssetScreen() {
             </Pressable>
           </View>
 
-          <View className="mt-8 rounded-3xl border border-white/5 bg-[#111214] p-5">
+          <View className="mt-8 rounded-2xl border border-white/5 bg-[#111214] p-5">
             <Text className="text-sm font-medium uppercase tracking-widest text-gray-500">
               Asset Details
             </Text>
@@ -231,8 +231,8 @@ export default function WalletAssetScreen() {
         onClose={() => setActiveSheet(null)}
       >
         <View>
-          <View className="items-center rounded-3xl border border-white/5 bg-white/5 p-5">
-            <View className="h-32 w-32 items-center justify-center rounded-3xl border border-white/10 bg-white">
+          <View className="items-center rounded-2xl border border-white/5 bg-white/5 p-5">
+            <View className="h-32 w-32 items-center justify-center rounded-2xl border border-white/10 bg-white">
               <View className="h-24 w-24 rounded-2xl bg-[#050505]" />
             </View>
             <Text className="mt-4 text-xs font-bold uppercase tracking-widest text-gray-500">
@@ -255,7 +255,7 @@ export default function WalletAssetScreen() {
             </Pressable>
           </View>
 
-          <View className="mt-5 rounded-3xl border border-amber-500/20 bg-amber-500/10 p-4">
+          <View className="mt-5 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
             <View className="flex-row items-start">
               <Ionicons name="warning-outline" size={20} color="#F59E0B" />
               <Text className="ml-2 flex-1 text-sm leading-5 text-gray-300">
@@ -275,7 +275,7 @@ export default function WalletAssetScreen() {
         onClose={() => setActiveSheet(null)}
       >
         <View>
-          <View className="flex-row items-center rounded-3xl border border-white/5 bg-white/5 p-4">
+          <View className="flex-row items-center rounded-2xl border border-white/5 bg-white/5 p-4">
             <Image source={asset.icon} className="h-12 w-12 rounded-full" />
             <View className="ml-3 flex-1">
               <Text className="text-base font-bold text-white">
@@ -293,7 +293,10 @@ export default function WalletAssetScreen() {
                 Amount to buy
               </Text>
               <View className="flex-row items-center rounded-2xl border border-white/10 bg-white/5 px-4">
-                <Text variant="none" className="text-xl pt-1 font-black text-brand">
+                <Text
+                  variant="none"
+                  className="text-xl pt-1 font-semibold text-brand"
+                >
                   $
                 </Text>
                 <TextInput
@@ -320,7 +323,10 @@ export default function WalletAssetScreen() {
                   className="h-14 flex-1 py-0 pr-2 text-lg font-bold leading-6 text-white"
                   textAlignVertical="center"
                 />
-                <Text variant="none" className="text-sm pt-1 font-black text-brand">
+                <Text
+                  variant="none"
+                  className="text-sm pt-1 font-semibold text-brand"
+                >
                   {asset.symbol}
                 </Text>
               </View>
@@ -359,11 +365,11 @@ export default function WalletAssetScreen() {
         onClose={() => setActiveSheet(null)}
       >
         <View>
-          <View className="rounded-3xl border border-white/5 bg-white/5 p-4">
+          <View className="rounded-2xl border border-white/5 bg-white/5 p-4">
             <Text className="text-xs font-bold uppercase tracking-widest text-gray-500">
               Available
             </Text>
-            <Text className="mt-2 text-2xl font-black text-white">
+            <Text className="mt-2 text-2xl font-semibold text-white">
               {asset.amount}
             </Text>
           </View>
@@ -393,7 +399,7 @@ export default function WalletAssetScreen() {
             />
           </View>
 
-          <View className="mt-5 rounded-3xl border border-red-500/20 bg-red-500/10 p-4">
+          <View className="mt-5 rounded-2xl border border-red-500/20 bg-red-500/10 p-4">
             <View className="flex-row items-start">
               <Ionicons name="alert-circle-outline" size={20} color="#F87171" />
               <Text className="ml-2 flex-1 text-sm leading-5 text-gray-300">

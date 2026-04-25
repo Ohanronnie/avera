@@ -210,7 +210,7 @@ export default function HomeScreen() {
               >
                 <View
                   style={{ backgroundColor: banner.color }}
-                  className="w-full h-44 flex-row rounded-3xl items-center overflow-hidden"
+                  className="w-full h-44 flex-row rounded-2xl items-center overflow-hidden"
                 >
                   <View className="w-[60%] pl-6 py-6 justify-center">
                     <View className="bg-white/20 self-start px-2 py-1 rounded-lg mb-2">
@@ -226,7 +226,7 @@ export default function HomeScreen() {
                     </Text>
                     <Pressable
                       onPress={() => router.push(banner.route)}
-                      className="mt-4 bg-white self-start px-5 py-2.5 rounded-xl"
+                      className="mt-4 bg-white self-start px-5 py-2.5 rounded-2xl"
                     >
                       <Text
                         style={{ color: banner.color }}
@@ -297,7 +297,7 @@ export default function HomeScreen() {
         {/* Product Sections */}
         <View className="mt-8 pb-80">
           {productsLoading ? (
-            <View className="mx-5 items-center justify-center rounded-3xl border border-gray-100 bg-gray-50 py-12 dark:border-white/5 dark:bg-white/5">
+            <View className="mx-5 items-center justify-center rounded-2xl border border-gray-100 bg-gray-50 py-12 dark:border-white/5 dark:bg-white/5">
               <AveraLoader size={34} compact />
             </View>
           ) : productSections.length ? (
@@ -345,7 +345,7 @@ export default function HomeScreen() {
               </View>
             ))
           ) : (
-            <View className="mx-5 items-center justify-center rounded-3xl border border-gray-100 bg-gray-50 px-5 py-10 dark:border-white/5 dark:bg-white/5">
+            <View className="mx-5 items-center justify-center rounded-2xl border border-gray-100 bg-gray-50 px-5 py-10 dark:border-white/5 dark:bg-white/5">
               <Text className="text-center text-base font-semibold text-gray-900 dark:text-white">
                 No products yet
               </Text>

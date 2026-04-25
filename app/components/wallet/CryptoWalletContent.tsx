@@ -48,7 +48,7 @@ export function CryptoWalletContent({
       <View className="mt-8 flex-row rounded-2xl bg-gray-100 p-1 dark:bg-[#111214]">
         <Pressable
           onPress={() => setCryptoTab("crypto")}
-          className={`flex-1 items-center rounded-xl py-3 ${
+          className={`flex-1 items-center rounded-2xl py-3 ${
             cryptoTab === "crypto" ? "bg-white dark:bg-[#1B1D21]" : ""
           }`}
         >
@@ -64,7 +64,7 @@ export function CryptoWalletContent({
         </Pressable>
         <Pressable
           onPress={() => setCryptoTab("activity")}
-          className={`flex-1 items-center rounded-xl py-3 ${
+          className={`flex-1 items-center rounded-2xl py-3 ${
             cryptoTab === "activity" ? "bg-white dark:bg-[#1B1D21]" : ""
           }`}
         >

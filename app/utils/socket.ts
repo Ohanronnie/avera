@@ -8,16 +8,43 @@ export const getSocket = (): Socket => {
   const token = getAccessToken();
 
   if (socket && socketToken !== token) {
+    console.log("[chat/socket] token changed, resetting socket", {
+      hadSocket: Boolean(socket),
+      hadPreviousToken: Boolean(socketToken),
+      hasNextToken: Boolean(token),
+    });
     socket.disconnect();
     socket = null;
   }
 
   if (!socket) {
     socketToken = token;
+    console.log("[chat/socket] creating socket", {
+      baseUrl: `${BASE_URL}/chat`,
+      hasToken: Boolean(token),
+    });
     socket = io(`${BASE_URL}/chat`, {
       autoConnect: false,
       auth: { token },
       transports: ["websocket"],
+    });
+
+    socket.on("connect", () => {
+      console.log("[chat/socket] connected", {
+        id: socket?.id,
+        connected: socket?.connected,
+      });
+    });
+
+    socket.on("disconnect", (reason) => {
+      console.log("[chat/socket] disconnected", { reason });
+    });
+
+    socket.on("connect_error", (error) => {
+      console.error("[chat/socket] connect_error", {
+        message: error.message,
+        name: error.name,
+      });
     });
   }
   return socket;
@@ -27,6 +54,10 @@ export const connectSocket = () => {
   const s = getSocket();
   socketToken = getAccessToken();
   s.auth = { token: socketToken };
+  console.log("[chat/socket] connectSocket called", {
+    connected: s.connected,
+    hasToken: Boolean(socketToken),
+  });
   if (!s.connected) s.connect();
   return s;
 };

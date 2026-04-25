@@ -80,7 +80,7 @@ export const SearchModal = ({
       onRequestClose={onClose}
     >
       <View className="flex-1 bg-black/50">
-        <View className="flex-1 bg-background-light mt-20 rounded-t-3xl p-5">
+        <View className="flex-1 bg-background-light mt-20 rounded-t-xl p-5">
           {/* Header */}
           <View className="flex flex-row justify-between items-center mb-4">
             <Text className="text-2xl font-semibold">Search</Text>

@@ -45,7 +45,7 @@ export default function AdsScreen() {
     return (
       <View className="px-5 py-4 border-b border-gray-50">
         <View className="flex-row items-center">
-          <View className="w-14 h-14 rounded-xl bg-gray-100 overflow-hidden">
+          <View className="w-14 h-14 rounded-2xl bg-gray-100 overflow-hidden">
             {image && (
               <Image
                 source={{ uri: getImageUrl(image) }}
@@ -71,7 +71,7 @@ export default function AdsScreen() {
             </View>
           </View>
         </View>
-        <View className="flex-row justify-between mt-3 bg-gray-50 rounded-xl p-3">
+        <View className="flex-row justify-between mt-3 bg-gray-50 rounded-2xl p-3">
           <View className="items-center">
             <Text className="text-xs text-gray-400">Impressions</Text>
             <Text className="text-sm font-bold text-gray-900">

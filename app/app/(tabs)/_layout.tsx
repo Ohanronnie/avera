@@ -1,5 +1,4 @@
 import { Tabs } from "expo-router/tabs";
-import { useFocusEffect, useSegments } from "expo-router";
 import {
   Badge,
   Icon,
@@ -15,10 +14,8 @@ import {
 } from "@expo/vector-icons";
 import { Platform } from "react-native";
 import { useColorScheme } from "nativewind";
-import { useCallback, useEffect, useState } from "react";
 
-import { axiosInstance } from "@/utils/axios";
-import { connectSocket } from "@/utils/socket";
+import { useUnreadConversationCount } from "@/hooks/use-unread-conversation-count";
 
 /**
  * ICON EXPLORER SETTINGS
@@ -137,58 +134,9 @@ const IOS_TABS = [
 export default function TabsLayout() {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
-  const segments = useSegments();
-  const [unreadMessages, setUnreadMessages] = useState(0);
-  const [orderUpdates, setOrderUpdates] = useState(0);
-  const badgeCount = unreadMessages + orderUpdates;
+  const { unreadConversationCount } = useUnreadConversationCount();
+  const badgeCount = unreadConversationCount;
   const unreadBadge = badgeCount > 9 ? "9+" : String(badgeCount);
-
-  const refreshUnreadMessages = useCallback(async () => {
-    try {
-      const { data } = await axiosInstance.get(
-        "/chat/conversations/unread-count",
-      );
-      setUnreadMessages(Number(data.count || 0));
-    } catch {
-      setUnreadMessages(0);
-    }
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      refreshUnreadMessages();
-    }, [refreshUnreadMessages]),
-  );
-
-  useEffect(() => {
-    refreshUnreadMessages();
-
-    const socket = connectSocket();
-    const handleUnreadCount = (payload: { count?: number }) => {
-      setUnreadMessages(Number(payload?.count || 0));
-    };
-    const handleOrderUpdated = () => {
-      setOrderUpdates((current) => Math.min(current + 1, 99));
-    };
-
-    socket.on("message:new", refreshUnreadMessages);
-    socket.on("conversation:read", refreshUnreadMessages);
-    socket.on("conversation:unread-count", handleUnreadCount);
-    socket.on("order:updated", handleOrderUpdated);
-
-    return () => {
-      socket.off("message:new", refreshUnreadMessages);
-      socket.off("conversation:read", refreshUnreadMessages);
-      socket.off("conversation:unread-count", handleUnreadCount);
-      socket.off("order:updated", handleOrderUpdated);
-    };
-  }, [refreshUnreadMessages]);
-
-  useEffect(() => {
-    if (segments.at(-1) === "orders") {
-      setOrderUpdates(0);
-    }
-  }, [segments]);
 
   if (Platform.OS === "ios") {
     return (
