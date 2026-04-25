@@ -1,5 +1,10 @@
 import { AveraLoader } from "@/components/brand/AveraLoader";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ProductSeller,
+  useCurrentProductOrderQuery,
+  useProductDetailsQuery,
+} from "@/features/products/hooks";
+import { useEffect, useMemo, useState } from "react";
 import {
   View,
   Pressable,
@@ -9,17 +14,18 @@ import {
   FlatList,
   TouchableOpacity,
   ImageSourcePropType,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Text } from "@/components/themed/theme";
-import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { Star } from "lucide-react-native";
 import { useColorScheme } from "nativewind";
-import { axiosInstance } from "@/utils/axios";
 import { useToast } from "@/contexts/ToastContext";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { useAuth } from "@/contexts/AuthContext";
+import { axiosInstance } from "@/utils/axios";
 import { connectSocket } from "@/utils/socket";
 import {
   useToggleWishlistMutation,
@@ -28,55 +34,6 @@ import {
 
 const fallbackImage = require("@/assets/images/shoe.jpg");
 const { width } = Dimensions.get("window");
-
-type ProductImage = {
-  id: number;
-  url: string;
-};
-
-type ProductSeller = {
-  id: number;
-  username?: string | null;
-  firstName?: string | null;
-  lastName?: string | null;
-  avatarUrl?: string | null;
-  rating?: number;
-  numReviews?: number;
-};
-
-type ProductDetails = {
-  id: number;
-  name: string;
-  description: string;
-  price: number | string;
-  condition?: string | null;
-  currency?: string | null;
-  location?: string | null;
-  quantity?: number;
-  rating?: number;
-  numReviews?: number;
-  isFeatured?: boolean;
-  createdAt?: string;
-  images?: ProductImage[];
-  category?: {
-    name?: string | null;
-  } | null;
-  seller?: ProductSeller | null;
-  isWishlisted?: boolean;
-  isOwner?: boolean;
-};
-
-type ActiveCheckoutOrder = {
-  id: number;
-  code?: string;
-  conversationId?: number | null;
-  offerMessageId?: number | null;
-  source?: string;
-  status?: string;
-  statusText?: string;
-  quantity?: number;
-  unitPrice?: number;
-};
 
 const formatPrice = (value: number | string | undefined) => {
   const price = Number(value || 0);
@@ -119,49 +76,23 @@ export default function ProductDetailsPage() {
   const productId = Number(id || 0);
   const { data: wishlistIds = [] } = useWishlistProductIds();
   const toggleWishlist = useToggleWishlistMutation();
-
-  const [product, setProduct] = useState<ProductDetails | null>(null);
-  const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [openingChat, setOpeningChat] = useState(false);
   const [openingCheckout, setOpeningCheckout] = useState(false);
   const [buyerQuantity, setBuyerQuantity] = useState(1);
-  const [activeCheckoutOrder, setActiveCheckoutOrder] =
-    useState<ActiveCheckoutOrder | null>(null);
   const [detailWishlistState, setDetailWishlistState] = useState<
     boolean | null
   >(null);
-
-  useEffect(() => {
-    const fetchProduct = async () => {
-      if (!id) return;
-
-      try {
-        setLoading(true);
-        console.log("Fetching product with ID:", id);
-        const { data } = await axiosInstance.get("/products", {
-          params: { productId: id },
-        });
-
-        setProduct(data);
-        setDetailWishlistState(data.isWishlisted ?? null);
-      } catch (error: any) {
-        toast.show({
-          title: "Product not available",
-          description:
-            error?.response?.data?.message ||
-            "We couldn't load this product right now.",
-          variant: "error",
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchProduct();
-  }, [id, toast]);
+  const {
+    data: product,
+    isLoading: loading,
+    isRefetching: isRefetchingProduct,
+    isError: productLoadFailed,
+    error: productLoadError,
+    refetch: refetchProduct,
+  } = useProductDetailsQuery(productId);
 
   const images = useMemo<ImageSourcePropType[]>(() => {
     const remoteImages = product?.images
@@ -190,6 +121,11 @@ export default function ProductDetailsPage() {
       product?.seller?.id &&
       Number(product.seller.id) === currentUserId,
     );
+  const {
+    data: activeCheckoutOrder,
+    isRefetching: isRefetchingCurrentOrder,
+    refetch: refetchCurrentOrder,
+  } = useCurrentProductOrderQuery(productId, !isOwnProduct);
   const hasActiveCheckout = Boolean(activeCheckoutOrder?.id);
   const canResumeCheckout = activeCheckoutOrder?.status === "PENDING_TRANSFER";
   const checkoutPrimaryLabel = isOwnProduct
@@ -223,29 +159,6 @@ export default function ProductDetailsPage() {
       // Checkout can still continue; this only wakes the seller's chat badge.
     }
   };
-
-  const loadActiveCheckout = useCallback(async () => {
-    if (!productId || isOwnProduct) {
-      setActiveCheckoutOrder(null);
-      return;
-    }
-
-    try {
-      const { data } = await axiosInstance.get<ActiveCheckoutOrder | null>(
-        "/orders/current",
-        {
-          params: {
-            productId,
-            source: "BUY_NOW",
-          },
-        },
-      );
-
-      setActiveCheckoutOrder(data);
-    } catch {
-      setActiveCheckoutOrder(null);
-    }
-  }, [isOwnProduct, productId]);
 
   const openExistingCheckout = () => {
     if (!product || !activeCheckoutOrder) return;
@@ -281,11 +194,25 @@ export default function ProductDetailsPage() {
     });
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      loadActiveCheckout();
-    }, [loadActiveCheckout]),
-  );
+  useEffect(() => {
+    if (!productLoadFailed) return;
+
+    toast.show({
+      title: "Product not available",
+      description:
+        (productLoadError as any)?.response?.data?.message ||
+        "We couldn't load this product right now.",
+      variant: "error",
+    });
+  }, [productLoadError, productLoadFailed, toast]);
+
+  useEffect(() => {
+    setDetailWishlistState(product?.isWishlisted ?? null);
+  }, [product?.isWishlisted]);
+
+  const refreshProductDetails = async () => {
+    await Promise.all([refetchProduct(), refetchCurrentOrder()]);
+  };
 
   const openCheckoutReview = async () => {
     if (!product || isOwnProduct || openingCheckout) return;
@@ -413,28 +340,12 @@ export default function ProductDetailsPage() {
                 const previousWishlistState = detailWishlistState;
                 const nextWishlistState = !isBookmarked;
                 setDetailWishlistState(nextWishlistState);
-                setProduct((current) =>
-                  current
-                    ? {
-                        ...current,
-                        isWishlisted: nextWishlistState,
-                      }
-                    : current,
-                );
 
                 toggleWishlist.mutate(
                   { productId, isWishlisted: isBookmarked },
                   {
                     onError: () => {
                       setDetailWishlistState(previousWishlistState);
-                      setProduct((current) =>
-                        current
-                          ? {
-                              ...current,
-                              isWishlisted: previousWishlistState ?? false,
-                            }
-                          : current,
-                      );
                       toast.show({
                         title: "Wishlist not updated",
                         description: "Please sign in and try again.",
@@ -489,6 +400,15 @@ export default function ProductDetailsPage() {
       <ScrollView
         className="-mt-5 flex-1 bg-white dark:bg-[#0A0A0A]"
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefetchingProduct || isRefetchingCurrentOrder}
+            onRefresh={() => {
+              void refreshProductDetails();
+            }}
+            tintColor="#2563EB"
+          />
+        }
       >
         <View className="px-6 pb-32 pt-8">
           <View className="mb-3 flex-row items-center justify-between">

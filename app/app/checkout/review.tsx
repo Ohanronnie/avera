@@ -1,16 +1,28 @@
 import { useEffect, useRef, useState } from "react";
 import { AveraLoader } from "@/components/brand/AveraLoader";
 import { CustomSelect } from "@/components/custom-select";
+import {
+  ReviewOrderPayload,
+  useAutofillProfileMutation,
+  useCreateOrderMutation,
+  useOrderReviewQuery,
+} from "@/features/orders/hooks";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
 import { useColorScheme } from "nativewind";
-import { Image, Pressable, ScrollView, TextInput, View } from "react-native";
+import {
+  Image,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  TextInput,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Text } from "@/components/themed/theme";
 import { useToast } from "@/contexts/ToastContext";
-import { axiosInstance } from "@/utils/axios";
 import { connectSocket } from "@/utils/socket";
 
 const parseNumber = (value?: string | string[], fallback = 1) => {
@@ -102,35 +114,10 @@ const resolveStateValue = (value?: string | null) => {
   return option?.value || "";
 };
 
-type ReviewOrderPayload = {
-  conversationId: number;
-  productId?: number;
-  sellerId?: number;
-  sellerName?: string | null;
-  buyerName?: string | null;
-  buyerAddress?: string | null;
-  buyerState?: string | null;
-  buyerCity?: string | null;
-  offeredPrice?: number | string | null;
-  offerMessageId?: number | null;
-  offerQuantity?: number | null;
-  source?: "buy_now" | "offer" | null;
-  product?: {
-    id: number;
-    name?: string | null;
-    price?: number | string | null;
-    quantity?: number | null;
-    images?: Array<{ url?: string | null }>;
-  } | null;
-};
-
 export default function CheckoutReviewScreen() {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   const toast = useToast();
-  const [reviewLoading, setReviewLoading] = useState(true);
-  const [creatingOrder, setCreatingOrder] = useState(false);
-  const [autofillingDelivery, setAutofillingDelivery] = useState(false);
   const [createdOrder, setCreatedOrder] = useState<{
     id: number;
     code: string;
@@ -144,12 +131,20 @@ export default function CheckoutReviewScreen() {
   const [deliveryCity, setDeliveryCity] = useState("");
   const [deliveryState, setDeliveryState] = useState("");
   const [deliveryErrors, setDeliveryErrors] = useState<DeliveryErrors>({});
-  const [reviewData, setReviewData] = useState<ReviewOrderPayload | null>(null);
   const reviewStatusSentRef = useRef(false);
   const params = useLocalSearchParams<{
     quantity?: string;
     conversationId?: string;
   }>();
+  const conversationId = parseNumber(params.conversationId, 0);
+  const {
+    data: reviewData,
+    isLoading: isReviewLoading,
+    isRefetching: isRefetchingReview,
+    refetch: refetchReview,
+  } = useOrderReviewQuery(conversationId);
+  const createOrderMutation = useCreateOrderMutation();
+  const autofillProfileMutation = useAutofillProfileMutation();
 
   const resolvedProductId =
     reviewData?.productId || reviewData?.product?.id || 0;
@@ -228,51 +223,19 @@ export default function CheckoutReviewScreen() {
   };
 
   useEffect(() => {
-    let active = true;
+    if (!reviewData) return;
 
-    const loadReviewData = async () => {
-      if (!params.conversationId) {
-        if (active) setReviewLoading(false);
-        return;
-      }
-
-      try {
-        setReviewLoading(true);
-        const { data } = await axiosInstance.get<ReviewOrderPayload>(
-          `/chat/conversations/order-review/${params.conversationId}`,
-        );
-
-        if (!active) return;
-
-        setReviewData(data);
-        setDeliveryName((current) => current || data.buyerName || "");
-        setDeliveryAddress((current) => current || data.buyerAddress || "");
-        setDeliveryCity((current) => current || data.buyerCity || "");
-        setDeliveryState(
-          (current) => current || resolveStateValue(data.buyerState),
-        );
-      } catch {
-        if (active) {
-          setReviewData(null);
-        }
-      } finally {
-        if (active) {
-          setReviewLoading(false);
-        }
-      }
-    };
-
-    loadReviewData();
-
-    return () => {
-      active = false;
-    };
-  }, [params.conversationId]);
+    setDeliveryName((current) => current || reviewData.buyerName || "");
+    setDeliveryAddress((current) => current || reviewData.buyerAddress || "");
+    setDeliveryCity((current) => current || reviewData.buyerCity || "");
+    setDeliveryState(
+      (current) => current || resolveStateValue(reviewData.buyerState),
+    );
+  }, [reviewData]);
 
   const fillDeliveryFromProfile = async () => {
     try {
-      setAutofillingDelivery(true);
-      const { data } = await axiosInstance.get("/users/me");
+      const data = await autofillProfileMutation.mutateAsync();
       const fullName =
         data.fullName ||
         [data.firstName, data.lastName].filter(Boolean).join(" ");
@@ -294,16 +257,14 @@ export default function CheckoutReviewScreen() {
           "Complete your profile details or enter delivery manually.",
         variant: "error",
       });
-    } finally {
-      setAutofillingDelivery(false);
     }
   };
 
   useEffect(() => {
-    if (reviewStatusSentRef.current || !params.conversationId) return;
+    if (reviewStatusSentRef.current || !conversationId) return;
     reviewStatusSentRef.current = true;
     notifySeller("Checkout status: Buyer is reviewing the order.");
-  }, [params.conversationId]);
+  }, [conversationId]);
 
   const openPaymentScreen = (orderId: number) => {
     if (!params.conversationId) return;
@@ -345,23 +306,10 @@ export default function CheckoutReviewScreen() {
     if (!normalizedPhone.valid) return;
 
     try {
-      setCreatingOrder(true);
       setDeliveryErrors({});
-      const { data } = await axiosInstance.post<{
-        message?: string;
-        existing?: boolean;
-        order?: {
-          id: number;
-          code: string;
-          status: string;
-          statusText: string;
-          totalAmount: number;
-        };
-      }>("/orders", {
+      const data = await createOrderMutation.mutateAsync({
         productId: resolvedProductId,
-        conversationId: params.conversationId
-          ? Number(params.conversationId)
-          : undefined,
+        conversationId: conversationId || undefined,
         offerMessageId: reviewData?.offerMessageId || undefined,
         quantity,
         source: isOfferCheckout ? "OFFER" : "BUY_NOW",
@@ -398,10 +346,12 @@ export default function CheckoutReviewScreen() {
           "We couldn't create this order right now.",
         variant: "error",
       });
-    } finally {
-      setCreatingOrder(false);
     }
   };
+
+  const reviewLoading = isReviewLoading;
+  const creatingOrder = createOrderMutation.isPending;
+  const autofillingDelivery = autofillProfileMutation.isPending;
 
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-[#0A0A0A]" edges={["top"]}>
@@ -428,7 +378,19 @@ export default function CheckoutReviewScreen() {
         </View>
       </View>
 
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+      <ScrollView
+        className="flex-1"
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefetchingReview}
+            onRefresh={() => {
+              void refetchReview();
+            }}
+            tintColor="#2563EB"
+          />
+        }
+      >
         <View className="px-5 pb-28 pt-5">
           <View className="flex-row rounded-2xl border border-gray-100 bg-gray-50 p-3 dark:border-white/5 dark:bg-white/5">
             {resolvedProductImage ? (

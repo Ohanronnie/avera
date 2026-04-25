@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import {
   Image,
   ImageBackground,
@@ -11,13 +11,14 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { router, useFocusEffect } from "expo-router";
+import { router } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 
 import { AveraLoader } from "@/components/brand/AveraLoader";
 import { CustomSelect } from "@/components/custom-select";
 import { Text } from "@/components/themed/theme";
 import { NIGERIA_STATE_OPTIONS } from "@/components/auth/user-info/constants";
+import { useMeQuery, useUpdateProfileMutation } from "@/features/profile/hooks";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useToast } from "@/contexts/ToastContext";
@@ -56,11 +57,15 @@ export default function EditProfileScreen() {
   const { login } = useAuth();
   const toast = useToast();
   const [form, setForm] = useState<ProfileForm>(initialForm);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState<
     "avatarUrl" | "coverPhotoUrl" | null
   >(null);
+  const {
+    data: profile,
+    isLoading: loading,
+    isError: profileLoadFailed,
+  } = useMeQuery();
+  const updateProfileMutation = useUpdateProfileMutation();
 
   const setField = (field: keyof ProfileForm, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -70,47 +75,23 @@ export default function EditProfileScreen() {
     value: stateName,
   }));
 
-  useFocusEffect(
-    useCallback(() => {
-      let mounted = true;
+  useEffect(() => {
+    if (!profile) return;
 
-      const loadProfile = async () => {
-        try {
-          setLoading(true);
-          const { data } = await axiosInstance.get("/users/me");
-          if (!mounted) return;
-
-          setForm({
-            firstName: data.firstName || "",
-            lastName: data.lastName || "",
-            username: data.username || "",
-            phoneNumber: data.phoneNumber || "",
-            avatarUrl: data.avatarUrl || "",
-            coverPhotoUrl: data.coverPhotoUrl || "",
-            bio: data.bio || "",
-            state: data.location?.state || "",
-            city: data.location?.city || "",
-            address: data.location?.address || "",
-            country: data.location?.country || "Nigeria",
-          });
-        } catch {
-          toast.show({
-            title: "Profile unavailable",
-            description: "We could not load your profile right now.",
-            variant: "error",
-          });
-        } finally {
-          if (mounted) setLoading(false);
-        }
-      };
-
-      loadProfile();
-
-      return () => {
-        mounted = false;
-      };
-    }, [toast]),
-  );
+    setForm({
+      firstName: profile.firstName || "",
+      lastName: profile.lastName || "",
+      username: profile.username || "",
+      phoneNumber: profile.phoneNumber || "",
+      avatarUrl: profile.avatarUrl || "",
+      coverPhotoUrl: profile.coverPhotoUrl || "",
+      bio: profile.bio || "",
+      state: profile.location?.state || "",
+      city: profile.location?.city || "",
+      address: profile.location?.address || "",
+      country: profile.location?.country || "Nigeria",
+    });
+  }, [profile]);
 
   const handleSave = async () => {
     const payload = {
@@ -146,8 +127,7 @@ export default function EditProfileScreen() {
     }
 
     try {
-      setSaving(true);
-      const { data } = await axiosInstance.patch("/users/me", payload);
+      const data = await updateProfileMutation.mutateAsync(payload);
       login(data);
       toast.show({
         title: "Profile updated",
@@ -170,8 +150,6 @@ export default function EditProfileScreen() {
           "We could not update your profile right now.",
         variant: "error",
       });
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -290,6 +268,15 @@ export default function EditProfileScreen() {
         {loading ? (
           <View className="flex-1 items-center justify-center">
             <AveraLoader label="Loading profile" />
+          </View>
+        ) : profileLoadFailed ? (
+          <View className="flex-1 items-center justify-center px-10">
+            <Text className="text-center text-lg font-bold text-gray-900 dark:text-white">
+              Profile unavailable
+            </Text>
+            <Text className="mt-2 text-center text-sm text-gray-500 dark:text-gray-400">
+              We could not load your profile right now.
+            </Text>
           </View>
         ) : (
           <ScrollView
@@ -425,10 +412,10 @@ export default function EditProfileScreen() {
 
             <Pressable
               onPress={handleSave}
-              disabled={saving}
+              disabled={updateProfileMutation.isPending}
               className="mt-2 h-14 flex-row items-center justify-center rounded-full bg-brand"
             >
-              {saving ? (
+              {updateProfileMutation.isPending ? (
                 <AveraLoader size={24} color="#FFFFFF" compact />
               ) : (
                 <>

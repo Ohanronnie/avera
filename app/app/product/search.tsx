@@ -1,85 +1,40 @@
 import { AveraLoader } from "@/components/brand/AveraLoader";
-import { ProductCard, IProduct } from "@/components/products/product-card";
-import { mapProductToCard } from "@/features/products/types";
+import { ProductCard } from "@/components/products/product-card";
+import {
+  flattenProductSearchPages,
+  ProductFilters,
+  useProductSearchQuery,
+  useProductSearchSuggestionsQuery,
+  useRecentProductSearches,
+  useTrackProductSearchMutation,
+  useTrendingKeywordsQuery,
+} from "@/features/products/hooks";
 import { Text } from "@/components/themed/theme";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { Input, InputField } from "@/components/ui/input";
-import { axiosInstance } from "@/utils/axios";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useColorScheme } from "nativewind";
-import { createMMKV } from "react-native-mmkv";
 import {
   FlatList,
   PanResponder,
   Pressable,
+  RefreshControl,
   ScrollView,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-const PRODUCT_PAGE_SIZE = 10;
-const RECENT_SEARCHES_KEY = "recentSearches";
 const PRICE_RANGE_MIN = 0;
 const PRICE_RANGE_MAX = 2000000;
 const PRICE_RANGE_STEP = 50000;
-const fallbackTrendingSearches = [
-  "iPhone 14 Pro Max",
-  "MacBook Air M2",
-  "AirPods Pro",
-  "Nike Air Max 270",
-];
-
-type RecentSearchesStorage = {
-  getItem: (key: string) => Promise<string | null>;
-  setItem: (key: string, value: string) => Promise<void>;
-};
-
-const recentSearchesMMKV = createMMKV({ id: "avera-recent-searches" });
-
-const recentSearchesStorage: RecentSearchesStorage = {
-  getItem: async (key) => recentSearchesMMKV.getString(key) ?? null,
-  setItem: async (key, value) => {
-    recentSearchesMMKV.set(key, value);
-  },
-};
-
-const loadRecentSearches = async () => {
-  try {
-    const storedSearches =
-      await recentSearchesStorage.getItem(RECENT_SEARCHES_KEY);
-    if (!storedSearches) return [];
-
-    const parsedSearches = JSON.parse(storedSearches);
-    return Array.isArray(parsedSearches)
-      ? parsedSearches.filter(
-          (item): item is string => typeof item === "string",
-        )
-      : [];
-  } catch (error) {
-    console.error("Failed to load recent searches:", error);
-    return [];
-  }
-};
-
-const saveRecentSearches = async (searches: string[]) => {
-  try {
-    await recentSearchesStorage.setItem(
-      RECENT_SEARCHES_KEY,
-      JSON.stringify(searches),
-    );
-  } catch (error) {
-    console.error("Failed to save recent searches:", error);
-  }
-};
-
-type ProductFilters = {
-  condition: "all" | "new" | "used";
-  sort: "newest" | "budget" | "premium";
-  featured: boolean;
-  minPrice: number;
-  maxPrice: number;
-};
 
 const conditionOptions: Array<{
   label: string;
@@ -334,6 +289,8 @@ const SuggestionsScreen = ({
   onClearRecentSearches,
   typing,
   suggestions,
+  refreshing,
+  onRefresh,
 }: {
   onSearchTerm: (term: string) => void;
   recentSearches: string[];
@@ -341,6 +298,8 @@ const SuggestionsScreen = ({
   onClearRecentSearches: (index?: number) => void;
   typing?: boolean;
   suggestions?: string[];
+  refreshing: boolean;
+  onRefresh: () => void;
 }) => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
@@ -356,6 +315,13 @@ const SuggestionsScreen = ({
       className="mx-4 mt-5"
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor="#2563EB"
+        />
+      }
     >
       {typing ? (
         <View className="mb-3 ">
@@ -503,157 +469,38 @@ export default function SearchScreen() {
   const [showSuggestions, setShowSuggestions] = useState(
     !params.query && !params.categoryId && !params.section,
   );
-  const [initialLoading, setInitialLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasNextPage, setHasNextPage] = useState(true);
-  const [products, setProducts] = useState<IProduct[]>([]);
-  const nextOffsetRef = useRef(0);
-  const requestIdRef = useRef(0);
-  const isFetchingRef = useRef(false);
   const [typing, setTyping] = useState(false);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [recentSearches, setRecentSearches] = useState<string[]>([]);
-  const [trendingSearches, setTrendingSearches] = useState(
-    fallbackTrendingSearches,
+  const deferredSearchQuery = useDeferredValue(searchQuery.trim());
+  const {
+    recentSearches,
+    clearRecentSearches,
+    addRecentSearch,
+    isLoading: recentSearchesLoading,
+    refetch: refetchRecentSearches,
+  } = useRecentProductSearches();
+  const { data: trendingSearches = [], refetch: refetchTrendingSearches } =
+    useTrendingKeywordsQuery(8);
+  const { mutate: trackProductSearch } = useTrackProductSearchMutation();
+  const {
+    data: searchResults,
+    isLoading: initialLoading,
+    isRefetching,
+    isFetchingNextPage: loadingMore,
+    hasNextPage,
+    fetchNextPage,
+    refetch,
+  } = useProductSearchQuery({
+    query: activeQuery,
+    categoryId: params.categoryId,
+    filters,
+  });
+  const { data: suggestions = [] } = useProductSearchSuggestionsQuery(
+    deferredSearchQuery,
+    typing,
   );
-
-  useEffect(() => {
-    loadRecentSearches().then(setRecentSearches);
-  }, []);
-
-  useEffect(() => {
-    const fetchTrendingSearches = async () => {
-      try {
-        const { data } = await axiosInstance.get<string[]>(
-          "/products/trending-keywords",
-          {
-            params: { limit: 8 },
-          },
-        );
-
-        if (Array.isArray(data) && data.length) {
-          setTrendingSearches(data);
-        }
-      } catch (error) {
-        setTrendingSearches(fallbackTrendingSearches);
-      }
-    };
-
-    fetchTrendingSearches();
-  }, []);
-
-  const storeRecentSearch = (searchTerm: string) => {
-    const trimmedSearchTerm = searchTerm.trim();
-    if (!trimmedSearchTerm) return;
-
-    const nextSearches = [
-      trimmedSearchTerm,
-      ...recentSearches.filter(
-        (item) => item.toLowerCase() !== trimmedSearchTerm.toLowerCase(),
-      ),
-    ].slice(0, 8);
-
-    setRecentSearches(nextSearches);
-    saveRecentSearches(nextSearches);
-  };
-
-  const clearRecentSearches = (index?: number) => {
-    const nextSearches = [...recentSearches];
-    if (index !== undefined) {
-      nextSearches.splice(index, 1);
-    } else {
-      nextSearches.length = 0;
-    }
-
-    setRecentSearches(nextSearches);
-    saveRecentSearches(nextSearches);
-  };
-  const fetchProductsPage = useCallback(
-    async ({
-      nextQuery = activeQuery,
-      reset = false,
-      nextFilters = filters,
-    }: {
-      nextQuery?: string;
-      reset?: boolean;
-      nextFilters?: ProductFilters;
-    } = {}) => {
-      if (isFetchingRef.current) return;
-      if (!reset && !hasNextPage) return;
-
-      isFetchingRef.current = true;
-      const requestId = requestIdRef.current + 1;
-      requestIdRef.current = requestId;
-      const offset = reset ? 0 : nextOffsetRef.current;
-
-      try {
-        if (reset) {
-          setInitialLoading(true);
-          setHasNextPage(true);
-          nextOffsetRef.current = 0;
-        } else {
-          setLoadingMore(true);
-        }
-
-        setShowSuggestions(false);
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-        const { data } = await axiosInstance.get("/products", {
-          params: {
-            query: nextQuery || "",
-            limit: PRODUCT_PAGE_SIZE,
-            offset,
-            ...(params.categoryId ? { categoryId: params.categoryId } : {}),
-            ...(nextFilters.featured ? { featured: "true" } : {}),
-            ...(nextFilters.condition !== "all"
-              ? { condition: nextFilters.condition }
-              : {}),
-            ...(nextFilters.sort !== "newest"
-              ? { sort: nextFilters.sort }
-              : {}),
-            ...(nextFilters.minPrice > PRICE_RANGE_MIN
-              ? { minPrice: nextFilters.minPrice }
-              : {}),
-            ...(nextFilters.maxPrice < PRICE_RANGE_MAX
-              ? { maxPrice: nextFilters.maxPrice }
-              : {}),
-          },
-        });
-
-        if (requestId !== requestIdRef.current) return;
-
-        const nextProducts = data.map(mapProductToCard);
-        nextOffsetRef.current = offset + data.length;
-        setHasNextPage(data.length === PRODUCT_PAGE_SIZE);
-        setProducts((current) => {
-          if (reset) return nextProducts;
-
-          const existingIds = new Set(current.map((product) => product.id));
-          return [
-            ...current,
-            ...nextProducts.filter((product) => !existingIds.has(product.id)),
-          ];
-        });
-      } catch (error) {
-        if (reset) setProducts([]);
-        setHasNextPage(false);
-      } finally {
-        if (requestId === requestIdRef.current) {
-          setInitialLoading(false);
-          setLoadingMore(false);
-        }
-        isFetchingRef.current = false;
-      }
-    },
-    [
-      activeQuery,
-      hasNextPage,
-      filters.condition,
-      filters.featured,
-      filters.maxPrice,
-      filters.minPrice,
-      filters.sort,
-      params.categoryId,
-    ],
+  const products = useMemo(
+    () => flattenProductSearchPages(searchResults),
+    [searchResults],
   );
 
   useEffect(() => {
@@ -665,12 +512,9 @@ export default function SearchScreen() {
     setDraftFilters(nextFilters);
 
     if (params.query || params.categoryId || params.section) {
-      fetchProductsPage({ nextQuery, reset: true, nextFilters });
+      setShowSuggestions(false);
     } else {
       setShowSuggestions(true);
-      setProducts([]);
-      setHasNextPage(true);
-      nextOffsetRef.current = 0;
     }
   }, [
     params.categoryId,
@@ -686,16 +530,11 @@ export default function SearchScreen() {
   const submitSearch = (nextQuery = searchQuery) => {
     const submittedQuery = nextQuery.trim();
     setActiveQuery(submittedQuery);
-    fetchProductsPage({ nextQuery: submittedQuery, reset: true });
-    storeRecentSearch(submittedQuery);
+    setShowSuggestions(false);
+    void addRecentSearch(submittedQuery);
 
     if (submittedQuery.length >= 2) {
-      axiosInstance
-        .post("/products/search-events", {
-          query: submittedQuery,
-          source: "product-search",
-        })
-        .catch(() => undefined);
+      trackProductSearch(submittedQuery);
     }
   };
 
@@ -707,11 +546,6 @@ export default function SearchScreen() {
   const applyFilters = () => {
     setFilters(draftFilters);
     setFilterSheetOpen(false);
-    fetchProductsPage({
-      nextQuery: activeQuery,
-      reset: true,
-      nextFilters: draftFilters,
-    });
   };
 
   const resetFilters = () => {
@@ -726,7 +560,6 @@ export default function SearchScreen() {
     setDraftFilters(nextFilters);
     setFilters(nextFilters);
     setFilterSheetOpen(false);
-    fetchProductsPage({ nextQuery: activeQuery, reset: true, nextFilters });
   };
   const activeFilterCount =
     (filters.condition !== "all" ? 1 : 0) +
@@ -737,29 +570,6 @@ export default function SearchScreen() {
       : 0);
 
   const title = params.categoryName || params.section || "All Products";
-  const fetchSuggestions = async (query: string) => {
-    try {
-      const response = await axiosInstance.get("/products/search/suggestions", {
-        params: { q: query },
-      });
-      console.log("Suggestions response:", response.data);
-      setSuggestions(response.data);
-    } catch (error) {
-      console.error("Failed to fetch suggestions:", error);
-    }
-  };
-
-  useEffect(() => {
-    if (typing && searchQuery.trim().length > 0) {
-      const delayDebounce = setTimeout(() => {
-        fetchSuggestions(searchQuery.trim());
-      }, 300);
-
-      return () => clearTimeout(delayDebounce);
-    } else {
-      setSuggestions([]);
-    }
-  }, [searchQuery, typing]);
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-[#0A0A0A]">
       <View className="flex-row items-center justify-between gap-x-2 border-b border-gray-200 bg-white px-4 py-4 dark:border-white/5 dark:bg-[#0A0A0A]">
@@ -844,8 +654,15 @@ export default function SearchScreen() {
             onSearchTerm={handleSearchTerm}
             recentSearches={recentSearches}
             trendingSearches={trendingSearches}
-            onClearRecentSearches={clearRecentSearches}
+            onClearRecentSearches={(index) => {
+              void clearRecentSearches(index);
+            }}
             typing={typing}
+            refreshing={recentSearchesLoading || isRefetching}
+            onRefresh={() => {
+              void refetchRecentSearches();
+              void refetchTrendingSearches();
+            }}
           />
         ) : products.length > 0 ? (
           <FlatList
@@ -876,21 +693,48 @@ export default function SearchScreen() {
             contentContainerStyle={{ paddingVertical: 20 }}
             renderItem={({ item }) => <ProductCard product={item} />}
             showsVerticalScrollIndicator={false}
-            onEndReached={() => fetchProductsPage()}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefetching}
+                onRefresh={() => {
+                  void refetch();
+                }}
+                tintColor="#2563EB"
+              />
+            }
+            onEndReached={() => {
+              if (hasNextPage && !loadingMore) {
+                void fetchNextPage();
+              }
+            }}
             onEndReachedThreshold={0.45}
           />
         ) : (
-          <View className="flex-1 items-center justify-center px-10">
-            <View className="mb-4 h-20 w-20 items-center justify-center rounded-full bg-gray-50 dark:bg-white/5">
-              <Ionicons name="search-outline" size={32} color="#9CA3AF" />
+          <ScrollView
+            contentContainerStyle={{ flexGrow: 1 }}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefetching}
+                onRefresh={() => {
+                  void refetch();
+                  void refetchTrendingSearches();
+                }}
+                tintColor="#2563EB"
+              />
+            }
+          >
+            <View className="flex-1 items-center justify-center px-10">
+              <View className="mb-4 h-20 w-20 items-center justify-center rounded-full bg-gray-50 dark:bg-white/5">
+                <Ionicons name="search-outline" size={32} color="#9CA3AF" />
+              </View>
+              <Text className="text-center text-lg font-bold text-gray-900 dark:text-white">
+                No results found
+              </Text>
+              <Text className="mt-2 text-center text-sm text-gray-500">
+                Try another search term or browse a different category.
+              </Text>
             </View>
-            <Text className="text-center text-lg font-bold text-gray-900 dark:text-white">
-              No results found
-            </Text>
-            <Text className="mt-2 text-center text-sm text-gray-500">
-              Try another search term or browse a different category.
-            </Text>
-          </View>
+          </ScrollView>
         )}
       </View>
 

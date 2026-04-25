@@ -1,54 +1,25 @@
 import { AveraLoader } from "@/components/brand/AveraLoader";
+import {
+  OrderDetail,
+  useOrderDetailQuery,
+  useUpdateOrderStatusMutation,
+} from "@/features/orders/hooks";
 import { Text } from "@/components/themed/theme";
 import { useToast } from "@/contexts/ToastContext";
-import { axiosInstance } from "@/utils/axios";
 import { Ionicons } from "@expo/vector-icons";
-import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useColorScheme } from "nativewind";
-import { ComponentProps, useCallback, useMemo, useState } from "react";
-import { Image, Pressable, ScrollView, View } from "react-native";
+import { ComponentProps, useMemo } from "react";
+import {
+  Image,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
-
-type Order = {
-  id: number;
-  code: string;
-  mode: "buying" | "selling";
-  productId: number;
-  conversationId?: number | null;
-  source: string;
-  status: string;
-  statusText: string;
-  step: string;
-  escrowState: string;
-  quantity: number;
-  unitPrice: number;
-  subtotal: number;
-  escrowFee: number;
-  totalAmount: number;
-  delivery: {
-    name?: string | null;
-    phone?: string | null;
-    address?: string | null;
-    city?: string | null;
-    state?: string | null;
-    country?: string | null;
-  };
-  product: {
-    id: number;
-    name: string;
-    imageUrl?: string | null;
-  };
-  counterparty: {
-    id: number;
-    name: string;
-    role: string;
-    avatarUrl?: string | null;
-  };
-  paidAt?: string | null;
-  updatedAt: string;
-};
 
 const formatPrice = (value: number) =>
   `₦${Number(value || 0).toLocaleString()}`;
@@ -72,27 +43,27 @@ const statusSteps = [
   { label: "Received", statuses: ["COMPLETED"] },
 ];
 
-const getAction = (order: Order | null) => {
+const getAction = (order: OrderDetail | null) => {
   if (!order) return null;
 
   if (order.mode === "selling") {
     if (order.status === "PAID_IN_ESCROW") {
       return {
-        action: "prepare",
+        action: "prepare" as const,
         label: "Mark preparing",
         icon: "construct-outline" as IconName,
       };
     }
     if (order.status === "SELLER_PREPARING") {
       return {
-        action: "ship",
+        action: "ship" as const,
         label: "Mark shipped",
         icon: "paper-plane-outline" as IconName,
       };
     }
     if (order.status === "SHIPPED") {
       return {
-        action: "deliver",
+        action: "deliver" as const,
         label: "Mark delivered",
         icon: "checkmark-done-outline" as IconName,
       };
@@ -101,7 +72,7 @@ const getAction = (order: Order | null) => {
 
   if (order.mode === "buying" && order.status === "DELIVERED") {
     return {
-      action: "received",
+      action: "received" as const,
       label: "I received it",
       icon: "checkmark-circle-outline" as IconName,
     };
@@ -116,52 +87,24 @@ export default function OrderDetailsScreen() {
   const toast = useToast();
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
-  const [order, setOrder] = useState<Order | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [updating, setUpdating] = useState(false);
+  const {
+    data: order,
+    isLoading: loading,
+    isRefetching,
+    refetch,
+  } = useOrderDetailQuery(orderId);
+  const updateOrderStatusMutation = useUpdateOrderStatusMutation();
 
   const action = useMemo(() => getAction(order), [order]);
-
-  const loadOrder = useCallback(async () => {
-    if (!orderId) return;
-
-    try {
-      setLoading(true);
-      const { data } = await axiosInstance.get<Order>(`/orders/${orderId}`);
-      setOrder(data);
-    } catch (error: any) {
-      toast.show({
-        title: "Order unavailable",
-        description:
-          error?.response?.data?.message ||
-          error?.message ||
-          "We couldn't load this order.",
-        variant: "error",
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [orderId, toast]);
-
-  useFocusEffect(
-    useCallback(() => {
-      loadOrder();
-    }, [loadOrder]),
-  );
 
   const updateStatus = async () => {
     if (!order || !action) return;
 
     try {
-      setUpdating(true);
-      const { data } = await axiosInstance.post<Order>(
-        `/orders/${order.id}/status`,
-        {
-          action: action.action,
-        },
-      );
-
-      setOrder(data);
+      const data = await updateOrderStatusMutation.mutateAsync({
+        orderId: order.id,
+        action: action.action,
+      });
       toast.show({
         title: "Order updated",
         description: data.step,
@@ -176,8 +119,6 @@ export default function OrderDetailsScreen() {
           "This status update is not available right now.",
         variant: "error",
       });
-    } finally {
-      setUpdating(false);
     }
   };
 
@@ -212,7 +153,19 @@ export default function OrderDetailsScreen() {
         </View>
       ) : order ? (
         <>
-          <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+          <ScrollView
+            className="flex-1"
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefetching}
+                onRefresh={() => {
+                  void refetch();
+                }}
+                tintColor="#2563EB"
+              />
+            }
+          >
             <View className="px-5 pb-28 pt-5">
               <View className="rounded-2xl border border-brand/20 bg-brand/10 p-4">
                 <Text
@@ -378,10 +331,10 @@ export default function OrderDetailsScreen() {
             <View className="border-t border-gray-100 bg-white px-5 pb-6 pt-4 dark:border-white/5 dark:bg-[#0A0A0A]">
               <Pressable
                 onPress={updateStatus}
-                disabled={updating}
+                disabled={updateOrderStatusMutation.isPending}
                 className="h-14 flex-row items-center justify-center rounded-2xl bg-brand"
               >
-                {updating ? (
+                {updateOrderStatusMutation.isPending ? (
                   <AveraLoader size={24} color="#FFFFFF" compact />
                 ) : (
                   <>

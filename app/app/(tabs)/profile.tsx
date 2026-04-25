@@ -1,76 +1,34 @@
 import { AveraLoader } from "@/components/brand/AveraLoader";
 import { Text } from "@/components/themed/theme";
-import { axiosInstance } from "@/utils/axios";
-import { router, useFocusEffect } from "expo-router";
+import { useMeQuery } from "@/features/profile/hooks";
+import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useCallback, useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   ScrollView,
   View,
   TouchableOpacity,
   Image,
   ImageBackground,
+  RefreshControl,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useUnreadConversationCount } from "@/hooks/use-unread-conversation-count";
 
-type ProfileUser = {
-  id?: number;
-  fullName?: string;
-  firstName?: string;
-  lastName?: string;
-  username?: string;
-  email?: string;
-  bio?: string;
-  avatarUrl?: string | null;
-  coverPhotoUrl?: string | null;
-  phoneNumber?: string;
-  location?: {
-    address?: string | null;
-    city?: string | null;
-    state?: string | null;
-    country?: string | null;
-    zipCode?: string | null;
-  };
-};
-
 export default function AccountScreen() {
   const insets = useSafeAreaInsets();
   const { isDark, themeMode, setTheme } = useTheme();
-  const { logout, login } = useAuth();
-  const [profile, setProfile] = useState<ProfileUser | null>(null);
-  const [isProfileLoading, setIsProfileLoading] = useState(true);
-  const [profileLoadFailed, setProfileLoadFailed] = useState(false);
+  const { logout } = useAuth();
   const { unreadConversationCount } = useUnreadConversationCount();
-
-  useFocusEffect(
-    useCallback(() => {
-      let isMounted = true;
-      setIsProfileLoading(true);
-      setProfileLoadFailed(false);
-
-      axiosInstance
-        .get("/users/me")
-        .then(({ data }) => {
-          if (!isMounted) return;
-          setProfile(data);
-          login(data);
-          setIsProfileLoading(false);
-        })
-        .catch(() => {
-          if (!isMounted) return;
-          setProfile(null);
-          setProfileLoadFailed(true);
-          setIsProfileLoading(false);
-        });
-
-      return () => {
-        isMounted = false;
-      };
-    }, [login]),
-  );
+  const {
+    data: profile,
+    isLoading: isProfileLoading,
+    isRefetching,
+    isError: profileLoadFailed,
+    refetch,
+  } = useMeQuery();
 
   const handleLogout = async () => {
     await logout();
@@ -157,7 +115,8 @@ export default function AccountScreen() {
     { label: "Light", value: "light", icon: "sunny-outline" },
     { label: "Dark", value: "dark", icon: "moon-outline" },
   ] as const;
-  const showLoadingOverlay = isProfileLoading;
+  const showLoadingOverlay =
+    isProfileLoading || (isRefetching && Boolean(profile));
 
   return (
     <View className="flex-1 bg-white dark:bg-[#0A0A0A]">
@@ -167,6 +126,15 @@ export default function AccountScreen() {
             className="flex-1"
             contentContainerStyle={{ paddingBottom: insets.bottom + 96 }}
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefetching}
+                onRefresh={() => {
+                  void refetch();
+                }}
+                tintColor="#2563EB"
+              />
+            }
           >
             <ImageBackground
               source={coverPhotoUrl ? { uri: coverPhotoUrl } : undefined}

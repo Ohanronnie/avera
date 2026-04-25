@@ -1,47 +1,21 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useColorScheme } from "nativewind";
-import { Image, Pressable, ScrollView, View } from "react-native";
+import {
+  Image,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AveraLoader } from "@/components/brand/AveraLoader";
+import { useSellerDetailsQuery } from "@/features/seller/hooks";
 import { Text } from "@/components/themed/theme";
-import { axiosInstance } from "@/utils/axios";
-import { useQuery } from "@tanstack/react-query";
 
 const sellerBadges = ["Verified seller", "Fast replies"];
 const memberBadges = ["Verified member", "Fast replies"];
-const sellerDetails = async (userId: string) => {
-  const response = await axiosInstance.get(`/users/${userId}`);
-  return response.data;
-};
-export interface ISellerDetails {
-  id: number;
-  firstName: string;
-  lastName: string;
-  email: string;
-  bio: string | null;
-  avatarUrl: string | null;
-  phoneNumber: string | null;
-  location: {
-    address: string | null;
-    city: string | null;
-    state: string | null;
-    country: string | null;
-    zipCode: string | null;
-  };
-  username: string;
-  productsCount: number;
-  averageRating: number;
-}
-export const useSellerDetails = (userId: string) => {
-  return useQuery<ISellerDetails>({
-    queryKey: ["sellerDetails", userId],
-    queryFn: () => sellerDetails(userId),
-    enabled: !!userId,
-    staleTime: 1000 * 60 * 5,
-  });
-};
 export default function SellerProfileScreen() {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
@@ -57,7 +31,9 @@ export default function SellerProfileScreen() {
     data: sellerData,
     error,
     isLoading,
-  } = useSellerDetails(params.id || "");
+    isRefetching,
+    refetch,
+  } = useSellerDetailsQuery(params.id || "");
   const sellerName = params.sellerName || "Avera Seller";
   const profileKind = params.profileKind === "buyer" ? "buyer" : "seller";
   const isSellerProfile = profileKind === "seller";
@@ -77,8 +53,6 @@ export default function SellerProfileScreen() {
     { label: "Sold", value: "N/A" },
     { label: "Rating", value: sellerData?.averageRating.toFixed(1) || "0.0" },
   ];
-
-  console.log("Seller data:", sellerData?.location);
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-[#0A0A0A]" edges={["top"]}>
       <View className="flex-row items-center justify-between border-b border-gray-100 bg-white px-5 py-4 dark:border-white/5 dark:bg-[#0A0A0A]">
@@ -109,6 +83,15 @@ export default function SellerProfileScreen() {
         contentContainerClassName="px-5 pb-10 pt-6"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ flexGrow: 1 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefetching}
+            onRefresh={() => {
+              void refetch();
+            }}
+            tintColor="#2563EB"
+          />
+        }
       >
         {isLoading ? (
           <View className="flex-1 items-center justify-center px-10">

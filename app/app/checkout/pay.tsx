@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
+import {
+  CheckoutOrder,
+  ReviewOrderPayload,
+  useCheckoutSessionMutation,
+  useOrderDetailQuery,
+  useOrderReviewQuery,
+} from "@/features/orders/hooks";
 import { router, useLocalSearchParams } from "expo-router";
 import { useColorScheme } from "nativewind";
 import {
@@ -7,6 +14,7 @@ import {
   Image,
   Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
   View,
 } from "react-native";
@@ -16,7 +24,7 @@ import { WebView } from "react-native-webview";
 import { AveraLoader } from "@/components/brand/AveraLoader";
 import { Text } from "@/components/themed/theme";
 import { useToast } from "@/contexts/ToastContext";
-import { BASE_URL, axiosInstance } from "@/utils/axios";
+import { BASE_URL } from "@/utils/axios";
 import { connectSocket } from "@/utils/socket";
 
 const parseNumber = (value?: string | string[], fallback = 0) => {
@@ -29,38 +37,6 @@ const parseNumber = (value?: string | string[], fallback = 0) => {
 
 const formatPrice = (value: number) =>
   `₦${Number(value || 0).toLocaleString()}`;
-
-type ReviewOrderPayload = {
-  conversationId: number;
-  productId?: number;
-  sellerName?: string | null;
-  offeredPrice?: number | string | null;
-  source?: "buy_now" | "offer" | null;
-  product?: {
-    id: number;
-    name?: string | null;
-    price?: number | string | null;
-    images?: Array<{ url?: string | null }>;
-  } | null;
-};
-
-type CheckoutOrder = {
-  id: number;
-  code: string;
-  status: string;
-  statusText: string;
-  totalAmount: number;
-  quantity: number;
-  paymentReference: string;
-  delivery?: {
-    name?: string;
-    phone?: string;
-    address?: string;
-    city?: string;
-    state?: string;
-    country?: string;
-  };
-};
 
 const cancelUrlPrefix = `${BASE_URL}/cancel`;
 const successUrlPrefix = `${BASE_URL}/success`;
@@ -77,14 +53,28 @@ export default function CheckoutPayScreen() {
 
   const orderId = parseNumber(params.orderId);
   const fallbackQuantity = parseNumber(params.quantity, 1);
-
-  const [reviewData, setReviewData] = useState<ReviewOrderPayload | null>(null);
-  const [order, setOrder] = useState<CheckoutOrder | null>(null);
-  const [loading, setLoading] = useState(true);
   const [checkoutModalVisible, setCheckoutModalVisible] = useState(false);
-  const [launchingCheckout, setLaunchingCheckout] = useState(false);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const payingStatusSentRef = useRef(false);
+  const conversationId = parseNumber(params.conversationId, 0);
+  const {
+    data: orderData,
+    isLoading: isOrderLoading,
+    isRefetching: isRefetchingOrder,
+    refetch: refetchOrder,
+  } = useOrderDetailQuery(orderId);
+  const {
+    data: reviewData,
+    isRefetching: isRefetchingReview,
+    refetch: refetchReview,
+  } = useOrderReviewQuery(conversationId);
+  const checkoutSessionMutation = useCheckoutSessionMutation();
+  const order = orderData
+    ? ({
+        ...orderData,
+        delivery: orderData.delivery || undefined,
+      } as CheckoutOrder)
+    : null;
 
   const resolvedQuantity = order?.quantity || fallbackQuantity;
   const resolvedProductName = reviewData?.product?.name || "Product listing";
@@ -105,65 +95,15 @@ export default function CheckoutPayScreen() {
   const isOrderPaid = order?.status === "PAID_IN_ESCROW";
 
   const notifyCheckoutStatus = (content: string) => {
-    if (!params.conversationId) return;
+    if (!conversationId) return;
 
     try {
       connectSocket().emit("conversation:message", {
-        conversationId: Number(params.conversationId),
+        conversationId,
         content,
       });
     } catch {}
   };
-
-  useEffect(() => {
-    let active = true;
-
-    const loadCheckout = async () => {
-      if (!orderId) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const requests = [
-          axiosInstance.get<CheckoutOrder>(`/orders/${orderId}`),
-          params.conversationId
-            ? axiosInstance.get<ReviewOrderPayload>(
-                `/chat/conversations/order-review/${params.conversationId}`,
-              )
-            : Promise.resolve({ data: null as ReviewOrderPayload | null }),
-        ] as const;
-
-        const [orderResponse, reviewResponse] = await Promise.all(requests);
-
-        if (!active) return;
-
-        setOrder(orderResponse.data);
-        setReviewData(reviewResponse.data);
-      } catch (error: any) {
-        if (!active) return;
-
-        toast.show({
-          title: "Checkout unavailable",
-          description:
-            error?.response?.data?.message ||
-            error?.message ||
-            "We couldn't load this checkout right now.",
-          variant: "error",
-        });
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
-    };
-
-    loadCheckout();
-
-    return () => {
-      active = false;
-    };
-  }, [orderId, params.conversationId, toast]);
 
   useEffect(() => {
     if (
@@ -187,14 +127,7 @@ export default function CheckoutPayScreen() {
     if (!orderId) return;
 
     try {
-      setLaunchingCheckout(true);
-      const { data } = await axiosInstance.post<{
-        order: CheckoutOrder;
-        authorizationUrl: string | null;
-        alreadyPaid?: boolean;
-      }>(`/orders/${orderId}/checkout-session`);
-
-      setOrder(data.order);
+      const data = await checkoutSessionMutation.mutateAsync(orderId);
 
       if (data.alreadyPaid || !data.authorizationUrl) {
         toast.show({
@@ -216,8 +149,6 @@ export default function CheckoutPayScreen() {
           "Try again in a moment.",
         variant: "error",
       });
-    } finally {
-      setLaunchingCheckout(false);
     }
   };
 
@@ -236,15 +167,6 @@ export default function CheckoutPayScreen() {
 
     if (url.startsWith(successUrlPrefix)) {
       closeCheckoutModal();
-      setOrder((current) =>
-        current
-          ? {
-              ...current,
-              status: "PAID_IN_ESCROW",
-              statusText: "Paid in escrow",
-            }
-          : current,
-      );
       router.replace({
         pathname: "/checkout/success",
         params: {
@@ -257,7 +179,7 @@ export default function CheckoutPayScreen() {
     return false;
   };
 
-  if (loading) {
+  if (isOrderLoading) {
     return (
       <View className="flex-1 items-center justify-center bg-white dark:bg-[#0A0A0A]">
         <AveraLoader label="Loading checkout" />
@@ -313,7 +235,19 @@ export default function CheckoutPayScreen() {
         </View>
       </View>
 
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+      <ScrollView
+        className="flex-1"
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefetchingOrder || isRefetchingReview}
+            onRefresh={() => {
+              void Promise.all([refetchOrder(), refetchReview()]);
+            }}
+            tintColor="#2563EB"
+          />
+        }
+      >
         <View className="px-5 pb-28 pt-5">
           <View className="flex-row rounded-2xl border border-gray-100 bg-gray-50 p-3 dark:border-white/5 dark:bg-white/5">
             {resolvedProductImage ? (
@@ -510,10 +444,10 @@ export default function CheckoutPayScreen() {
 
                 <Pressable
                   onPress={startCheckout}
-                  disabled={launchingCheckout}
+                  disabled={checkoutSessionMutation.isPending}
                   className="mt-5 h-14 items-center justify-center rounded-full bg-brand"
                 >
-                  {launchingCheckout ? (
+                  {checkoutSessionMutation.isPending ? (
                     <AveraLoader size={22} color="#FFFFFF" compact />
                   ) : (
                     <Text

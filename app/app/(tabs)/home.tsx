@@ -1,87 +1,25 @@
 import { AveraLoader } from "@/components/brand/AveraLoader";
-import { ProductCard, IProduct } from "@/components/products/product-card";
+import { ProductCard } from "@/components/products/product-card";
 import { AnimatedAveraLogo } from "@/components/brand/AnimatedAveraLogo";
-import { ApiProduct, mapProductToCard } from "@/features/products/types";
+import { useHomeProductSectionsQuery } from "@/features/products/hooks";
 import { Text } from "@/components/themed/theme";
-import { BottomSheet } from "@/components/ui/bottom-sheet";
-import { axiosInstance } from "@/utils/axios";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { ComponentProps } from "react";
-import { useEffect, useState } from "react";
-import { Pressable, ScrollView, View, Dimensions } from "react-native";
+import { useState } from "react";
+import {
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  View,
+  Dimensions,
+} from "react-native";
 import Categories from "@/components/products/categories";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useColorScheme } from "nativewind";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 type BannerIconName = ComponentProps<typeof Ionicons>["name"];
-
-type HomeProductSection = {
-  key: string;
-  title: string;
-  subtitle: string;
-  products: IProduct[];
-};
-
-const buildHomeSections = (items: ApiProduct[]): HomeProductSection[] => {
-  const products = items.map(mapProductToCard);
-  const featuredProducts = items
-    .filter((item) => item.isFeatured)
-    .map(mapProductToCard)
-    .slice(0, 4);
-  const budgetFinds = [...items]
-    .sort(
-      (first, second) => Number(first.price || 0) - Number(second.price || 0),
-    )
-    .map(mapProductToCard)
-    .slice(0, 4);
-  const premiumPicks = [...items]
-    .sort(
-      (first, second) => Number(second.price || 0) - Number(first.price || 0),
-    )
-    .map(mapProductToCard)
-    .slice(0, 4);
-  const usedDeals = items
-    .filter((item) => item.condition && item.condition !== "New")
-    .map(mapProductToCard)
-    .slice(0, 4);
-
-  return [
-    {
-      key: "popular",
-      title: "Popular Products",
-      subtitle: "The pieces getting the most attention right now.",
-      products: products.slice(0, 4),
-    },
-    {
-      key: "featured",
-      title: "Featured Deals",
-      subtitle: "Hand-picked items worth checking first.",
-      products: featuredProducts.length
-        ? featuredProducts
-        : products.slice(4, 8),
-    },
-    {
-      key: "budget",
-      title: "Budget Finds",
-      subtitle: "Good picks when you want value without stress.",
-      products: budgetFinds,
-    },
-    {
-      key: "premium",
-      title: "Premium Picks",
-      subtitle: "Higher-end listings for when quality matters.",
-      products: premiumPicks,
-    },
-    {
-      key: "used",
-      title: "Pre-Owned Deals",
-      subtitle: "Clean used items at friendlier prices.",
-      products: usedDeals,
-    },
-  ].filter((section) => section.products.length > 0);
-};
 
 const sectionSearchParams: Record<string, Record<string, string>> = {
   popular: {},
@@ -97,10 +35,12 @@ export default function HomeScreen() {
 
   const router = useRouter();
   const [activeBanner, setActiveBanner] = useState(0);
-  const [productSections, setProductSections] = useState<HomeProductSection[]>(
-    [],
-  );
-  const [productsLoading, setProductsLoading] = useState(false);
+  const {
+    data: productSections = [],
+    isLoading: productsLoading,
+    isRefetching: productsRefreshing,
+    refetch: refetchProducts,
+  } = useHomeProductSectionsQuery();
 
   const banners = [
     {
@@ -135,28 +75,6 @@ export default function HomeScreen() {
     },
   ];
 
-  useEffect(() => {
-    const fetchHomeProducts = async () => {
-      try {
-        setProductsLoading(true);
-        const response = await axiosInstance.get("/products", {
-          params: {
-            limit: 20,
-            offset: 0,
-          },
-        });
-
-        setProductSections(buildHomeSections(response.data));
-      } catch (error) {
-        setProductSections([]);
-      } finally {
-        setProductsLoading(false);
-      }
-    };
-
-    fetchHomeProducts();
-  }, []);
-
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-[#0A0A0A]" edges={["top"]}>
       {/* Fixed Full-Width Header */}
@@ -188,6 +106,15 @@ export default function HomeScreen() {
       <ScrollView
         className="flex-1 bg-white dark:bg-[#0A0A0A]"
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={productsRefreshing && !productsLoading}
+            onRefresh={() => {
+              void refetchProducts();
+            }}
+            tintColor="#2563EB"
+          />
+        }
       >
         {/* Banner Carousel */}
         <View className="mt-4">

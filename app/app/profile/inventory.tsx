@@ -1,19 +1,14 @@
 import { AveraLoader } from "@/components/brand/AveraLoader";
 import { ProductCard, IProduct } from "@/components/products/product-card";
+import { useMeQuery } from "@/features/profile/hooks";
+import { useInventoryListingsQuery } from "@/features/seller/hooks";
 import { Text } from "@/components/themed/theme";
-import {
-  PaginatedProductsResponse,
-  mapProductToCard,
-} from "@/features/products/types";
-import { axiosInstance } from "@/utils/axios";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useColorScheme } from "nativewind";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { FlatList, Pressable, View } from "react-native";
+import { useMemo } from "react";
+import { FlatList, Pressable, RefreshControl, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-const INVENTORY_PAGE_SIZE = 10;
 
 export default function InventoryScreen() {
   const { colorScheme } = useColorScheme();
@@ -23,106 +18,29 @@ export default function InventoryScreen() {
     sellerName?: string;
   }>();
 
-  const [userId, setUserId] = useState(params.userId || "");
-  const [displayName, setDisplayName] = useState(
-    params.sellerName || "Your inventory",
+  const { data: me, isLoading: loadingMe } = useMeQuery(!params.userId);
+  const userId = params.userId || (me?.id ? String(me.id) : "");
+  const displayName =
+    params.sellerName ||
+    me?.fullName ||
+    [me?.firstName, me?.lastName].filter(Boolean).join(" ") ||
+    "Your inventory";
+  const {
+    data,
+    isLoading: loadingInventory,
+    isError: hasError,
+    isRefetching,
+    hasNextPage,
+    isFetchingNextPage: loadingMore,
+    fetchNextPage,
+    refetch,
+  } = useInventoryListingsQuery(userId);
+  const listings = useMemo<IProduct[]>(
+    () => data?.pages.flatMap((page) => page.mappedItems) || [],
+    [data],
   );
-  const [listings, setListings] = useState<IProduct[]>([]);
-  const [total, setTotal] = useState(0);
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasError, setHasError] = useState(false);
-  const nextOffsetRef = useRef(0);
-  const isFetchingRef = useRef(false);
-  const hasNextPageRef = useRef(true);
-
-  useEffect(() => {
-    if (userId) return;
-
-    let isMounted = true;
-
-    axiosInstance
-      .get("/users/me")
-      .then(({ data }) => {
-        if (!isMounted) return;
-        setUserId(data.id ? String(data.id) : "");
-        setDisplayName(
-          data.fullName ||
-            [data.firstName, data.lastName].filter(Boolean).join(" ") ||
-            "Your inventory",
-        );
-      })
-      .catch(() => {
-        if (isMounted) {
-          setHasError(true);
-          setInitialLoading(false);
-        }
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [userId]);
-
-  const fetchInventoryPage = useCallback(
-    async ({ reset = false }: { reset?: boolean } = {}) => {
-      if (!userId) return;
-      if (isFetchingRef.current) return;
-      if (!reset && !hasNextPageRef.current) return;
-
-      isFetchingRef.current = true;
-      const offset = reset ? 0 : nextOffsetRef.current;
-
-      try {
-        if (reset) {
-          setInitialLoading(true);
-          setHasError(false);
-          hasNextPageRef.current = true;
-          nextOffsetRef.current = 0;
-        } else {
-          setLoadingMore(true);
-        }
-
-        const { data } = await axiosInstance.get<PaginatedProductsResponse>(
-          `/users/${userId}/listings`,
-          {
-            params: {
-              limit: INVENTORY_PAGE_SIZE,
-              offset,
-            },
-          },
-        );
-
-        const nextListings = data.items.map(mapProductToCard);
-
-        nextOffsetRef.current = offset + nextListings.length;
-        setTotal(data.total);
-        hasNextPageRef.current = data.hasMore;
-        setListings((current) => {
-          if (reset) return nextListings;
-
-          const existingIds = new Set(current.map((product) => product.id));
-          return [
-            ...current,
-            ...nextListings.filter((product) => !existingIds.has(product.id)),
-          ];
-        });
-      } catch (error) {
-        if (reset) setListings([]);
-        setHasError(true);
-        hasNextPageRef.current = false;
-      } finally {
-        setInitialLoading(false);
-        setLoadingMore(false);
-        isFetchingRef.current = false;
-      }
-    },
-    [userId],
-  );
-
-  useEffect(() => {
-    fetchInventoryPage({ reset: true });
-  }, [fetchInventoryPage]);
+  const total = data?.pages[0]?.total || 0;
+  const initialLoading = loadingMe || loadingInventory;
 
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-[#0A0A0A]" edges={["top"]}>
@@ -160,7 +78,9 @@ export default function InventoryScreen() {
             We couldn't load your listed products right now.
           </Text>
           <Pressable
-            onPress={() => fetchInventoryPage({ reset: true })}
+            onPress={() => {
+              void refetch();
+            }}
             className="mt-8 rounded-2xl bg-brand px-8 py-4"
           >
             <Text className="font-bold text-white">Try Again</Text>
@@ -178,7 +98,19 @@ export default function InventoryScreen() {
           contentContainerStyle={{ paddingTop: 24, paddingBottom: 32 }}
           renderItem={({ item }) => <ProductCard product={item} />}
           showsVerticalScrollIndicator={false}
-          onEndReached={() => fetchInventoryPage()}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefetching && !loadingMore}
+              onRefresh={() => {
+                void refetch();
+              }}
+              tintColor="#2563EB"
+            />
+          }
+          onEndReached={() => {
+            if (!hasNextPage || loadingMore) return;
+            void fetchNextPage();
+          }}
           onEndReachedThreshold={0.45}
           ListHeaderComponent={
             <View className="mb-5 px-5">

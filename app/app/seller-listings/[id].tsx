@@ -1,19 +1,13 @@
 import { AveraLoader } from "@/components/brand/AveraLoader";
 import { ProductCard, IProduct } from "@/components/products/product-card";
+import { useSellerListingsQuery } from "@/features/seller/hooks";
 import { Text } from "@/components/themed/theme";
-import {
-  PaginatedProductsResponse,
-  mapProductToCard,
-} from "@/features/products/types";
-import { axiosInstance } from "@/utils/axios";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useColorScheme } from "nativewind";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { FlatList, Pressable, View } from "react-native";
+import { useMemo } from "react";
+import { FlatList, Pressable, RefreshControl, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-const SELLER_LISTINGS_PAGE_SIZE = 10;
 
 export default function SellerListingsScreen() {
   const { colorScheme } = useColorScheme();
@@ -25,78 +19,21 @@ export default function SellerListingsScreen() {
 
   const sellerId = params.id || "";
   const sellerName = params.sellerName || "Seller";
-  const [listings, setListings] = useState<IProduct[]>([]);
-  const [total, setTotal] = useState(0);
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasError, setHasError] = useState(false);
-  const nextOffsetRef = useRef(0);
-  const isFetchingRef = useRef(false);
-  const hasNextPageRef = useRef(true);
-
-  const fetchListingsPage = useCallback(
-    async ({ reset = false }: { reset?: boolean } = {}) => {
-      if (!sellerId) {
-        setInitialLoading(false);
-        setHasError(true);
-        return;
-      }
-      if (isFetchingRef.current) return;
-      if (!reset && !hasNextPageRef.current) return;
-
-      isFetchingRef.current = true;
-      const offset = reset ? 0 : nextOffsetRef.current;
-
-      try {
-        if (reset) {
-          setInitialLoading(true);
-          setHasError(false);
-          hasNextPageRef.current = true;
-          nextOffsetRef.current = 0;
-        } else {
-          setLoadingMore(true);
-        }
-
-        const { data } = await axiosInstance.get<PaginatedProductsResponse>(
-          `/users/${sellerId}/listings`,
-          {
-            params: {
-              limit: SELLER_LISTINGS_PAGE_SIZE,
-              offset,
-            },
-          },
-        );
-
-        const nextListings = data.items.map(mapProductToCard);
-
-        nextOffsetRef.current = offset + nextListings.length;
-        setTotal(data.total);
-        hasNextPageRef.current = data.hasMore;
-        setListings((current) => {
-          if (reset) return nextListings;
-
-          const existingIds = new Set(current.map((product) => product.id));
-          return [
-            ...current,
-            ...nextListings.filter((product) => !existingIds.has(product.id)),
-          ];
-        });
-      } catch (error) {
-        if (reset) setListings([]);
-        setHasError(true);
-        hasNextPageRef.current = false;
-      } finally {
-        setInitialLoading(false);
-        setLoadingMore(false);
-        isFetchingRef.current = false;
-      }
-    },
-    [sellerId],
+  const {
+    data,
+    isLoading: initialLoading,
+    isError: hasError,
+    isRefetching,
+    hasNextPage,
+    isFetchingNextPage: loadingMore,
+    fetchNextPage,
+    refetch,
+  } = useSellerListingsQuery(sellerId);
+  const listings = useMemo<IProduct[]>(
+    () => data?.pages.flatMap((page) => page.mappedItems) || [],
+    [data],
   );
-
-  useEffect(() => {
-    fetchListingsPage({ reset: true });
-  }, [fetchListingsPage]);
+  const total = data?.pages[0]?.total || 0;
 
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-[#0A0A0A]" edges={["top"]}>
@@ -146,7 +83,19 @@ export default function SellerListingsScreen() {
           contentContainerStyle={{ paddingTop: 24, paddingBottom: 32 }}
           renderItem={({ item }) => <ProductCard product={item} />}
           showsVerticalScrollIndicator={false}
-          onEndReached={() => fetchListingsPage()}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefetching && !loadingMore}
+              onRefresh={() => {
+                void refetch();
+              }}
+              tintColor="#2563EB"
+            />
+          }
+          onEndReached={() => {
+            if (!hasNextPage || loadingMore) return;
+            void fetchNextPage();
+          }}
           onEndReachedThreshold={0.45}
           ListHeaderComponent={
             <View className="mb-5 px-5">
