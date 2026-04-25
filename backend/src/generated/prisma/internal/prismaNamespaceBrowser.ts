@@ -228,7 +228,10 @@ export const ConversationScalarFieldEnum = {
   buyerId: 'buyerId',
   sellerId: 'sellerId',
   productId: 'productId',
+  status: 'status',
   offeredPrice: 'offeredPrice',
+  closedAt: 'closedAt',
+  closedReason: 'closedReason',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const

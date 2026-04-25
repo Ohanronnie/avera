@@ -10,4 +10,4 @@ import { PaystackModule } from 'src/paystack/paystack.module';
   providers: [OrdersService],
   exports: [OrdersService],
 })
-export class OrdersModule {}
+export class OrdersModule { }

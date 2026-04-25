@@ -17,6 +17,14 @@ export const WalletTransactionType = {
 export type WalletTransactionType = (typeof WalletTransactionType)[keyof typeof WalletTransactionType]
 
 
+export const ConversationStatus = {
+  ACTIVE: 'ACTIVE',
+  CLOSED: 'CLOSED'
+} as const
+
+export type ConversationStatus = (typeof ConversationStatus)[keyof typeof ConversationStatus]
+
+
 export const OrderSource = {
   BUY_NOW: 'BUY_NOW',
   OFFER: 'OFFER'

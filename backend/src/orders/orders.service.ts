@@ -8,6 +8,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from 'src/generated/prisma/client';
 import {
+  ConversationStatus,
   OrderSource,
   OrderStatus,
   WalletTransactionType,
@@ -28,8 +29,11 @@ const ACTIVE_ORDER_STATUSES: OrderStatus[] = [
   OrderStatus.SELLER_PREPARING,
   OrderStatus.SHIPPED,
   OrderStatus.DELIVERED,
-  OrderStatus.COMPLETED,
   OrderStatus.DISPUTED,
+];
+const TERMINAL_CONVERSATION_ORDER_STATUSES: OrderStatus[] = [
+  OrderStatus.COMPLETED,
+  OrderStatus.CANCELLED,
 ];
 
 @Injectable()
@@ -332,6 +336,107 @@ export class OrdersService {
     }
   }
 
+  private async findActiveConversation(
+    tx: Prisma.TransactionClient,
+    {
+      buyerId,
+      sellerId,
+      productId,
+    }: {
+      buyerId: number;
+      sellerId: number;
+      productId: number;
+    },
+  ) {
+    return tx.conversation.findFirst({
+      where: {
+        buyerId,
+        sellerId,
+        productId,
+        status: ConversationStatus.ACTIVE,
+      },
+      select: {
+        id: true,
+        buyerId: true,
+        sellerId: true,
+        productId: true,
+        status: true,
+        offeredPrice: true,
+        product: {
+          select: {
+            price: true,
+          },
+        },
+      },
+      orderBy: {
+        updatedAt: 'desc',
+      },
+    });
+  }
+
+  private async findOrCreateActiveConversation(
+    tx: Prisma.TransactionClient,
+    {
+      buyerId,
+      sellerId,
+      productId,
+    }: {
+      buyerId: number;
+      sellerId: number;
+      productId: number;
+    },
+  ) {
+    const existingConversation = await this.findActiveConversation(tx, {
+      buyerId,
+      sellerId,
+      productId,
+    });
+
+    if (existingConversation) {
+      return existingConversation;
+    }
+
+    return tx.conversation.create({
+      data: {
+        buyerId,
+        sellerId,
+        productId,
+        status: ConversationStatus.ACTIVE,
+      },
+      select: {
+        id: true,
+        buyerId: true,
+        sellerId: true,
+        productId: true,
+        status: true,
+        offeredPrice: true,
+        product: {
+          select: {
+            price: true,
+          },
+        },
+      },
+    });
+  }
+
+  private async closeConversation(
+    tx: Prisma.TransactionClient,
+    conversationId: number,
+    closedReason: string,
+  ) {
+    await tx.conversation.updateMany({
+      where: {
+        id: conversationId,
+        status: ConversationStatus.ACTIVE,
+      },
+      data: {
+        status: ConversationStatus.CLOSED,
+        closedAt: new Date(),
+        closedReason,
+      },
+    });
+  }
+
   async createOrder(userId: number, createOrderDto: CreateOrderDto) {
     const {
       conversationId,
@@ -371,6 +476,7 @@ export class OrdersService {
                   buyerId: true,
                   sellerId: true,
                   productId: true,
+                  status: true,
                   offeredPrice: true,
                   product: {
                     select: {
@@ -411,35 +517,17 @@ export class OrdersService {
             );
           }
 
-          orderConversation = await tx.conversation.upsert({
-            where: {
-              conversation_unique: {
-                buyerId: userId,
-                sellerId: requestedProduct.sellerId,
-                productId: requestedProduct.id,
-              },
-            },
-            update: {
-              updatedAt: new Date(),
-            },
-            create: {
-              buyerId: userId,
-              sellerId: requestedProduct.sellerId,
-              productId: requestedProduct.id,
-            },
-            select: {
-              id: true,
-              buyerId: true,
-              sellerId: true,
-              productId: true,
-              offeredPrice: true,
-              product: {
-                select: {
-                  price: true,
-                },
-              },
-            },
+          orderConversation = await this.findOrCreateActiveConversation(tx, {
+            buyerId: userId,
+            sellerId: requestedProduct.sellerId,
+            productId: requestedProduct.id,
           });
+        }
+
+        if (orderConversation.status !== ConversationStatus.ACTIVE) {
+          throw new BadRequestException(
+            'This conversation is closed. Start a new conversation to continue.',
+          );
         }
 
         if (orderConversation.buyerId !== userId) {
@@ -807,6 +895,12 @@ export class OrdersService {
             quantity: { increment: order.quantity },
           },
         });
+
+        await this.closeConversation(
+          tx,
+          order.conversationId,
+          'Order was cancelled before payment was completed.',
+        );
       },
       {
         isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
@@ -955,6 +1049,16 @@ export class OrdersService {
           senderId: userId,
           content: statusMessage,
         });
+
+        if (TERMINAL_CONVERSATION_ORDER_STATUSES.includes(nextStatus)) {
+          await this.closeConversation(
+            tx,
+            nextOrder.conversationId,
+            nextStatus === OrderStatus.COMPLETED
+              ? 'Order completed successfully.'
+              : 'Order was cancelled.',
+          );
+        }
 
         return {
           order: nextOrder,

@@ -47,7 +47,10 @@ export type ConversationMinAggregateOutputType = {
   buyerId: number | null
   sellerId: number | null
   productId: number | null
+  status: $Enums.ConversationStatus | null
   offeredPrice: runtime.Decimal | null
+  closedAt: Date | null
+  closedReason: string | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -57,7 +60,10 @@ export type ConversationMaxAggregateOutputType = {
   buyerId: number | null
   sellerId: number | null
   productId: number | null
+  status: $Enums.ConversationStatus | null
   offeredPrice: runtime.Decimal | null
+  closedAt: Date | null
+  closedReason: string | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -67,7 +73,10 @@ export type ConversationCountAggregateOutputType = {
   buyerId: number
   sellerId: number
   productId: number
+  status: number
   offeredPrice: number
+  closedAt: number
+  closedReason: number
   createdAt: number
   updatedAt: number
   _all: number
@@ -95,7 +104,10 @@ export type ConversationMinAggregateInputType = {
   buyerId?: true
   sellerId?: true
   productId?: true
+  status?: true
   offeredPrice?: true
+  closedAt?: true
+  closedReason?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -105,7 +117,10 @@ export type ConversationMaxAggregateInputType = {
   buyerId?: true
   sellerId?: true
   productId?: true
+  status?: true
   offeredPrice?: true
+  closedAt?: true
+  closedReason?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -115,7 +130,10 @@ export type ConversationCountAggregateInputType = {
   buyerId?: true
   sellerId?: true
   productId?: true
+  status?: true
   offeredPrice?: true
+  closedAt?: true
+  closedReason?: true
   createdAt?: true
   updatedAt?: true
   _all?: true
@@ -212,7 +230,10 @@ export type ConversationGroupByOutputType = {
   buyerId: number
   sellerId: number
   productId: number
+  status: $Enums.ConversationStatus
   offeredPrice: runtime.Decimal | null
+  closedAt: Date | null
+  closedReason: string | null
   createdAt: Date
   updatedAt: Date
   _count: ConversationCountAggregateOutputType | null
@@ -245,7 +266,10 @@ export type ConversationWhereInput = {
   buyerId?: Prisma.IntFilter<"Conversation"> | number
   sellerId?: Prisma.IntFilter<"Conversation"> | number
   productId?: Prisma.IntFilter<"Conversation"> | number
+  status?: Prisma.EnumConversationStatusFilter<"Conversation"> | $Enums.ConversationStatus
   offeredPrice?: Prisma.DecimalNullableFilter<"Conversation"> | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Prisma.DateTimeNullableFilter<"Conversation"> | Date | string | null
+  closedReason?: Prisma.StringNullableFilter<"Conversation"> | string | null
   createdAt?: Prisma.DateTimeFilter<"Conversation"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Conversation"> | Date | string
   buyer?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
@@ -260,7 +284,10 @@ export type ConversationOrderByWithRelationInput = {
   buyerId?: Prisma.SortOrder
   sellerId?: Prisma.SortOrder
   productId?: Prisma.SortOrder
+  status?: Prisma.SortOrder
   offeredPrice?: Prisma.SortOrderInput | Prisma.SortOrder
+  closedAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  closedReason?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   buyer?: Prisma.UserOrderByWithRelationInput
@@ -272,14 +299,16 @@ export type ConversationOrderByWithRelationInput = {
 
 export type ConversationWhereUniqueInput = Prisma.AtLeast<{
   id?: number
-  conversation_unique?: Prisma.ConversationConversation_uniqueCompoundUniqueInput
   AND?: Prisma.ConversationWhereInput | Prisma.ConversationWhereInput[]
   OR?: Prisma.ConversationWhereInput[]
   NOT?: Prisma.ConversationWhereInput | Prisma.ConversationWhereInput[]
   buyerId?: Prisma.IntFilter<"Conversation"> | number
   sellerId?: Prisma.IntFilter<"Conversation"> | number
   productId?: Prisma.IntFilter<"Conversation"> | number
+  status?: Prisma.EnumConversationStatusFilter<"Conversation"> | $Enums.ConversationStatus
   offeredPrice?: Prisma.DecimalNullableFilter<"Conversation"> | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Prisma.DateTimeNullableFilter<"Conversation"> | Date | string | null
+  closedReason?: Prisma.StringNullableFilter<"Conversation"> | string | null
   createdAt?: Prisma.DateTimeFilter<"Conversation"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Conversation"> | Date | string
   buyer?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
@@ -287,14 +316,17 @@ export type ConversationWhereUniqueInput = Prisma.AtLeast<{
   product?: Prisma.XOR<Prisma.ProductScalarRelationFilter, Prisma.ProductWhereInput>
   messages?: Prisma.MessageListRelationFilter
   orders?: Prisma.OrderListRelationFilter
-}, "id" | "conversation_unique">
+}, "id">
 
 export type ConversationOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
   buyerId?: Prisma.SortOrder
   sellerId?: Prisma.SortOrder
   productId?: Prisma.SortOrder
+  status?: Prisma.SortOrder
   offeredPrice?: Prisma.SortOrderInput | Prisma.SortOrder
+  closedAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  closedReason?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.ConversationCountOrderByAggregateInput
@@ -312,13 +344,19 @@ export type ConversationScalarWhereWithAggregatesInput = {
   buyerId?: Prisma.IntWithAggregatesFilter<"Conversation"> | number
   sellerId?: Prisma.IntWithAggregatesFilter<"Conversation"> | number
   productId?: Prisma.IntWithAggregatesFilter<"Conversation"> | number
+  status?: Prisma.EnumConversationStatusWithAggregatesFilter<"Conversation"> | $Enums.ConversationStatus
   offeredPrice?: Prisma.DecimalNullableWithAggregatesFilter<"Conversation"> | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Conversation"> | Date | string | null
+  closedReason?: Prisma.StringNullableWithAggregatesFilter<"Conversation"> | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Conversation"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"Conversation"> | Date | string
 }
 
 export type ConversationCreateInput = {
+  status?: $Enums.ConversationStatus
   offeredPrice?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Date | string | null
+  closedReason?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   buyer: Prisma.UserCreateNestedOneWithoutBuyerConversationsInput
@@ -333,7 +371,10 @@ export type ConversationUncheckedCreateInput = {
   buyerId: number
   sellerId: number
   productId: number
+  status?: $Enums.ConversationStatus
   offeredPrice?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Date | string | null
+  closedReason?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   messages?: Prisma.MessageUncheckedCreateNestedManyWithoutConversationInput
@@ -341,7 +382,10 @@ export type ConversationUncheckedCreateInput = {
 }
 
 export type ConversationUpdateInput = {
+  status?: Prisma.EnumConversationStatusFieldUpdateOperationsInput | $Enums.ConversationStatus
   offeredPrice?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  closedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   buyer?: Prisma.UserUpdateOneRequiredWithoutBuyerConversationsNestedInput
@@ -356,7 +400,10 @@ export type ConversationUncheckedUpdateInput = {
   buyerId?: Prisma.IntFieldUpdateOperationsInput | number
   sellerId?: Prisma.IntFieldUpdateOperationsInput | number
   productId?: Prisma.IntFieldUpdateOperationsInput | number
+  status?: Prisma.EnumConversationStatusFieldUpdateOperationsInput | $Enums.ConversationStatus
   offeredPrice?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  closedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   messages?: Prisma.MessageUncheckedUpdateManyWithoutConversationNestedInput
@@ -368,13 +415,19 @@ export type ConversationCreateManyInput = {
   buyerId: number
   sellerId: number
   productId: number
+  status?: $Enums.ConversationStatus
   offeredPrice?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Date | string | null
+  closedReason?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
 
 export type ConversationUpdateManyMutationInput = {
+  status?: Prisma.EnumConversationStatusFieldUpdateOperationsInput | $Enums.ConversationStatus
   offeredPrice?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  closedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -384,7 +437,10 @@ export type ConversationUncheckedUpdateManyInput = {
   buyerId?: Prisma.IntFieldUpdateOperationsInput | number
   sellerId?: Prisma.IntFieldUpdateOperationsInput | number
   productId?: Prisma.IntFieldUpdateOperationsInput | number
+  status?: Prisma.EnumConversationStatusFieldUpdateOperationsInput | $Enums.ConversationStatus
   offeredPrice?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  closedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -399,18 +455,15 @@ export type ConversationOrderByRelationAggregateInput = {
   _count?: Prisma.SortOrder
 }
 
-export type ConversationConversation_uniqueCompoundUniqueInput = {
-  buyerId: number
-  sellerId: number
-  productId: number
-}
-
 export type ConversationCountOrderByAggregateInput = {
   id?: Prisma.SortOrder
   buyerId?: Prisma.SortOrder
   sellerId?: Prisma.SortOrder
   productId?: Prisma.SortOrder
+  status?: Prisma.SortOrder
   offeredPrice?: Prisma.SortOrder
+  closedAt?: Prisma.SortOrder
+  closedReason?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -428,7 +481,10 @@ export type ConversationMaxOrderByAggregateInput = {
   buyerId?: Prisma.SortOrder
   sellerId?: Prisma.SortOrder
   productId?: Prisma.SortOrder
+  status?: Prisma.SortOrder
   offeredPrice?: Prisma.SortOrder
+  closedAt?: Prisma.SortOrder
+  closedReason?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -438,7 +494,10 @@ export type ConversationMinOrderByAggregateInput = {
   buyerId?: Prisma.SortOrder
   sellerId?: Prisma.SortOrder
   productId?: Prisma.SortOrder
+  status?: Prisma.SortOrder
   offeredPrice?: Prisma.SortOrder
+  closedAt?: Prisma.SortOrder
+  closedReason?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -582,6 +641,10 @@ export type ConversationUncheckedUpdateManyWithoutProductNestedInput = {
   deleteMany?: Prisma.ConversationScalarWhereInput | Prisma.ConversationScalarWhereInput[]
 }
 
+export type EnumConversationStatusFieldUpdateOperationsInput = {
+  set?: $Enums.ConversationStatus
+}
+
 export type NullableDecimalFieldUpdateOperationsInput = {
   set?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   increment?: runtime.Decimal | runtime.DecimalJsLike | number | string
@@ -619,7 +682,10 @@ export type ConversationUpdateOneRequiredWithoutMessagesNestedInput = {
 }
 
 export type ConversationCreateWithoutBuyerInput = {
+  status?: $Enums.ConversationStatus
   offeredPrice?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Date | string | null
+  closedReason?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   seller: Prisma.UserCreateNestedOneWithoutSellerConversationsInput
@@ -632,7 +698,10 @@ export type ConversationUncheckedCreateWithoutBuyerInput = {
   id?: number
   sellerId: number
   productId: number
+  status?: $Enums.ConversationStatus
   offeredPrice?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Date | string | null
+  closedReason?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   messages?: Prisma.MessageUncheckedCreateNestedManyWithoutConversationInput
@@ -650,7 +719,10 @@ export type ConversationCreateManyBuyerInputEnvelope = {
 }
 
 export type ConversationCreateWithoutSellerInput = {
+  status?: $Enums.ConversationStatus
   offeredPrice?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Date | string | null
+  closedReason?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   buyer: Prisma.UserCreateNestedOneWithoutBuyerConversationsInput
@@ -663,7 +735,10 @@ export type ConversationUncheckedCreateWithoutSellerInput = {
   id?: number
   buyerId: number
   productId: number
+  status?: $Enums.ConversationStatus
   offeredPrice?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Date | string | null
+  closedReason?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   messages?: Prisma.MessageUncheckedCreateNestedManyWithoutConversationInput
@@ -704,7 +779,10 @@ export type ConversationScalarWhereInput = {
   buyerId?: Prisma.IntFilter<"Conversation"> | number
   sellerId?: Prisma.IntFilter<"Conversation"> | number
   productId?: Prisma.IntFilter<"Conversation"> | number
+  status?: Prisma.EnumConversationStatusFilter<"Conversation"> | $Enums.ConversationStatus
   offeredPrice?: Prisma.DecimalNullableFilter<"Conversation"> | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Prisma.DateTimeNullableFilter<"Conversation"> | Date | string | null
+  closedReason?: Prisma.StringNullableFilter<"Conversation"> | string | null
   createdAt?: Prisma.DateTimeFilter<"Conversation"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Conversation"> | Date | string
 }
@@ -726,7 +804,10 @@ export type ConversationUpdateManyWithWhereWithoutSellerInput = {
 }
 
 export type ConversationCreateWithoutProductInput = {
+  status?: $Enums.ConversationStatus
   offeredPrice?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Date | string | null
+  closedReason?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   buyer: Prisma.UserCreateNestedOneWithoutBuyerConversationsInput
@@ -739,7 +820,10 @@ export type ConversationUncheckedCreateWithoutProductInput = {
   id?: number
   buyerId: number
   sellerId: number
+  status?: $Enums.ConversationStatus
   offeredPrice?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Date | string | null
+  closedReason?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   messages?: Prisma.MessageUncheckedCreateNestedManyWithoutConversationInput
@@ -773,7 +857,10 @@ export type ConversationUpdateManyWithWhereWithoutProductInput = {
 }
 
 export type ConversationCreateWithoutOrdersInput = {
+  status?: $Enums.ConversationStatus
   offeredPrice?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Date | string | null
+  closedReason?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   buyer: Prisma.UserCreateNestedOneWithoutBuyerConversationsInput
@@ -787,7 +874,10 @@ export type ConversationUncheckedCreateWithoutOrdersInput = {
   buyerId: number
   sellerId: number
   productId: number
+  status?: $Enums.ConversationStatus
   offeredPrice?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Date | string | null
+  closedReason?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   messages?: Prisma.MessageUncheckedCreateNestedManyWithoutConversationInput
@@ -810,7 +900,10 @@ export type ConversationUpdateToOneWithWhereWithoutOrdersInput = {
 }
 
 export type ConversationUpdateWithoutOrdersInput = {
+  status?: Prisma.EnumConversationStatusFieldUpdateOperationsInput | $Enums.ConversationStatus
   offeredPrice?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  closedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   buyer?: Prisma.UserUpdateOneRequiredWithoutBuyerConversationsNestedInput
@@ -824,14 +917,20 @@ export type ConversationUncheckedUpdateWithoutOrdersInput = {
   buyerId?: Prisma.IntFieldUpdateOperationsInput | number
   sellerId?: Prisma.IntFieldUpdateOperationsInput | number
   productId?: Prisma.IntFieldUpdateOperationsInput | number
+  status?: Prisma.EnumConversationStatusFieldUpdateOperationsInput | $Enums.ConversationStatus
   offeredPrice?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  closedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   messages?: Prisma.MessageUncheckedUpdateManyWithoutConversationNestedInput
 }
 
 export type ConversationCreateWithoutMessagesInput = {
+  status?: $Enums.ConversationStatus
   offeredPrice?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Date | string | null
+  closedReason?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   buyer: Prisma.UserCreateNestedOneWithoutBuyerConversationsInput
@@ -845,7 +944,10 @@ export type ConversationUncheckedCreateWithoutMessagesInput = {
   buyerId: number
   sellerId: number
   productId: number
+  status?: $Enums.ConversationStatus
   offeredPrice?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Date | string | null
+  closedReason?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   orders?: Prisma.OrderUncheckedCreateNestedManyWithoutConversationInput
@@ -868,7 +970,10 @@ export type ConversationUpdateToOneWithWhereWithoutMessagesInput = {
 }
 
 export type ConversationUpdateWithoutMessagesInput = {
+  status?: Prisma.EnumConversationStatusFieldUpdateOperationsInput | $Enums.ConversationStatus
   offeredPrice?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  closedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   buyer?: Prisma.UserUpdateOneRequiredWithoutBuyerConversationsNestedInput
@@ -882,7 +987,10 @@ export type ConversationUncheckedUpdateWithoutMessagesInput = {
   buyerId?: Prisma.IntFieldUpdateOperationsInput | number
   sellerId?: Prisma.IntFieldUpdateOperationsInput | number
   productId?: Prisma.IntFieldUpdateOperationsInput | number
+  status?: Prisma.EnumConversationStatusFieldUpdateOperationsInput | $Enums.ConversationStatus
   offeredPrice?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  closedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   orders?: Prisma.OrderUncheckedUpdateManyWithoutConversationNestedInput
@@ -892,7 +1000,10 @@ export type ConversationCreateManyBuyerInput = {
   id?: number
   sellerId: number
   productId: number
+  status?: $Enums.ConversationStatus
   offeredPrice?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Date | string | null
+  closedReason?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -901,13 +1012,19 @@ export type ConversationCreateManySellerInput = {
   id?: number
   buyerId: number
   productId: number
+  status?: $Enums.ConversationStatus
   offeredPrice?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Date | string | null
+  closedReason?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
 
 export type ConversationUpdateWithoutBuyerInput = {
+  status?: Prisma.EnumConversationStatusFieldUpdateOperationsInput | $Enums.ConversationStatus
   offeredPrice?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  closedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   seller?: Prisma.UserUpdateOneRequiredWithoutSellerConversationsNestedInput
@@ -920,7 +1037,10 @@ export type ConversationUncheckedUpdateWithoutBuyerInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   sellerId?: Prisma.IntFieldUpdateOperationsInput | number
   productId?: Prisma.IntFieldUpdateOperationsInput | number
+  status?: Prisma.EnumConversationStatusFieldUpdateOperationsInput | $Enums.ConversationStatus
   offeredPrice?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  closedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   messages?: Prisma.MessageUncheckedUpdateManyWithoutConversationNestedInput
@@ -931,13 +1051,19 @@ export type ConversationUncheckedUpdateManyWithoutBuyerInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   sellerId?: Prisma.IntFieldUpdateOperationsInput | number
   productId?: Prisma.IntFieldUpdateOperationsInput | number
+  status?: Prisma.EnumConversationStatusFieldUpdateOperationsInput | $Enums.ConversationStatus
   offeredPrice?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  closedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
 export type ConversationUpdateWithoutSellerInput = {
+  status?: Prisma.EnumConversationStatusFieldUpdateOperationsInput | $Enums.ConversationStatus
   offeredPrice?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  closedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   buyer?: Prisma.UserUpdateOneRequiredWithoutBuyerConversationsNestedInput
@@ -950,7 +1076,10 @@ export type ConversationUncheckedUpdateWithoutSellerInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   buyerId?: Prisma.IntFieldUpdateOperationsInput | number
   productId?: Prisma.IntFieldUpdateOperationsInput | number
+  status?: Prisma.EnumConversationStatusFieldUpdateOperationsInput | $Enums.ConversationStatus
   offeredPrice?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  closedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   messages?: Prisma.MessageUncheckedUpdateManyWithoutConversationNestedInput
@@ -961,7 +1090,10 @@ export type ConversationUncheckedUpdateManyWithoutSellerInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   buyerId?: Prisma.IntFieldUpdateOperationsInput | number
   productId?: Prisma.IntFieldUpdateOperationsInput | number
+  status?: Prisma.EnumConversationStatusFieldUpdateOperationsInput | $Enums.ConversationStatus
   offeredPrice?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  closedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -970,13 +1102,19 @@ export type ConversationCreateManyProductInput = {
   id?: number
   buyerId: number
   sellerId: number
+  status?: $Enums.ConversationStatus
   offeredPrice?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Date | string | null
+  closedReason?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
 
 export type ConversationUpdateWithoutProductInput = {
+  status?: Prisma.EnumConversationStatusFieldUpdateOperationsInput | $Enums.ConversationStatus
   offeredPrice?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  closedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   buyer?: Prisma.UserUpdateOneRequiredWithoutBuyerConversationsNestedInput
@@ -989,7 +1127,10 @@ export type ConversationUncheckedUpdateWithoutProductInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   buyerId?: Prisma.IntFieldUpdateOperationsInput | number
   sellerId?: Prisma.IntFieldUpdateOperationsInput | number
+  status?: Prisma.EnumConversationStatusFieldUpdateOperationsInput | $Enums.ConversationStatus
   offeredPrice?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  closedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   messages?: Prisma.MessageUncheckedUpdateManyWithoutConversationNestedInput
@@ -1000,7 +1141,10 @@ export type ConversationUncheckedUpdateManyWithoutProductInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   buyerId?: Prisma.IntFieldUpdateOperationsInput | number
   sellerId?: Prisma.IntFieldUpdateOperationsInput | number
+  status?: Prisma.EnumConversationStatusFieldUpdateOperationsInput | $Enums.ConversationStatus
   offeredPrice?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  closedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  closedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -1050,7 +1194,10 @@ export type ConversationSelect<ExtArgs extends runtime.Types.Extensions.Internal
   buyerId?: boolean
   sellerId?: boolean
   productId?: boolean
+  status?: boolean
   offeredPrice?: boolean
+  closedAt?: boolean
+  closedReason?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   buyer?: boolean | Prisma.UserDefaultArgs<ExtArgs>
@@ -1066,7 +1213,10 @@ export type ConversationSelectCreateManyAndReturn<ExtArgs extends runtime.Types.
   buyerId?: boolean
   sellerId?: boolean
   productId?: boolean
+  status?: boolean
   offeredPrice?: boolean
+  closedAt?: boolean
+  closedReason?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   buyer?: boolean | Prisma.UserDefaultArgs<ExtArgs>
@@ -1079,7 +1229,10 @@ export type ConversationSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.
   buyerId?: boolean
   sellerId?: boolean
   productId?: boolean
+  status?: boolean
   offeredPrice?: boolean
+  closedAt?: boolean
+  closedReason?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   buyer?: boolean | Prisma.UserDefaultArgs<ExtArgs>
@@ -1092,12 +1245,15 @@ export type ConversationSelectScalar = {
   buyerId?: boolean
   sellerId?: boolean
   productId?: boolean
+  status?: boolean
   offeredPrice?: boolean
+  closedAt?: boolean
+  closedReason?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type ConversationOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "buyerId" | "sellerId" | "productId" | "offeredPrice" | "createdAt" | "updatedAt", ExtArgs["result"]["conversation"]>
+export type ConversationOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "buyerId" | "sellerId" | "productId" | "status" | "offeredPrice" | "closedAt" | "closedReason" | "createdAt" | "updatedAt", ExtArgs["result"]["conversation"]>
 export type ConversationInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   buyer?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   seller?: boolean | Prisma.UserDefaultArgs<ExtArgs>
@@ -1131,7 +1287,10 @@ export type $ConversationPayload<ExtArgs extends runtime.Types.Extensions.Intern
     buyerId: number
     sellerId: number
     productId: number
+    status: $Enums.ConversationStatus
     offeredPrice: runtime.Decimal | null
+    closedAt: Date | null
+    closedReason: string | null
     createdAt: Date
     updatedAt: Date
   }, ExtArgs["result"]["conversation"]>
@@ -1566,7 +1725,10 @@ export interface ConversationFieldRefs {
   readonly buyerId: Prisma.FieldRef<"Conversation", 'Int'>
   readonly sellerId: Prisma.FieldRef<"Conversation", 'Int'>
   readonly productId: Prisma.FieldRef<"Conversation", 'Int'>
+  readonly status: Prisma.FieldRef<"Conversation", 'ConversationStatus'>
   readonly offeredPrice: Prisma.FieldRef<"Conversation", 'Decimal'>
+  readonly closedAt: Prisma.FieldRef<"Conversation", 'DateTime'>
+  readonly closedReason: Prisma.FieldRef<"Conversation", 'String'>
   readonly createdAt: Prisma.FieldRef<"Conversation", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"Conversation", 'DateTime'>
 }

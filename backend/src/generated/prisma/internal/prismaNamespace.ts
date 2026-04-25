@@ -1637,7 +1637,10 @@ export const ConversationScalarFieldEnum = {
   buyerId: 'buyerId',
   sellerId: 'sellerId',
   productId: 'productId',
+  status: 'status',
   offeredPrice: 'offeredPrice',
+  closedAt: 'closedAt',
+  closedReason: 'closedReason',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
@@ -1846,6 +1849,20 @@ export type EnumProductStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$Pr
  * Reference to a field of type 'ProductStatus[]'
  */
 export type ListEnumProductStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ProductStatus[]'>
+    
+
+
+/**
+ * Reference to a field of type 'ConversationStatus'
+ */
+export type EnumConversationStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ConversationStatus'>
+    
+
+
+/**
+ * Reference to a field of type 'ConversationStatus[]'
+ */
+export type ListEnumConversationStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ConversationStatus[]'>
     
 
 

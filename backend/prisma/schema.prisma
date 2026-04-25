@@ -181,24 +181,31 @@ model SearchKeywordTrend {
 }
 
 model Conversation {
-  id            Int       @id @default(autoincrement())
-  buyerId       Int
-  buyer         User      @relation("BuyerConversations", fields: [buyerId], references: [id], onDelete: Cascade)
-  sellerId      Int
-  seller        User      @relation("SellerConversations", fields: [sellerId], references: [id], onDelete: Cascade)
-  productId     Int
-  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
-  messages      Message[]
-  orders        Order[]
-  offeredPrice       Decimal?  @db.Decimal(10, 2) 
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
- 
+  id           Int                @id @default(autoincrement())
+  buyerId      Int
+  buyer        User               @relation("BuyerConversations", fields: [buyerId], references: [id], onDelete: Cascade)
+  sellerId     Int
+  seller       User               @relation("SellerConversations", fields: [sellerId], references: [id], onDelete: Cascade)
+  productId    Int
+  product      Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
+  messages     Message[]
+  orders       Order[]
+  status       ConversationStatus @default(ACTIVE)
+  offeredPrice Decimal?           @db.Decimal(10, 2)
+  closedAt     DateTime?
+  closedReason String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
 
-  @@unique(name: "conversation_unique", [buyerId, sellerId, productId]) // ensure one conversation per buyer/seller/product
   @@index([buyerId, updatedAt])
   @@index([sellerId, updatedAt])
   @@index([productId])
+  @@index([buyerId, sellerId, productId, status])
+}
+
+enum ConversationStatus {
+  ACTIVE
+  CLOSED
 }
 
 model Order {

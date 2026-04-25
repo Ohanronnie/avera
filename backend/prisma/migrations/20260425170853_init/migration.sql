@@ -2,6 +2,9 @@
 CREATE TYPE "WalletTransactionType" AS ENUM ('CREDIT', 'DEBIT');
 
 -- CreateEnum
+CREATE TYPE "ConversationStatus" AS ENUM ('ACTIVE', 'CLOSED');
+
+-- CreateEnum
 CREATE TYPE "OrderSource" AS ENUM ('BUY_NOW', 'OFFER');
 
 -- CreateEnum
@@ -159,7 +162,10 @@ CREATE TABLE "Conversation" (
     "buyerId" INTEGER NOT NULL,
     "sellerId" INTEGER NOT NULL,
     "productId" INTEGER NOT NULL,
+    "status" "ConversationStatus" NOT NULL DEFAULT 'ACTIVE',
     "offeredPrice" DECIMAL(10,2),
+    "closedAt" TIMESTAMP(3),
+    "closedReason" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -281,7 +287,7 @@ CREATE INDEX "Conversation_sellerId_updatedAt_idx" ON "Conversation"("sellerId",
 CREATE INDEX "Conversation_productId_idx" ON "Conversation"("productId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Conversation_buyerId_sellerId_productId_key" ON "Conversation"("buyerId", "sellerId", "productId");
+CREATE INDEX "Conversation_buyerId_sellerId_productId_status_idx" ON "Conversation"("buyerId", "sellerId", "productId", "status");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Order_paymentReference_key" ON "Order"("paymentReference");

@@ -16,7 +16,10 @@ import { OrdersService } from 'src/orders/orders.service';
 import { WalletService } from 'src/wallet/wallet.service';
 import { ChatService } from './chat.service';
 import { BadRequestException, Logger } from '@nestjs/common';
-import { OfferStatus } from 'src/generated/prisma/enums';
+import {
+  ConversationStatus,
+  OfferStatus,
+} from 'src/generated/prisma/enums';
 
 type AuthenticatedSocket = Socket & { userId: number; email: string };
 @WebSocketGateway({
@@ -271,6 +274,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       socket.emit('error', 'Conversation not found');
       return;
     }
+    if (conversation.status !== ConversationStatus.ACTIVE) {
+      socket.emit('error', 'Conversation is closed');
+      return;
+    }
     const message = await this.prisma.message.create({
       data: {
         conversationId: data.conversationId,
@@ -333,6 +340,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       throw new BadRequestException(
         'Conversation not found or user is not the buyer',
       );
+    if (conversation.status !== ConversationStatus.ACTIVE) {
+      throw new BadRequestException('Conversation is closed');
+    }
     const productPrice = this.parsePriceValue(conversation.product.price);
 
     if (
@@ -400,6 +410,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       throw new BadRequestException(
         'Conversation not found or user is not the seller',
       );
+    if (conversation.status !== ConversationStatus.ACTIVE) {
+      throw new BadRequestException('Conversation is closed');
+    }
     const offerMessage = await this.prisma.message.findFirst({
       where: { id: data.offerId, conversationId: data.conversationId },
     });

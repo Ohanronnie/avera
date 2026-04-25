@@ -128,6 +128,7 @@ export default function CheckoutReviewScreen() {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   const toast = useToast();
+  const [reviewLoading, setReviewLoading] = useState(true);
   const [creatingOrder, setCreatingOrder] = useState(false);
   const [autofillingDelivery, setAutofillingDelivery] = useState(false);
   const [createdOrder, setCreatedOrder] = useState<{
@@ -230,9 +231,13 @@ export default function CheckoutReviewScreen() {
     let active = true;
 
     const loadReviewData = async () => {
-      if (!params.conversationId) return;
+      if (!params.conversationId) {
+        if (active) setReviewLoading(false);
+        return;
+      }
 
       try {
+        setReviewLoading(true);
         const { data } = await axiosInstance.get<ReviewOrderPayload>(
           `/chat/conversations/order-review/${params.conversationId}`,
         );
@@ -249,6 +254,10 @@ export default function CheckoutReviewScreen() {
       } catch {
         if (active) {
           setReviewData(null);
+        }
+      } finally {
+        if (active) {
+          setReviewLoading(false);
         }
       }
     };
@@ -687,15 +696,27 @@ export default function CheckoutReviewScreen() {
         </View>
       </ScrollView>
 
+      {reviewLoading ? (
+        <View className="absolute inset-x-0 top-[76px] bottom-[88px] items-center justify-center bg-white/55 dark:bg-[#0A0A0A]/60">
+          <AveraLoader label="Loading order details" />
+        </View>
+      ) : null}
+
       <View className="border-t border-gray-100 bg-white px-5 pb-6 pt-4 dark:border-white/5 dark:bg-[#0A0A0A]">
         <Pressable
           onPress={createOrder}
-          disabled={creatingOrder || isOrderPaid}
+          disabled={reviewLoading || creatingOrder || isOrderPaid}
           className={`h-14 items-center justify-center rounded-2xl ${
-            isOrderPaid ? "bg-emerald-500" : "bg-brand"
+            reviewLoading
+              ? "bg-brand/60"
+              : isOrderPaid
+                ? "bg-emerald-500"
+                : "bg-brand"
           }`}
         >
-          {creatingOrder ? (
+          {reviewLoading ? (
+            <AveraLoader size={24} color="#FFFFFF" compact />
+          ) : creatingOrder ? (
             <AveraLoader size={24} color="#FFFFFF" compact />
           ) : (
             <Text variant="none" className="text-base font-bold text-white">

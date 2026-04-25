@@ -4,9 +4,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { OfferStatus } from 'src/generated/prisma/enums';
+import {
+  ConversationStatus,
+  OfferStatus,
+} from 'src/generated/prisma/enums';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { CreateConversationDto } from './dto/create-conversation.dto';
 import { SendMessageDto } from './dto/send-message.dto';
 import { Prisma, PrismaClient } from 'src/generated/prisma/client';
 
@@ -15,6 +17,24 @@ const MIN_OFFER_PERCENT = 80;
 @Injectable()
 export class ChatService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private async findActiveConversation(
+    buyerId: number,
+    sellerId: number,
+    productId: number,
+  ) {
+    return this.prisma.conversation.findFirst({
+      where: {
+        buyerId,
+        sellerId,
+        productId,
+        status: ConversationStatus.ACTIVE,
+      },
+      orderBy: {
+        updatedAt: 'desc',
+      },
+    });
+  }
 
   async getUnreadConversationCount(userId: number) {
     const unreadConversations = await this.prisma.message.findMany({
@@ -45,23 +65,24 @@ export class ChatService {
         'Cannot start conversation on your own product',
       );
     }
-    const conversation = await this.prisma.conversation.upsert({
-      where: {
-        conversation_unique: {
+
+    const activeConversation = await this.findActiveConversation(
+      userId,
+      product.sellerId,
+      productId,
+    );
+
+    const conversation =
+      activeConversation ||
+      (await this.prisma.conversation.create({
+        data: {
           buyerId: userId,
           sellerId: product.sellerId,
-          productId: productId,
+          productId,
+          status: ConversationStatus.ACTIVE,
         },
-      },
-      update: {
-        updatedAt: new Date(),
-      },
-      create: {
-        buyerId: userId,
-        sellerId: product.sellerId,
-        productId: productId,
-      },
-    });
+      }));
+
     return conversation.id;
   }
 
@@ -173,6 +194,8 @@ export class ChatService {
     if (!conversation) throw new NotFoundException('Conversation not found');
     return {
       conversationId: conversation.id,
+      status: conversation.status,
+      closedAt: conversation.closedAt,
       buyerId: conversation.buyerId,
       sellerId: conversation.sellerId,
       messages: conversation.messages,
