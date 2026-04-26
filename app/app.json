@@ -27,6 +27,9 @@
           "image": "./assets/transparent-icon.png",
           "backgroundColor": "#0A0A0A"
         }
+      },
+       "infoPlist": {
+        "UIDesignRequiresCompatibility": true
       }
     },
     "android": {
