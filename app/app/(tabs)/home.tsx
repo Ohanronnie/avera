@@ -112,6 +112,7 @@ export default function HomeScreen() {
             onRefresh={() => {
               void refetchProducts();
             }}
+            
             tintColor="#2563EB"
           />
         }

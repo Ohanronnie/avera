@@ -18,6 +18,21 @@ module.exports = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        // default
+        sans: ["Geist_400Regular"],
+
+        // 🔥 map weights → Inter
+        thin: ["Geist_100Thin"],
+        extralight: ["Geist_200ExtraLight"],
+        light: ["Geist_300Light"],
+        normal: ["Geist_400Regular"],
+        medium: ["Geist_500Medium"],
+        semibold: ["Geist_600SemiBold"],
+        bold: ["Geist_700Bold"],
+        extrabold: ["Geist_800ExtraBold"],
+        black: ["Geist_900Black"],
+      },
       colors: {
         brand: {
           DEFAULT: "#2563EB",
@@ -180,12 +195,12 @@ module.exports = {
           error: "rgb(var(--color-indicator-error)/<alpha-value>)",
         },
       },
-      fontFamily: {
-        heading: undefined,
-        body: undefined,
-        mono: undefined,
-        roboto: ["Roboto", "sans-serif"],
-      },
+      // fontFamily: {
+      //   heading: undefined,
+      //   body: undefined,
+      //   mono: undefined,
+      //   roboto: ["Roboto", "sans-serif"],
+      // },
       fontWeight: {
         extrablack: "950",
       },

@@ -32,6 +32,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useSearchStore } from "@/stores/search-store";
 const PRICE_RANGE_MIN = 0;
 const PRICE_RANGE_MAX = 2000000;
 const PRICE_RANGE_STEP = 50000;
@@ -457,19 +458,26 @@ export default function SearchScreen() {
     minPrice?: string;
     maxPrice?: string;
   }>();
-  const [searchQuery, setSearchQuery] = useState(params.query || "");
-  const [activeQuery, setActiveQuery] = useState(params.query || "");
-  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
-  const [filters, setFilters] = useState<ProductFilters>(() =>
-    getInitialFilters(params),
+  const searchQuery = useSearchStore((state) => state.searchQuery);
+  const activeQuery = useSearchStore((state) => state.activeQuery);
+  const filterSheetOpen = useSearchStore((state) => state.filterSheetOpen);
+  const filters = useSearchStore((state) => state.filters);
+  const draftFilters = useSearchStore((state) => state.draftFilters);
+  const showSuggestions = useSearchStore((state) => state.showSuggestions);
+  const typing = useSearchStore((state) => state.typing);
+  const setSearchQuery = useSearchStore((state) => state.setSearchQuery);
+  const setActiveQuery = useSearchStore((state) => state.setActiveQuery);
+  const setFilters = useSearchStore((state) => state.setFilters);
+  const setDraftFilters = useSearchStore((state) => state.setDraftFilters);
+  const setFilterSheetOpen = useSearchStore(
+    (state) => state.setFilterSheetOpen,
   );
-  const [draftFilters, setDraftFilters] = useState<ProductFilters>(() =>
-    getInitialFilters(params),
+  const setShowSuggestions = useSearchStore(
+    (state) => state.setShowSuggestions,
   );
-  const [showSuggestions, setShowSuggestions] = useState(
-    !params.query && !params.categoryId && !params.section,
-  );
-  const [typing, setTyping] = useState(false);
+  const setTyping = useSearchStore((state) => state.setTyping);
+  const syncFromRoute = useSearchStore((state) => state.syncFromRoute);
+  const resetStoredFilters = useSearchStore((state) => state.resetFilters);
   const deferredSearchQuery = useDeferredValue(searchQuery.trim());
   const {
     recentSearches,
@@ -506,16 +514,11 @@ export default function SearchScreen() {
   useEffect(() => {
     const nextQuery = params.query || "";
     const nextFilters = getInitialFilters(params);
-    setSearchQuery(nextQuery);
-    setActiveQuery(nextQuery);
-    setFilters(nextFilters);
-    setDraftFilters(nextFilters);
-
-    if (params.query || params.categoryId || params.section) {
-      setShowSuggestions(false);
-    } else {
-      setShowSuggestions(true);
-    }
+    syncFromRoute({
+      query: nextQuery,
+      hasContext: Boolean(params.query || params.categoryId || params.section),
+      filters: nextFilters,
+    });
   }, [
     params.categoryId,
     params.condition,
@@ -525,6 +528,7 @@ export default function SearchScreen() {
     params.sort,
     params.maxPrice,
     params.minPrice,
+    syncFromRoute,
   ]);
 
   const submitSearch = (nextQuery = searchQuery) => {
@@ -549,17 +553,7 @@ export default function SearchScreen() {
   };
 
   const resetFilters = () => {
-    const nextFilters: ProductFilters = {
-      condition: "all",
-      sort: "newest",
-      featured: false,
-      minPrice: PRICE_RANGE_MIN,
-      maxPrice: PRICE_RANGE_MAX,
-    };
-
-    setDraftFilters(nextFilters);
-    setFilters(nextFilters);
-    setFilterSheetOpen(false);
+    resetStoredFilters();
   };
   const activeFilterCount =
     (filters.condition !== "all" ? 1 : 0) +
@@ -756,10 +750,10 @@ export default function SearchScreen() {
                   label={option.label}
                   active={draftFilters.condition === option.value}
                   onPress={() =>
-                    setDraftFilters((current) => ({
-                      ...current,
+                    setDraftFilters({
+                      ...draftFilters,
                       condition: option.value,
-                    }))
+                    })
                   }
                 />
               ))}
@@ -777,10 +771,10 @@ export default function SearchScreen() {
                   label={option.label}
                   active={draftFilters.sort === option.value}
                   onPress={() =>
-                    setDraftFilters((current) => ({
-                      ...current,
+                    setDraftFilters({
+                      ...draftFilters,
                       sort: option.value,
-                    }))
+                    })
                   }
                 />
               ))}
@@ -795,10 +789,10 @@ export default function SearchScreen() {
               minPrice={draftFilters.minPrice}
               maxPrice={draftFilters.maxPrice}
               onChange={(range) =>
-                setDraftFilters((current) => ({
-                  ...current,
+                setDraftFilters({
+                  ...draftFilters,
                   ...range,
-                }))
+                })
               }
             />
           </View>

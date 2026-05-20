@@ -1,11 +1,12 @@
 import axios from "axios";
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
+import { useAppStore } from "@/stores/app-store";
 
 // Use environment variable or fallback
 export const BASE_URL = __DEV__
   ? "http://172.20.10.2:3000"
-  : "https://meadow-fox.tunnel.rxnnie.tech";
+  : "https://comet-amber-canyon.tunnel.rxnnie.tech";
 console.log(BASE_URL);
 // || !__DEV__
 //   ? Platform.OS === "ios"
@@ -97,8 +98,6 @@ const refreshAccessToken = async (): Promise<string> => {
 // === Interceptors ===
 axiosInstance.interceptors.request.use(
   async (config) => {
-
-     await new Promise((res, rej) => setTimeout(res, 1000))
     // If tokens are not in memory, load them once from storage
     if (!accessToken || !refreshToken) {
       await loadTokensFromStore();
@@ -113,9 +112,16 @@ axiosInstance.interceptors.request.use(
 );
 
 axiosInstance.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    useAppStore.getState().setIsOnline(true);
+    return response;
+  },
   async (error) => {
     const originalRequest = error.config;
+
+    if (!error.response) {
+      useAppStore.getState().setIsOnline(false);
+    }
 
     // Handle expired access token
     if (

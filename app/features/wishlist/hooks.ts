@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { axiosInstance } from "@/utils/axios";
 import { ApiProduct } from "@/features/products/types";
+import { useWishlistUiStore } from "@/stores/wishlist-ui-store";
 
 export const wishlistKeys = {
   all: ["wishlist"] as const,
@@ -20,6 +21,8 @@ export const useWishlistProductIds = () => {
       const { data } = await axiosInstance.get<number[]>("/wishlist/ids");
       return data;
     },
+    staleTime: 1000 * 60 * 10,
+    gcTime: 1000 * 60 * 60 * 24,
     retry: false,
   });
 };
@@ -31,12 +34,15 @@ export const useWishlistProducts = () => {
       const { data } = await axiosInstance.get<ApiProduct[]>("/wishlist");
       return data;
     },
+    staleTime: 1000 * 60 * 10,
+    gcTime: 1000 * 60 * 60 * 24,
     retry: false,
   });
 };
 
 export const useToggleWishlistMutation = () => {
   const queryClient = useQueryClient();
+  const setPending = useWishlistUiStore((state) => state.setPending);
 
   return useMutation({
     mutationFn: async ({ productId, isWishlisted }: ToggleWishlistInput) => {
@@ -49,6 +55,7 @@ export const useToggleWishlistMutation = () => {
       return data;
     },
     onMutate: async ({ productId, isWishlisted }) => {
+      setPending(productId, true);
       await queryClient.cancelQueries({ queryKey: wishlistKeys.ids });
       await queryClient.cancelQueries({ queryKey: wishlistKeys.products });
 
@@ -83,7 +90,8 @@ export const useToggleWishlistMutation = () => {
         queryClient.setQueryData(wishlistKeys.products, context.previousProducts);
       }
     },
-    onSettled: () => {
+    onSettled: (_data, _error, variables) => {
+      setPending(variables.productId, false);
       queryClient.invalidateQueries({ queryKey: wishlistKeys.ids });
       queryClient.invalidateQueries({ queryKey: wishlistKeys.products });
     },

@@ -25,6 +25,7 @@ import { useColorScheme } from "nativewind";
 import { useToast } from "@/contexts/ToastContext";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWishlistUiStore } from "@/stores/wishlist-ui-store";
 import { axiosInstance } from "@/utils/axios";
 import { connectSocket } from "@/utils/socket";
 import {
@@ -76,6 +77,7 @@ export default function ProductDetailsPage() {
   const productId = Number(id || 0);
   const { data: wishlistIds = [] } = useWishlistProductIds();
   const toggleWishlist = useToggleWishlistMutation();
+  const pendingProductIds = useWishlistUiStore((state) => state.pendingProductIds);
   const [expanded, setExpanded] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -110,6 +112,7 @@ export default function ProductDetailsPage() {
   const isBookmarked =
     detailWishlistState ??
     (productId ? wishlistIds.includes(productId) : false);
+  const wishlistPending = pendingProductIds.includes(productId);
   const subtotal = price * buyerQuantity;
   const serviceFee = Math.round(subtotal * 0.01);
   const total = subtotal + serviceFee;
@@ -355,7 +358,7 @@ export default function ProductDetailsPage() {
                   },
                 );
               }}
-              disabled={toggleWishlist.isPending}
+              disabled={toggleWishlist.isPending || wishlistPending}
               className="h-10 w-10 items-center justify-center rounded-full border border-gray-100/50 bg-white/90 dark:border-white/10 dark:bg-black/40"
             >
               <Ionicons

@@ -29,7 +29,7 @@
         }
       },
        "infoPlist": {
-        "UIDesignRequiresCompatibility": true
+        "UIDesignRequiresCompatibility": false
       }
     },
     "android": {

@@ -1,4 +1,5 @@
 import { io, Socket } from "socket.io-client";
+import { useAppStore } from "@/stores/app-store";
 import { BASE_URL, getAccessToken } from "./axios";
 
 let socket: Socket | null = null;
@@ -30,6 +31,8 @@ export const getSocket = (): Socket => {
     });
 
     socket.on("connect", () => {
+      useAppStore.getState().setSocketConnected(true);
+      useAppStore.getState().setIsOnline(true);
       console.log("[chat/socket] connected", {
         id: socket?.id,
         connected: socket?.connected,
@@ -37,10 +40,13 @@ export const getSocket = (): Socket => {
     });
 
     socket.on("disconnect", (reason) => {
+      useAppStore.getState().setSocketConnected(false);
       console.log("[chat/socket] disconnected", { reason });
     });
 
     socket.on("connect_error", (error) => {
+      useAppStore.getState().setSocketConnected(false);
+      useAppStore.getState().setIsOnline(false);
       console.error("[chat/socket] connect_error", {
         message: error.message,
         name: error.name,
@@ -52,6 +58,7 @@ export const getSocket = (): Socket => {
 
 export const connectSocket = () => {
   const s = getSocket();
+  useAppStore.getState().setIsOnline(true);
   socketToken = getAccessToken();
   s.auth = { token: socketToken };
   console.log("[chat/socket] connectSocket called", {
@@ -64,6 +71,7 @@ export const connectSocket = () => {
 
 export const disconnectSocket = () => {
   if (socket?.connected) socket.disconnect();
+  useAppStore.getState().setSocketConnected(false);
   socket = null;
   socketToken = null;
 };

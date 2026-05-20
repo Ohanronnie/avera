@@ -6,13 +6,16 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { useMeQuery } from "@/features/profile/hooks";
 import { ThemeProvider, useTheme } from "@/contexts/ThemeContext";
 import { ToastProvider } from "@/contexts/ToastContext";
+import {
+  createAppQueryClient,
+  hydrateQueryCache,
+  subscribeToQueryCachePersistence,
+} from "@/utils/query-cache";
 import { StatusBar } from "expo-status-bar";
 import { router, useSegments } from "expo-router";
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import * as SplashScreen from "expo-splash-screen";
 import { KeyboardProvider } from "react-native-keyboard-controller";
-
-const client = new QueryClient();
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   // The splash screen may already be hidden in fast refresh.
@@ -85,32 +88,50 @@ function AuthGate() {
 
 function AppProviders() {
   const { hydrated, isDark } = useTheme();
+  const [queryCacheHydrated, setQueryCacheHydrated] = useState(false);
+  const client = useMemo(() => createAppQueryClient(), []);
 
   useEffect(() => {
-    if (!hydrated) return;
+    hydrateQueryCache(client);
+    const unsubscribe = subscribeToQueryCachePersistence(client);
+    setQueryCacheHydrated(true);
+
+    return unsubscribe;
+  }, [client]);
+
+  useEffect(() => {
+    if (!hydrated || !queryCacheHydrated) return;
     SplashScreen.hideAsync().catch(() => {});
-  }, [hydrated]);
-  console.log("Theme hydrated:", hydrated, "Dark mode:", isDark);
+  }, [hydrated, queryCacheHydrated]);
+  console.log(
+    "Theme hydrated:",
+    hydrated,
+    "Query cache hydrated:",
+    queryCacheHydrated,
+    "Dark mode:",
+    isDark,
+  );
+
   return (
-    <KeyboardProvider>
-      <AuthProvider>
-        <GluestackUIProvider mode={isDark ? "dark" : "light"}>
-          <ToastProvider>
-            <StatusBar style={isDark ? "light" : "dark"} />
-            <AuthGate />
-          </ToastProvider>
-        </GluestackUIProvider>
-      </AuthProvider>
-    </KeyboardProvider>
+    <QueryClientProvider client={client}>
+      <KeyboardProvider>
+        <AuthProvider>
+          <GluestackUIProvider mode={isDark ? "dark" : "light"}>
+            <ToastProvider>
+              <StatusBar style={isDark ? "light" : "dark"} />
+              <AuthGate />
+            </ToastProvider>
+          </GluestackUIProvider>
+        </AuthProvider>
+      </KeyboardProvider>
+    </QueryClientProvider>
   );
 }
 
 export default function Layout() {
   return (
-    <QueryClientProvider client={client}>
-      <ThemeProvider>
-        <AppProviders />
-      </ThemeProvider>
-    </QueryClientProvider>
+    <ThemeProvider>
+      <AppProviders />
+    </ThemeProvider>
   );
 }

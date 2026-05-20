@@ -24,6 +24,8 @@ import { WebView } from "react-native-webview";
 import { AveraLoader } from "@/components/brand/AveraLoader";
 import { Text } from "@/components/themed/theme";
 import { useToast } from "@/contexts/ToastContext";
+import { useAppStore } from "@/stores/app-store";
+import { useCheckoutStore } from "@/stores/checkout-store";
 import { BASE_URL } from "@/utils/axios";
 import { connectSocket } from "@/utils/socket";
 
@@ -45,6 +47,8 @@ export default function CheckoutPayScreen() {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   const toast = useToast();
+  const isOnline = useAppStore((state) => state.isOnline);
+  const hydrateCheckoutDraft = useCheckoutStore((state) => state.hydrateDraft);
   const params = useLocalSearchParams<{
     orderId?: string;
     quantity?: string;
@@ -94,6 +98,29 @@ export default function CheckoutPayScreen() {
   const total = order?.totalAmount || subtotal + escrowFee;
   const isOrderPaid = order?.status === "PAID_IN_ESCROW";
 
+  useEffect(() => {
+    hydrateCheckoutDraft({
+      conversationId: conversationId || undefined,
+      quantity: resolvedQuantity,
+      deliveryName: order?.delivery?.name || "",
+      deliveryPhone: order?.delivery?.phone || "",
+      deliveryAddress: order?.delivery?.address || "",
+      deliveryCity: order?.delivery?.city || "",
+      deliveryState: order?.delivery?.state || "",
+      deliveryCountry: order?.delivery?.country || "Nigeria",
+    });
+  }, [
+    conversationId,
+    hydrateCheckoutDraft,
+    order?.delivery?.address,
+    order?.delivery?.city,
+    order?.delivery?.country,
+    order?.delivery?.name,
+    order?.delivery?.phone,
+    order?.delivery?.state,
+    resolvedQuantity,
+  ]);
+
   const notifyCheckoutStatus = (content: string) => {
     if (!conversationId) return;
 
@@ -124,6 +151,15 @@ export default function CheckoutPayScreen() {
   };
 
   const startCheckout = async () => {
+    if (!isOnline) {
+      toast.show({
+        title: "Connection required",
+        description: "You need internet access to continue with payment.",
+        variant: "error",
+      });
+      return;
+    }
+
     if (!orderId) return;
 
     try {

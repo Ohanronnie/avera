@@ -22,6 +22,7 @@ import { useMeQuery, useUpdateProfileMutation } from "@/features/profile/hooks";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useToast } from "@/contexts/ToastContext";
+import { usePreferencesStore } from "@/stores/preferences-store";
 import { axiosInstance, BASE_URL } from "@/utils/axios";
 
 type ProfileForm = {
@@ -56,6 +57,13 @@ export default function EditProfileScreen() {
   const { isDark } = useTheme();
   const { login } = useAuth();
   const toast = useToast();
+  const profileEditDraft = usePreferencesStore((state) => state.profileEditDraft);
+  const setProfileEditDraft = usePreferencesStore(
+    (state) => state.setProfileEditDraft,
+  );
+  const clearProfileEditDraft = usePreferencesStore(
+    (state) => state.clearProfileEditDraft,
+  );
   const [form, setForm] = useState<ProfileForm>(initialForm);
   const [uploadingImage, setUploadingImage] = useState<
     "avatarUrl" | "coverPhotoUrl" | null
@@ -68,7 +76,11 @@ export default function EditProfileScreen() {
   const updateProfileMutation = useUpdateProfileMutation();
 
   const setField = (field: keyof ProfileForm, value: string) => {
-    setForm((current) => ({ ...current, [field]: value }));
+    setForm((current) => {
+      const next = { ...current, [field]: value };
+      setProfileEditDraft(next);
+      return next;
+    });
   };
   const stateOptions = NIGERIA_STATE_OPTIONS.map((stateName) => ({
     label: stateName,
@@ -76,9 +88,17 @@ export default function EditProfileScreen() {
   }));
 
   useEffect(() => {
+    if (Object.keys(profileEditDraft).length > 0) {
+      setForm((current) => ({
+        ...current,
+        ...profileEditDraft,
+      }));
+      return;
+    }
+
     if (!profile) return;
 
-    setForm({
+    const nextForm = {
       firstName: profile.firstName || "",
       lastName: profile.lastName || "",
       username: profile.username || "",
@@ -90,8 +110,10 @@ export default function EditProfileScreen() {
       city: profile.location?.city || "",
       address: profile.location?.address || "",
       country: profile.location?.country || "Nigeria",
-    });
-  }, [profile]);
+    };
+    setForm(nextForm);
+    setProfileEditDraft(nextForm);
+  }, [profile, profileEditDraft, setProfileEditDraft]);
 
   const handleSave = async () => {
     const payload = {
@@ -129,6 +151,7 @@ export default function EditProfileScreen() {
     try {
       const data = await updateProfileMutation.mutateAsync(payload);
       login(data);
+      clearProfileEditDraft();
       toast.show({
         title: "Profile updated",
         description: "Your profile details have been saved.",

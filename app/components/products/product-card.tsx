@@ -7,6 +7,7 @@ import {
   useToggleWishlistMutation,
   useWishlistProductIds,
 } from "@/features/wishlist/hooks";
+import { useWishlistUiStore } from "@/stores/wishlist-ui-store";
 import { useToast } from "@/contexts/ToastContext";
 
 export interface IProduct {
@@ -29,6 +30,7 @@ export function ProductCard({ product }: { product: IProduct }) {
   const toast = useToast();
   const { data: wishlistIds = [] } = useWishlistProductIds();
   const toggleWishlist = useToggleWishlistMutation();
+  const pendingProductIds = useWishlistUiStore((state) => state.pendingProductIds);
 
   const {
     onFavorite,
@@ -42,6 +44,7 @@ export function ProductCard({ product }: { product: IProduct }) {
     imageUrl,
   } = product;
   const isFavorited = wishlistIds.includes(id);
+  const wishlistPending = pendingProductIds.includes(id);
 
   const handleFavorite = () => {
     toggleWishlist.mutate(
@@ -87,7 +90,7 @@ export function ProductCard({ product }: { product: IProduct }) {
             event.stopPropagation();
             handleFavorite();
           }}
-          disabled={toggleWishlist.isPending}
+          disabled={toggleWishlist.isPending || wishlistPending}
           className="absolute top-3 right-3 w-9 h-9 bg-white/95 dark:bg-black/20 rounded-full items-center justify-center z-10 border border-gray-200 dark:border-white/5"
           android_ripple={{ color: "#f0f0f0", radius: 18 }}
         >

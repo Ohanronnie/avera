@@ -81,6 +81,32 @@ export type OrderDetail = {
   updatedAt: string;
 };
 
+export type OrderSummary = {
+  id: number;
+  code: string;
+  mode: "buying" | "selling";
+  productId: number;
+  conversationId?: number | null;
+  status: string;
+  statusText: string;
+  step: string;
+  escrowState: string;
+  unitPrice: number;
+  quantity: number;
+  totalAmount: number;
+  updatedAt: string;
+  product: {
+    id: number;
+    name: string;
+    imageUrl?: string | null;
+  };
+  counterparty: {
+    id: number;
+    name: string;
+    role: string;
+  };
+};
+
 type CreateOrderInput = {
   productId: number;
   conversationId?: number;
@@ -136,6 +162,20 @@ export const fetchOrderDetail = async (orderId: number) => {
   const { data } = await axiosInstance.get<OrderDetail>(`/orders/${orderId}`);
   return data;
 };
+
+export const fetchOrders = async () => {
+  const { data } = await axiosInstance.get<OrderSummary[]>("/orders");
+  return data;
+};
+
+export function useOrdersQuery() {
+  return useQuery({
+    queryKey: orderKeys.all,
+    queryFn: fetchOrders,
+    staleTime: 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+}
 
 export function useOrderReviewQuery(conversationId: number) {
   return useQuery({

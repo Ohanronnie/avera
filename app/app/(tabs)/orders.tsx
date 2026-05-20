@@ -1,14 +1,19 @@
 import { AveraLoader } from "@/components/brand/AveraLoader";
 import { Text } from "@/components/themed/theme";
-import { axiosInstance } from "@/utils/axios";
+import {
+  orderKeys,
+  OrderSummary,
+  useOrdersQuery,
+} from "@/features/orders/hooks";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAppStore } from "@/stores/app-store";
 import { connectSocket } from "@/utils/socket";
 import { useUnreadConversationCount } from "@/hooks/use-unread-conversation-count";
 import { Ionicons } from "@expo/vector-icons";
-import { router, useFocusEffect } from "expo-router";
+import { router } from "expo-router";
 import { useColorScheme } from "nativewind";
 import {
   ComponentProps,
-  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -19,32 +24,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 type IconName = ComponentProps<typeof Ionicons>["name"];
 type OrderMode = "buying" | "selling";
 type OrderStatus = "active" | "completed" | "cancelled";
-
-type Order = {
-  id: number;
-  code: string;
-  mode: OrderMode;
-  productId: number;
-  conversationId?: number | null;
-  status: string;
-  statusText: string;
-  step: string;
-  escrowState: string;
-  unitPrice: number;
-  quantity: number;
-  totalAmount: number;
-  updatedAt: string;
-  product: {
-    id: number;
-    name: string;
-    imageUrl?: string | null;
-  };
-  counterparty: {
-    id: number;
-    name: string;
-    role: string;
-  };
-};
 
 const statusFilters: Array<{ label: string; value: OrderStatus }> = [
   { label: "Active", value: "active" },
@@ -104,38 +83,34 @@ const getStatusTone = (status: OrderStatus) => {
 export default function OrdersScreen() {
   const [activeMode, setActiveMode] = useState<OrderMode>("buying");
   const [activeStatus, setActiveStatus] = useState<OrderStatus>("active");
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loadingOrders, setLoadingOrders] = useState(true);
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   const { unreadConversationCount } = useUnreadConversationCount();
+  const queryClient = useQueryClient();
+  const markOrdersSynced = useAppStore((state) => state.markOrdersSynced);
+  const {
+    data: orders = [],
+    isLoading: loadingOrders,
+  } = useOrdersQuery();
 
-  const refreshOrders = useCallback(async () => {
-    try {
-      setLoadingOrders(true);
-      const { data } = await axiosInstance.get("/orders");
-      setOrders(data);
-    } catch {
-      setOrders([]);
-    } finally {
-      setLoadingOrders(false);
+  useEffect(() => {
+    if (orders.length > 0) {
+      markOrdersSynced();
     }
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      refreshOrders();
-    }, [refreshOrders]),
-  );
+  }, [markOrdersSynced, orders]);
 
   useEffect(() => {
     const socket = connectSocket();
-    socket.on("order:updated", refreshOrders);
+    const handleOrderUpdated = () => {
+      queryClient.invalidateQueries({ queryKey: orderKeys.all });
+    };
+
+    socket.on("order:updated", handleOrderUpdated);
 
     return () => {
-      socket.off("order:updated", refreshOrders);
+      socket.off("order:updated", handleOrderUpdated);
     };
-  }, [refreshOrders]);
+  }, [queryClient]);
 
   const filteredOrders = useMemo(
     () =>
@@ -244,7 +219,7 @@ export default function OrdersScreen() {
             </View>
           ) : filteredOrders.length ? (
             <View className="mt-5">
-              {filteredOrders.map((order) => {
+              {filteredOrders.map((order: OrderSummary) => {
                 const statusGroup = getStatusGroup(order.status);
                 const tone = getStatusTone(statusGroup);
                 const timeline = getTimeline(order.status);

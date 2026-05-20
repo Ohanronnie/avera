@@ -31,6 +31,10 @@ import type { Socket } from "socket.io-client";
 import { MessageThread } from "@/components/messages/message-thread";
 import { Text } from "@/components/themed/theme";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
+import {
+  getConversationDraft,
+  useChatDraftStore,
+} from "@/stores/chat-draft-store";
 import { axiosInstance } from "@/utils/axios";
 
 const quickReplies = [
@@ -316,18 +320,20 @@ export default function MessageDetailsScreen() {
   const { user } = useAuth();
   const toast = useToast();
   const scrollViewRef = useRef<any>(null);
-  const [message, setMessage] = useState("");
+  const setActiveConversationId = useChatDraftStore(
+    (state) => state.setActiveConversationId,
+  );
+  const updateConversationDraft = useChatDraftStore(
+    (state) => state.updateDraft,
+  );
   const [actionsOpen, setActionsOpen] = useState(false);
   const [offerOpen, setOfferOpen] = useState(false);
   const [buyNowOpen, setBuyNowOpen] = useState(false);
-  const [offerAmount, setOfferAmount] = useState("");
-  const [buyQuantity, setBuyQuantity] = useState(1);
   const [composerHeight, setComposerHeight] = useState(0);
   const [messages, setMessages] = useState<MessageItem[]>([]);
   const [checkoutOrder, setCheckoutOrder] = useState<CheckoutOrder | null>(
     null,
   );
-  const [pendingMedia, setPendingMedia] = useState<PendingMediaItem[]>([]);
   const [sending, setSending] = useState(false);
   const [viewingImageUrls, setViewingImageUrls] = useState<string[]>([]);
   const [viewingImageIndex, setViewingImageIndex] = useState(0);
@@ -347,6 +353,57 @@ export default function MessageDetailsScreen() {
   }>();
   const currentUserId = user!.id;
   const conversationId = Number(params.id);
+  const draft = useChatDraftStore(
+    useCallback(
+      (state) => state.drafts[conversationId] || getConversationDraft(conversationId),
+      [conversationId],
+    ),
+  );
+  const message = draft.message;
+  const offerAmount = draft.offerAmount;
+  const buyQuantity = draft.buyQuantity;
+  const pendingMedia = draft.pendingMedia;
+
+  const setMessage = useCallback(
+    (value: string) => {
+      if (!conversationId) return;
+      updateConversationDraft(conversationId, { message: value });
+    },
+    [conversationId, updateConversationDraft],
+  );
+
+  const setOfferAmount = useCallback(
+    (value: string) => {
+      if (!conversationId) return;
+      updateConversationDraft(conversationId, { offerAmount: value });
+    },
+    [conversationId, updateConversationDraft],
+  );
+
+  const setBuyQuantity = useCallback(
+    (value: number | ((current: number) => number)) => {
+      if (!conversationId) return;
+      const nextValue =
+        typeof value === "function" ? value(getConversationDraft(conversationId).buyQuantity) : value;
+      updateConversationDraft(conversationId, { buyQuantity: nextValue });
+    },
+    [conversationId, updateConversationDraft],
+  );
+
+  const setPendingMedia = useCallback(
+    (
+      value:
+        | PendingMediaItem[]
+        | ((current: PendingMediaItem[]) => PendingMediaItem[]),
+    ) => {
+      if (!conversationId) return;
+      const currentPendingMedia = getConversationDraft(conversationId).pendingMedia;
+      const nextValue =
+        typeof value === "function" ? value(currentPendingMedia) : value;
+      updateConversationDraft(conversationId, { pendingMedia: nextValue });
+    },
+    [conversationId, updateConversationDraft],
+  );
 
   const sellerName = conversationMeta?.sellerName || "Avera Seller";
   const productName = conversationMeta?.productName || "Product listing";
@@ -441,6 +498,14 @@ export default function MessageDetailsScreen() {
       : directCheckoutPaid
         ? "View order"
         : "Buy now";
+
+  useEffect(() => {
+    setActiveConversationId(conversationId || null);
+
+    return () => {
+      setActiveConversationId(null);
+    };
+  }, [conversationId, setActiveConversationId]);
 
   useEffect(() => {
     setBuyQuantity((current) =>

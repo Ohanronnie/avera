@@ -6,6 +6,7 @@ import {
   useState,
 } from "react";
 import * as SecureStore from "expo-secure-store";
+import { resetUnreadConversationCount } from "@/stores/chat-store";
 import { disconnectSocket } from "@/utils/socket";
 
 type UserType = {
@@ -30,6 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await SecureStore.deleteItemAsync("accessToken");
       await SecureStore.deleteItemAsync("refreshToken");
       disconnectSocket();
+      resetUnreadConversationCount();
       setUser(null);
     } catch (error) {
       console.error("Error during logout:", error);

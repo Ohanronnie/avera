@@ -12,16 +12,39 @@ import {
   AntDesign,
   MaterialIcons,
 } from "@expo/vector-icons";
+import {
+  Home,
+  CreditCard,
+  Heart,
+  ShoppingBag,
+  User,
+} from "lucide-react-native";
 import { Platform } from "react-native";
 import { useColorScheme } from "nativewind";
-
 import { useUnreadConversationCount } from "@/hooks/use-unread-conversation-count";
+import { useFonts, Geist_100Thin, Geist_200ExtraLight, Geist_300Light, Geist_400Regular, Geist_500Medium, Geist_600SemiBold, Geist_700Bold, Geist_800ExtraBold, Geist_900Black } from "@expo-google-fonts/geist"
+import { Text, TextInput } from "react-native";
+import { G } from "react-native-svg";
 
 /**
  * ICON EXPLORER SETTINGS
- * Change the index below (0 to 4) to switch between different icon families
+ * Change the index below:
+ * 0 = Ionicons
+ * 1 = Feather
+ * 2 = Material Community
+ * 3 = AntDesign
+ * 4 = Material Icons
+ * 5 = Lucide
  */
 const ICON_SET_INDEX = 1;
+
+const LUCIDE_ICONS = {
+  home: Home,
+  wallet: CreditCard,
+  wishlist: Heart,
+  orders: ShoppingBag,
+  profile: User,
+};
 
 const ICON_SETS = [
   {
@@ -46,7 +69,7 @@ const ICON_SETS = [
       orders: "shopping-bag",
       profile: "user",
     },
-    activeModifier: (name: string) => name, // Feather doesn't have solid/outline variants usually
+    activeModifier: (name: string) => name,
   },
   {
     name: "Set 3: Material Community (Modern)",
@@ -84,18 +107,45 @@ const ICON_SETS = [
     },
     activeModifier: (name: string) => name,
   },
-];
+  {
+    name: "Set 6: Lucide (Adjustable Stroke)",
+    Library: null,
+    icons: {
+      home: "home",
+      wallet: "credit-card",
+      wishlist: "heart",
+      orders: "shopping-bag",
+      profile: "user",
+    },
+    activeModifier: (name: string) => name,
+  },
+] as const;
+
+type TabType = keyof typeof LUCIDE_ICONS;
 
 const TabIcon = ({
   type,
   color,
   focused,
 }: {
-  type: keyof (typeof ICON_SETS)[0]["icons"];
+  type: TabType;
   color: string;
   focused: boolean;
 }) => {
   const currentSet = ICON_SETS[ICON_SET_INDEX];
+
+  if (currentSet.name.includes("Lucide")) {
+    const IconComponent = LUCIDE_ICONS[type];
+
+    return (
+      <IconComponent
+        size={24}
+        color={color}
+        strokeWidth={focused ? 2.9 : 2.2}
+      />
+    );
+  }
+
   const { Library, icons, activeModifier } = currentSet;
   const baseName = icons[type];
   const iconName = focused ? activeModifier(baseName) : baseName;
@@ -135,9 +185,22 @@ export default function TabsLayout() {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   const { unreadConversationCount } = useUnreadConversationCount();
+
   const badgeCount = unreadConversationCount;
   const unreadBadge = badgeCount > 9 ? "9+" : String(badgeCount);
-
+ const [loaded] = useFonts({
+   Geist_100Thin,
+   Geist_200ExtraLight,
+   Geist_300Light,
+   Geist_400Regular,
+   Geist_500Medium,
+   Geist_600SemiBold,
+   Geist_700Bold,
+   Geist_800ExtraBold,
+   Geist_900Black,
+   
+ });
+ if (!loaded) return null;
   if (Platform.OS === "ios") {
     return (
       <NativeTabs
@@ -185,7 +248,7 @@ export default function TabsLayout() {
           backgroundColor: isDark ? "#0A0A0A" : "#FFFFFF",
           borderTopWidth: 1,
           borderTopColor: isDark ? "#111" : "#F3F4FB",
-          height: 68,
+          height: 88,
           elevation: 0,
           shadowOpacity: 0,
         },
@@ -194,14 +257,15 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarShowLabel: true,
         tabBarLabelStyle: {
-          fontSize: 10,
-          fontWeight: "700",
+          fontSize: 13,
+          fontWeight: "900",
           letterSpacing: 0.5,
-          marginTop: 4,
-          marginBottom: 10,
+          marginTop: 2,
+          marginBottom: 2,
+          fontFamily: "Geist_500Medium",
         },
         tabBarIconStyle: {
-          marginTop: 0,
+          marginTop: 8,
         },
       }}
     >
@@ -214,6 +278,7 @@ export default function TabsLayout() {
           ),
         }}
       />
+
       <Tabs.Screen
         name="wallet"
         options={{
@@ -223,6 +288,7 @@ export default function TabsLayout() {
           ),
         }}
       />
+
       <Tabs.Screen
         name="wishlist"
         options={{
@@ -232,6 +298,7 @@ export default function TabsLayout() {
           ),
         }}
       />
+
       <Tabs.Screen
         name="orders"
         options={{
@@ -250,6 +317,7 @@ export default function TabsLayout() {
           ),
         }}
       />
+
       <Tabs.Screen
         name="profile"
         options={{

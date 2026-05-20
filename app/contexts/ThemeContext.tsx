@@ -7,10 +7,9 @@ import {
   useState,
 } from "react";
 import { Appearance } from "react-native";
-import * as SecureStore from "expo-secure-store";
 import { useColorScheme } from "nativewind";
+import { ThemeMode, usePreferencesStore } from "@/stores/preferences-store";
 
-type ThemeMode = "light" | "dark" | "system";
 type ResolvedThemeMode = "light" | "dark";
 
 type ThemeContextType = {
@@ -22,14 +21,13 @@ type ThemeContextType = {
   hydrated: boolean;
 };
 
-const THEME_STORAGE_KEY = "themeMode";
-
 const ThemeContext = createContext<ThemeContextType | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const { colorScheme, setColorScheme } = useColorScheme();
   const [hydrated, setHydrated] = useState(false);
-  const [themeMode, setThemeMode] = useState<ThemeMode>("system");
+  const themeMode = usePreferencesStore((state) => state.themeMode);
+  const setStoredThemeMode = usePreferencesStore((state) => state.setThemeMode);
   const systemScheme = Appearance.getColorScheme();
   const resolvedScheme: ResolvedThemeMode =
     colorScheme === "light" || colorScheme === "dark"
@@ -43,22 +41,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
     const syncTheme = async () => {
       try {
-        const storedTheme = await SecureStore.getItemAsync(THEME_STORAGE_KEY);
-        const nextTheme: ThemeMode =
-          storedTheme === "light" ||
-          storedTheme === "dark" ||
-          storedTheme === "system"
-            ? storedTheme
-            : "system";
-
-        if (mounted) {
-          setThemeMode(nextTheme);
-        }
-        setColorScheme(nextTheme);
+        setColorScheme(themeMode);
       } catch (error) {
-        if (mounted) {
-          setThemeMode("system");
-        }
         setColorScheme("system");
       } finally {
         if (mounted) {
@@ -72,12 +56,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return () => {
       mounted = false;
     };
-  }, [setColorScheme]);
+  }, [setColorScheme, themeMode]);
 
   const setTheme = async (mode: ThemeMode) => {
-    setThemeMode(mode);
+    setStoredThemeMode(mode);
     setColorScheme(mode);
-    await SecureStore.setItemAsync(THEME_STORAGE_KEY, mode);
   };
 
   const toggleTheme = async () => {

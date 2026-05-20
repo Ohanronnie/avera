@@ -37,8 +37,8 @@ export function useMeQuery(enabled = true) {
     queryKey: profileKeys.me,
     queryFn: fetchMe,
     enabled,
-    staleTime: 5 * 60 * 1000,
-    gcTime: 5 * 60 * 1000,
+    staleTime: 1000 * 60 * 10,
+    gcTime: 1000 * 60 * 60 * 24,
     retry: false,
   });
 }

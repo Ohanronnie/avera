@@ -1,12 +1,19 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
+import { useEffect } from "react";
 import { Pressable, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Text } from "@/components/themed/theme";
+import { useCheckoutStore } from "@/stores/checkout-store";
 
 export default function CheckoutSuccessScreen() {
   const params = useLocalSearchParams<{ orderId?: string }>();
+  const clearCheckoutDraft = useCheckoutStore((state) => state.clearDraft);
+
+  useEffect(() => {
+    clearCheckoutDraft();
+  }, [clearCheckoutDraft]);
 
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-[#0A0A0A]">

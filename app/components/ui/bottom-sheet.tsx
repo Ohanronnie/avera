@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Text } from "@/components/themed/theme";
+import { useUiStore } from "@/stores/ui-store";
 import { useColorScheme } from "nativewind";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
@@ -25,6 +26,7 @@ type BottomSheetProps = {
   alwaysVisible?: boolean;
   showCloseButton?: boolean;
   coverTabs?: boolean;
+  sheetId?: string;
 };
 
 export function BottomSheet({
@@ -36,10 +38,13 @@ export function BottomSheet({
   alwaysVisible = false,
   showCloseButton = true,
   coverTabs = false,
+  sheetId,
 }: BottomSheetProps) {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   const insets = useSafeAreaInsets();
+  const openSheet = useUiStore((state) => state.openSheet);
+  const closeActiveSheet = useUiStore((state) => state.closeSheet);
   const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const animationRef = useRef<Animated.CompositeAnimation | null>(null);
 
@@ -101,6 +106,14 @@ export function BottomSheet({
   ).current;
 
   useEffect(() => {
+    const resolvedSheetId = sheetId || title || null;
+
+    if (visible && resolvedSheetId) {
+      openSheet(resolvedSheetId);
+    } else if (!visible) {
+      closeActiveSheet();
+    }
+
     if (visible) {
       startAnimation(
         Animated.spring(translateY, {
@@ -120,7 +133,7 @@ export function BottomSheet({
       animationRef.current = null;
       translateY.stopAnimation();
     };
-  }, [alwaysVisible, translateY, visible]);
+  }, [alwaysVisible, closeActiveSheet, openSheet, sheetId, title, translateY, visible]);
 
   const sheet = (
     <View className="absolute left-0 right-0" style={{ bottom: -5 }}>

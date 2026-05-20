@@ -23,6 +23,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Text } from "@/components/themed/theme";
 import { useToast } from "@/contexts/ToastContext";
+import { useAppStore } from "@/stores/app-store";
+import { useCheckoutStore } from "@/stores/checkout-store";
 import { connectSocket } from "@/utils/socket";
 
 const parseNumber = (value?: string | string[], fallback = 1) => {
@@ -118,6 +120,10 @@ export default function CheckoutReviewScreen() {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === "dark";
   const toast = useToast();
+  const isOnline = useAppStore((state) => state.isOnline);
+  const checkoutDraft = useCheckoutStore((state) => state.draft);
+  const updateCheckoutDraft = useCheckoutStore((state) => state.updateDraft);
+  const hydrateCheckoutDraft = useCheckoutStore((state) => state.hydrateDraft);
   const [createdOrder, setCreatedOrder] = useState<{
     id: number;
     code: string;
@@ -125,11 +131,6 @@ export default function CheckoutReviewScreen() {
     statusText: string;
     totalAmount: number;
   } | null>(null);
-  const [deliveryName, setDeliveryName] = useState("");
-  const [deliveryPhone, setDeliveryPhone] = useState("");
-  const [deliveryAddress, setDeliveryAddress] = useState("");
-  const [deliveryCity, setDeliveryCity] = useState("");
-  const [deliveryState, setDeliveryState] = useState("");
   const [deliveryErrors, setDeliveryErrors] = useState<DeliveryErrors>({});
   const reviewStatusSentRef = useRef(false);
   const params = useLocalSearchParams<{
@@ -172,6 +173,11 @@ export default function CheckoutReviewScreen() {
   const isOfferCheckout =
     reviewData?.source === "offer" || reviewData?.offeredPrice != null;
   const isOrderPaid = createdOrder?.status === "PAID_IN_ESCROW";
+  const deliveryName = checkoutDraft.deliveryName;
+  const deliveryPhone = checkoutDraft.deliveryPhone;
+  const deliveryAddress = checkoutDraft.deliveryAddress;
+  const deliveryCity = checkoutDraft.deliveryCity;
+  const deliveryState = checkoutDraft.deliveryState;
 
   const hasDeliveryDetails = [
     deliveryName,
@@ -223,15 +229,42 @@ export default function CheckoutReviewScreen() {
   };
 
   useEffect(() => {
+    hydrateCheckoutDraft({
+      conversationId,
+      quantity,
+      productId: resolvedProductId || undefined,
+      offerMessageId: reviewData?.offerMessageId || undefined,
+      source: isOfferCheckout ? "OFFER" : "BUY_NOW",
+      deliveryCountry: "Nigeria",
+    });
+  }, [
+    conversationId,
+    hydrateCheckoutDraft,
+    isOfferCheckout,
+    quantity,
+    resolvedProductId,
+    reviewData?.offerMessageId,
+  ]);
+
+  useEffect(() => {
     if (!reviewData) return;
 
-    setDeliveryName((current) => current || reviewData.buyerName || "");
-    setDeliveryAddress((current) => current || reviewData.buyerAddress || "");
-    setDeliveryCity((current) => current || reviewData.buyerCity || "");
-    setDeliveryState(
-      (current) => current || resolveStateValue(reviewData.buyerState),
-    );
-  }, [reviewData]);
+    hydrateCheckoutDraft({
+      deliveryName: checkoutDraft.deliveryName || reviewData.buyerName || "",
+      deliveryAddress:
+        checkoutDraft.deliveryAddress || reviewData.buyerAddress || "",
+      deliveryCity: checkoutDraft.deliveryCity || reviewData.buyerCity || "",
+      deliveryState:
+        checkoutDraft.deliveryState || resolveStateValue(reviewData.buyerState),
+    });
+  }, [
+    checkoutDraft.deliveryAddress,
+    checkoutDraft.deliveryCity,
+    checkoutDraft.deliveryName,
+    checkoutDraft.deliveryState,
+    hydrateCheckoutDraft,
+    reviewData,
+  ]);
 
   const fillDeliveryFromProfile = async () => {
     try {
@@ -239,11 +272,13 @@ export default function CheckoutReviewScreen() {
       const fullName =
         data.fullName ||
         [data.firstName, data.lastName].filter(Boolean).join(" ");
-      setDeliveryName(fullName || "");
-      setDeliveryPhone(data.phoneNumber || "");
-      setDeliveryAddress(data.location?.address || "");
-      setDeliveryCity(data.location?.city || "");
-      setDeliveryState(resolveStateValue(data.location?.state));
+      hydrateCheckoutDraft({
+        deliveryName: fullName || "",
+        deliveryPhone: data.phoneNumber || "",
+        deliveryAddress: data.location?.address || "",
+        deliveryCity: data.location?.city || "",
+        deliveryState: resolveStateValue(data.location?.state),
+      });
       setDeliveryErrors({});
       toast.show({
         title: fullName ? `Filled for ${fullName}` : "Delivery filled",
@@ -280,6 +315,15 @@ export default function CheckoutReviewScreen() {
   };
 
   const createOrder = async () => {
+    if (!isOnline) {
+      toast.show({
+        title: "Connection required",
+        description: "You need internet access to create this order.",
+        variant: "error",
+      });
+      return;
+    }
+
     if (createdOrder) {
       if (createdOrder.status === "PAID_IN_ESCROW") {
         router.push({
@@ -493,7 +537,7 @@ export default function CheckoutReviewScreen() {
             <TextInput
               value={deliveryName}
               onChangeText={(value) => {
-                setDeliveryName(value);
+                updateCheckoutDraft({ deliveryName: value });
                 if (value.trim()) clearDeliveryError("name");
               }}
               placeholder="Recipient name"
@@ -514,7 +558,7 @@ export default function CheckoutReviewScreen() {
             <TextInput
               value={deliveryAddress}
               onChangeText={(value) => {
-                setDeliveryAddress(value);
+                updateCheckoutDraft({ deliveryAddress: value });
                 if (value.trim()) clearDeliveryError("address");
               }}
               placeholder="Delivery address"
@@ -535,7 +579,7 @@ export default function CheckoutReviewScreen() {
             <TextInput
               value={deliveryCity}
               onChangeText={(value) => {
-                setDeliveryCity(value);
+                updateCheckoutDraft({ deliveryCity: value });
                 if (value.trim()) clearDeliveryError("city");
               }}
               placeholder="City"
@@ -557,7 +601,7 @@ export default function CheckoutReviewScreen() {
               options={NIGERIAN_STATE_OPTIONS}
               selectedValue={deliveryState}
               onValueChange={(value) => {
-                setDeliveryState(value);
+                updateCheckoutDraft({ deliveryState: value });
                 clearDeliveryError("state");
               }}
               placeholder="State"
@@ -581,7 +625,7 @@ export default function CheckoutReviewScreen() {
             <TextInput
               value={deliveryPhone}
               onChangeText={(value) => {
-                setDeliveryPhone(value);
+                updateCheckoutDraft({ deliveryPhone: value });
                 if (value.trim() && formatNigerianPhone(value).valid) {
                   clearDeliveryError("phone");
                 }

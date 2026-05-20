@@ -10,6 +10,7 @@ import { AveraLoader } from "@/components/brand/AveraLoader";
 import { Text } from "@/components/themed/theme";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
+import { useAppStore } from "@/stores/app-store";
 import { connectSocket } from "@/utils/socket";
 
 type Conversation = {
@@ -189,6 +190,7 @@ export default function MessagesInboxScreen() {
   const isDark = colorScheme === "dark";
   const { user } = useAuth();
   const toast = useToast();
+  const markMessagesSynced = useAppStore((state) => state.markMessagesSynced);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -207,6 +209,7 @@ export default function MessagesInboxScreen() {
           ),
         ),
       );
+      markMessagesSynced();
     } catch (error: any) {
       toast.show({
         title: "Messages unavailable",
@@ -219,7 +222,7 @@ export default function MessagesInboxScreen() {
     } finally {
       setLoading(false);
     }
-  }, [toast, user?.id]);
+  }, [markMessagesSynced, toast, user?.id]);
 
   useFocusEffect(
     useCallback(() => {
